@@ -1,0 +1,5 @@
+https://medium.com/helidon/helidon-logging-and-mdc-5de272cf085d
+
+explains, imperfectly, how to use JUL logging with Helidon.
+Turns out the configuration file that Helidon expects is logging.properties at the root of the context.
+The format is a little weird.
