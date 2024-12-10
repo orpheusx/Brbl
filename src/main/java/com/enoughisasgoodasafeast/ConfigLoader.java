@@ -4,7 +4,6 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import java.io.FileInputStream;
-import java.io.FileNotFoundException;
 import java.io.IOException;
 import java.util.Properties;
 
@@ -14,7 +13,7 @@ public class ConfigLoader {
 
     /**
      * Load the named .properties file from the classpath.
-     * @param fileName
+     * @param fileName the base name of the file
      * @return a populated Properties object
      */
     public static Properties readConfig(String fileName) throws IOException {
@@ -27,6 +26,6 @@ public class ConfigLoader {
     }
 
     public static String resourcePath(String fileName) {
-        return Thread.currentThread().getContextClassLoader().getResource("").getPath() + fileName;
+        return Thread.currentThread().getContextClassLoader().getResource("").getPath() + fileName; //FIXME
     }
 }
