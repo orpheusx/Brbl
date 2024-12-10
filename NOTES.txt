@@ -3,3 +3,54 @@ https://medium.com/helidon/helidon-logging-and-mdc-5de272cf085d
 explains, imperfectly, how to use JUL logging with Helidon.
 Turns out the configuration file that Helidon expects is logging.properties at the root of the context.
 The format is a little weird.
+
+NAMING SCHEMES:
+
+We're going to use the terminology from our SMS/SMPP days.
+
+for queues
+
+    <platform>.<region>.<direction>
+
+    e.g.
+
+    whatsapp.us.mo  - the platform is whatsapp, the regions is the United States, the direction is Mobile Originated.
+
+    test.local.mo   - the platform is a developer/test, the region is the scope of the test resources (likely a dev machine), the direction is Mobile Originated.
+
+Current design uses Topics with routingKeys.
+I'm thinking that we'd likely have separate endpoints running for each platform gateway but using topics & routingKeys gives us flexibility.
+
+Test Setup:
+FakePlatformMO (client)
+    Reads messages from file, for each
+    HTTP POST to
+     --> Rcvr (port: 4242)
+            --> RabbitMQ client enqueue to "test.mo"
+
+     --> "Operator"
+         RabbitMQ client dequeues from "test.mo"
+         Processes the message (side effects galore)
+         Creates response
+         Enqueues response to "test.mt"
+
+     --> Sndr
+        RabbitMQ client dequeues from "test.mt"
+        HTTP POST to
+
+     --> FakePlatformMT (port: 2424)
+        Writes each received message to file.
+
+ Validator compares input file with output file.
+
+Test Program:
+FakePlatformMO generates messages with known values.
+FakePlatformMT receives messages and validates that it corresponds to a previously sent message.
+
+
+Helidon has libraries that support tracing (https://helidon.io/docs/v4/se/tracing) for both the web server and web client. Note: OpenTracing (https://opentracing.io/) has been retired in favor of OpenTelemetry (https://opentelemetry.io/docs/languages/js/instrumentation/)
+
+OpenAPI is also supported in case parts of the software needs to be used with AWS Lambda.
+
+Scheduling support is available (https://helidon.io/docs/v4/se/scheduling) which should allow us to avoid shit like EventBridge. Under the covers it uses cron-utils (https://github.com/jmrozanec/cron-utils)
+

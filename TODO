@@ -1,4 +1,0 @@
-Rcvr
-    • configurability (endpoint, connection params, initial log level.)
-    • pluggable queueing client
-Sndr

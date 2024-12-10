@@ -1,0 +1,23 @@
+Rcvr
+    • configurability (endpoint, connection params, initial log level.)
+    • pluggable queue sender impl that just writes to file (part of the test framework?)
+    • pluggable queue sender impl that just writes to rabbitmq (replacement for SQS.)
+
+Sndr
+    • pluggable client for reading messages from a queue.
+    • queue sender impl that writes to activemq queue.
+
+General Needs
+    • json formatted message object
+
+=== 04/12/2024 ========
+
+We now have a matched pair of queue components for producing to and consuming from a Rabbit broker.
+
+TODO
+X integrate them with the Sndr and Rcvr web services.
+_ implement an "end-to-end" integration test that sends strings
+_ implement test harness that verifies a MO message and response.
+_ implement ack logic.
+
+_ compose a copyright snippet

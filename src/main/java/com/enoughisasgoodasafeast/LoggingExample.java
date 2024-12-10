@@ -1,7 +1,6 @@
 package com.enoughisasgoodasafeast;
 
 import java.util.logging.Logger;
-import java.util.logging.Level;
 import java.util.logging.LogManager;
 import java.io.IOException;
 
@@ -16,7 +15,6 @@ public class LoggingExample {
                     LoggingExample.class.getResourceAsStream("/logging.properties"));
         } catch (IOException e) {
             System.err.println("Could not load logging.properties file");
-            e.printStackTrace();
         }
 
         LOGGER.info("This is an informational message.");
