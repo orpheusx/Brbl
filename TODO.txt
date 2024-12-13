@@ -15,9 +15,34 @@ General Needs
 We now have a matched pair of queue components for producing to and consuming from a Rabbit broker.
 
 TODO
+Programming stuff:
 X integrate them with the Sndr and Rcvr web services.
-_ implement an "end-to-end" integration test that sends strings
-_ implement test harness that verifies a MO message and response.
-_ implement ack logic.
+X implement an "end-to-end" set of components.
+    _ implement an integration test that sends strings.
+    _ implement test harness that verifies a MO message and response.
+_ implement ack logic for the Operator queue client.
 
-_ compose a copyright snippet
+_ compose a copyright header snippet and plug it into IDEA.
+
+Deployment DevOps-y stuff:
+_ Produce just a few executables (GraalVM compiled) Snd and Rcv could be one, for example.
+_ Create dedicated container images for the multiple uses of each executable type.
+_ Use something like Docker Compose to set up full developer runtimes.
+
+Technology questions to answer:
+_ Telemetry: Helidon supports this out of the box but which implementation should we use?
+    _ Prometheus?
+    _ Maybe just Graphite for our level of load?
+_ Given the non-technical hassles of integrating with Facebook Messenger and the costs of SMS we would like to have our own client platform.
+    _ Create our own Web Socket based client? Not an app that requires installing, just a web page. Super light weight with little to no JS.
+_ Would it be possible/useful to run a small ML model that could simply understand and categorize incoming questions. The responses would be sent based on the categorization to avoid the response hallucination problem.
+
+_ Testing
+    _ JUnit and various mocking frameworks
+    _ Playwright (https://playwright.dev/java) for browser support
+    _ probably need some pure CLI load/test tools.
+
+_ Client
+    _ Elixir and Phoenix LiveView enable low/no-JavaScript clients.
+        Pros: Claims great scalability with WebSockets.
+        Cons: Requires learning a new language plus a framework for that language.
