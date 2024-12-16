@@ -22,6 +22,11 @@ Current design uses Topics with routingKeys.
 I'm thinking that we'd likely have separate endpoints running for each platform gateway but using topics & routingKeys gives us flexibility.
 
 Test Setup:
+
+Run the container image with the RabbitMQ server:
+
+    docker run -it --rm --name rabbitmq -p 5672:5672 -p 15672:15672 rabbitmq:4.0-management
+
 FakePlatformMO (client)
     Reads messages from file, for each
     HTTP POST to
@@ -53,4 +58,54 @@ Helidon has libraries that support tracing (https://helidon.io/docs/v4/se/tracin
 OpenAPI is also supported in case parts of the software needs to be used with AWS Lambda.
 
 Scheduling support is available (https://helidon.io/docs/v4/se/scheduling) which should allow us to avoid shit like EventBridge. Under the covers it uses cron-utils (https://github.com/jmrozanec/cron-utils)
+
+
+=========== Building an executable jar ===========
+Added the following components to the <build/> section of the pom.xml file:
+    exec-maven-plugin
+    maven-compiler-plugin
+    maven-jar-plugin
+    maven-assembly-plugin
+Now we can run:
+    mvn clean compile assembly:single
+
+to yield an artifact that can be run with 'java -jar'
+The artifact ends up being around 23MB as of 12/12/2024.
+
+Java Microbenchmark Harness:
+    https://www.baeldung.com/java-microbenchmark-harness
+
+
+Trying to compile the project with native-image yielded errors related to logback.
+The GraalVM output was pretty helpful. It suggested adding to the file that tracks usages of reflection.
+While researching the problem someone suggested switching to the new configuration system available for logback: logback-tyler
+This provides a class generator that provides a fairly easy to edit Configurator implementation that doesn't use XML or reflection.
+
+Of course, it couldn't be that simple ;-) There seems to be a bug that causes the generated class to not be marked public. The service-provider mechanism added JDK9 in support of the new package system complained of not having access. Simply editing the class to be public appears to have solve the problem. I posted a question to the github discussion board:
+
+    https://github.com/qos-ch/logback-tyler/discussions/5
+
+Needed to add a reachability-metadata.json file to META-INF/native-image to have the .properties files included in the binary.
+
+Some notable/interesting bits from the compiler output:
+
+Top 10 origins of code area:                                Top 10 object types in image heap:
+  11.60MB java.base                                            8.48MB byte[] for embedded resources
+   2.59MB java.xml                                             5.24MB byte[] for code metadata
+   1.22MB svm.jar (Native Image)                               3.31MB byte[] for java.lang.String
+ 747.48kB logback-core-1.5.12.jar                              2.31MB java.lang.String
+ 468.30kB amqp-client-5.23.0.jar                               2.20MB java.lang.Class
+ 326.55kB java.rmi                                           843.80kB byte[] for general heap data
+ 244.26kB logback-classic-1.5.12.jar                         785.30kB com.oracle.svm.core.hub.DynamicHubCompanion
+ 207.22kB helidon-http-http2-4.1.4.jar                       554.23kB heap alignment
+ 203.91kB java.naming                                        513.00kB int[][]
+ 203.76kB helidon-webclient-api-4.1.4.jar                    491.98kB byte[] for reflection metadata
+   1.46MB for 37 more packages                                 5.34MB for 2375 more object types
+
+Recommendations:
+ HEAP: Set max heap for improved and more predictable memory usage.
+ CPU:  Enable more CPU features with '-march=native' for improved performance.
+
+ Questions: Why are we getting java.xml and java.rmi included?
+ The binary size is significant: 50MB.
 
