@@ -38,7 +38,7 @@ public class FakeOperator {
         public boolean handle(String payload) {
             // FIXME implement a meaningful return value or change return type.
             try {
-                LOG.info("Processing message, '{}'");
+                LOG.info("Processing message, '{}'", payload);
 
                 if(payload.contains("hello")) {
 

@@ -22,13 +22,15 @@ public class RabbitQueueConsumer implements QueueConsumer {
         String queueHost = props.getProperty("queue.host");
         String queueName = props.getProperty("queue.name");
         String queueRoutingKey = props.getProperty("queue.routingKey");
+        boolean isQueueDurable = Boolean.parseBoolean(props.getProperty("queue.durable"));
 
-        return new RabbitQueueConsumer(queueHost, queueName, queueRoutingKey, consumingHandler);
+        return new RabbitQueueConsumer(queueHost, queueName, queueRoutingKey, isQueueDurable, consumingHandler);
     }
 
     private RabbitQueueConsumer(String queueHost,
                                 String queueName,
                                 String routingKey,
+                                boolean durable,
                                 MTHandler consumingHandler)
             throws IOException, TimeoutException {
 
@@ -50,33 +52,40 @@ public class RabbitQueueConsumer implements QueueConsumer {
 
         // The RabbitMQ docs stupidly use a bare string for the exchange type, despite the nice enum that's available.
         // We use the enum because we're not animals.
-        channel.exchangeDeclare(queueName, BuiltinExchangeType.TOPIC); // this creates exchange only if it doesn't already exist.
-        String queueID = channel.queueDeclare().getQueue();
-        LOG.info("queueID: {}", queueID);
+        channel.exchangeDeclare(queueName, BuiltinExchangeType.TOPIC, durable); // creates topic only if it doesn't already exist.
 
-        channel.queueBind(queueID, queueName, routingKey);
+        AMQP.Queue.DeclareOk declareOk = channel.queueDeclare();
+        LOG.info("AMQP.Queue.DeclareOk: queue={} consumerCount={} messageCount={}",
+                declareOk.getQueue(), declareOk.getConsumerCount(), declareOk.getMessageCount());
 
+        AMQP.Queue.BindOk bindOk = channel.queueBind(declareOk.getQueue(), queueName, routingKey);
+        LOG.info("AMQP.Queue.BindOk: protocolClassId={} protocolMethodId={} protocolMethodName={}",
+                bindOk.protocolClassId(), bindOk.protocolMethodId(), bindOk.protocolMethodName());
+
+        // TODO move this into a separate class.
         DeliverCallback deliverCallback = (consumerTag, delivery) -> {
             String message = new String(delivery.getBody(), "UTF-8");
             LOG.info("ConsumerTag for deliverCallback: {}", consumerTag);
-            LOG.info(" [x] Received from {}: '{}'", delivery.getEnvelope().getRoutingKey(), message);
+            LOG.info(" [x] Receiving {}: '{}'", delivery.getEnvelope().getRoutingKey(), message);
             boolean ok = this.consumingHandler.handle(message);
             if (ok) {
-                LOG.info("Delivered message: {}", message);
+                LOG.info("Received message: {}", message);
             } else {
                 LOG.error("Delivery failed for message: {}", message);
                 // FIXME need to implement ack/no-ack with broker.
             }
         };
 
-        LOG.info("deliverCallback: {}", deliverCallback);
+        LOG.info("DeliverCallback: {}", deliverCallback);
 
         CancelCallback cancelCallback = (consumerTag) -> {
-            LOG.info("consumerTag for cancelCallback: {}",consumerTag);
+            LOG.info("ConsumerTag for cancelCallback: {}",consumerTag);
         };
 
+        LOG.info("CancelCallback: {}", cancelCallback);
+
         // TODO/FIXME handle the ack in our message processing
-        String consumerTag = channel.basicConsume(queueID, true, deliverCallback, cancelCallback);
+        String consumerTag = channel.basicConsume(declareOk.getQueue(), true, deliverCallback, cancelCallback);
         LOG.info("consumerTag returned from basicConsume: {}", consumerTag);
     }
 

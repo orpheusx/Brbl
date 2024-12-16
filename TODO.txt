@@ -19,22 +19,28 @@ Programming stuff:
 X integrate them with the Sndr and Rcvr web services.
 X implement an "end-to-end" set of components.
     _ implement an integration test that sends strings.
-    _ implement test harness that verifies a MO message and response.
-_ implement ack logic for the Operator queue client.
+    _ implement test harness that verifies an MO message and response.
+_ implement ack logic for the Operator queue client so that errors are supported/testable.
+_ Think about durable queues and how to manage them while still supporting integration tests.
 
 _ compose a copyright header snippet and plug it into IDEA.
 
 Deployment DevOps-y stuff:
 _ Produce just a few executables (GraalVM compiled) Snd and Rcv could be one, for example.
+    The binaries seem pretty big so amortizing the disk space used seems like a good idea.
+_ That said, figure out the Maven arcana to produce multiple binaries.
 _ Create dedicated container images for the multiple uses of each executable type.
 _ Use something like Docker Compose to set up full developer runtimes.
+_ Check out Fly.io for deployment, Wasabi for storage.
 
 Technology questions to answer:
 _ Telemetry: Helidon supports this out of the box but which implementation should we use?
-    _ Prometheus?
+    _ Prometheus? InfluxDB?
+    _ NOTE: RabbitMQ runs rabbitmq_prometheus by default.
     _ Maybe just Graphite for our level of load?
 _ Given the non-technical hassles of integrating with Facebook Messenger and the costs of SMS we would like to have our own client platform.
-    _ Create our own Web Socket based client? Not an app that requires installing, just a web page. Super light weight with little to no JS.
+    _ Create our own Web Socket based client? Not an app that requires installing, just a web page. Super light weight with little to no JS. Phoenix LiveView which uses Elixir/BEAM looks pretty impressive.
+_ Alternative platforms: Slack, BlueSky, Telegram?
 _ Would it be possible/useful to run a small ML model that could simply understand and categorize incoming questions. The responses would be sent based on the categorization to avoid the response hallucination problem.
 
 _ Testing
@@ -45,4 +51,5 @@ _ Testing
 _ Client
     _ Elixir and Phoenix LiveView enable low/no-JavaScript clients.
         Pros: Claims great scalability with WebSockets.
-        Cons: Requires learning a new language plus a framework for that language.
+        Cons: Requires learning an entire new language plus a framework for that language.
+

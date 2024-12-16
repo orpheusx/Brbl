@@ -31,6 +31,7 @@ public class RabbitQueueProducer implements QueueProducer {
         String queueHost = props.getProperty("queue.host");
         String queueName = props.getProperty("queue.name");
         String queueRoutingKey = props.getProperty("queue.routingKey");
+
         boolean queueIsDurable = Boolean.parseBoolean(props.getProperty("queue.durable"));
 
         return new RabbitQueueProducer(queueHost, queueName, queueRoutingKey, queueIsDurable);
@@ -39,8 +40,8 @@ public class RabbitQueueProducer implements QueueProducer {
     private RabbitQueueProducer(String queueHost, String queueName, String routingKey, boolean isDurable)
             throws IOException, TimeoutException {
 
-        LOG.info("Creating RabbitQueueProducer: queueHost: '{}', queueName: '{}', routingKey: '{}'",
-                queueHost, queueName, routingKey);
+        LOG.info("Creating RabbitQueueProducer: queueHost: '{}', queueName: '{}', routingKey: '{}', isDurable: {}",
+                queueHost, queueName, routingKey, isDurable);
 
         this.queueHost = queueHost;
         this.queueName = queueName;
@@ -75,6 +76,7 @@ public class RabbitQueueProducer implements QueueProducer {
     public static void main(String[] args) throws IOException, TimeoutException {
         QueueProducer rqp = RabbitQueueProducer.createQueueProducer("queue.properties");
         long timestamp = System.currentTimeMillis();
+
         rqp.enqueue("one " + timestamp);
         rqp.enqueue("two " + timestamp);
         rqp.enqueue("three " + timestamp);
