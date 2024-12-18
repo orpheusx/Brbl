@@ -6,6 +6,11 @@ import org.slf4j.LoggerFactory;
 import java.io.IOException;
 import java.util.concurrent.TimeoutException;
 
+/**
+ * FIXME we would like the Operator logic to be neutral where the queuing implementation is concerned.
+ * This class is "Fake" because it combines direct knowledge of RabbitMQ and the work needed to process
+ * messages.
+ */
 public class FakeOperator {
 
     private static final Logger LOG = LoggerFactory.getLogger(FakeOperator.class);
@@ -49,7 +54,7 @@ public class FakeOperator {
                         return false;
                     }
 
-                    LOG.info("Received {} --> {}", inputs[0], inputs[1]);
+                    LOG.info("Process {} --> {}", inputs[0], inputs[1]);
 
                     String sndText = inputs[0] + " goodbye";
                     producer.enqueue(sndText);

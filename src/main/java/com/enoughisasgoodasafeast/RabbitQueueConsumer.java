@@ -52,7 +52,8 @@ public class RabbitQueueConsumer implements QueueConsumer {
 
         // The RabbitMQ docs stupidly use a bare string for the exchange type, despite the nice enum that's available.
         // We use the enum because we're not animals.
-        channel.exchangeDeclare(queueName, BuiltinExchangeType.TOPIC, durable); // creates topic only if it doesn't already exist.
+        // This creates topic only if it doesn't already exist.
+        channel.exchangeDeclare(queueName, BuiltinExchangeType.TOPIC, durable); // FIXME leave the durability to the topic producer?
 
         AMQP.Queue.DeclareOk declareOk = channel.queueDeclare();
         LOG.info("AMQP.Queue.DeclareOk: queue={} consumerCount={} messageCount={}",
@@ -62,21 +63,27 @@ public class RabbitQueueConsumer implements QueueConsumer {
         LOG.info("AMQP.Queue.BindOk: protocolClassId={} protocolMethodId={} protocolMethodName={}",
                 bindOk.protocolClassId(), bindOk.protocolMethodId(), bindOk.protocolMethodName());
 
-        // TODO move this into a separate class.
-        DeliverCallback deliverCallback = (consumerTag, delivery) -> {
-            String message = new String(delivery.getBody(), "UTF-8");
-            LOG.info("ConsumerTag for deliverCallback: {}", consumerTag);
-            LOG.info(" [x] Receiving {}: '{}'", delivery.getEnvelope().getRoutingKey(), message);
-            boolean ok = this.consumingHandler.handle(message);
-            if (ok) {
-                LOG.info("Received message: {}", message);
-            } else {
-                LOG.error("Delivery failed for message: {}", message);
-                // FIXME need to implement ack/no-ack with broker.
-            }
-        };
+        channel.basicQos(1); // FIXME not sure we want this always but for testing acks...
 
-        LOG.info("DeliverCallback: {}", deliverCallback);
+        // TODO move this into a separate class.
+//        DeliverCallback deliverCallback = (consumerTag, delivery) -> {
+//            String message = new String(delivery.getBody(), "UTF-8");
+//            LOG.info("ConsumerTag for deliverCallback: {}", consumerTag);
+//            LOG.info(" [x] Receiving on {}: '{}'", delivery.getEnvelope().getRoutingKey(), message);
+//            boolean ok = this.consumingHandler.handle(message);
+//            if (ok) {
+//                LOG.info("Processed message: {}", message);
+//            } else {
+//                LOG.error("Delivery failed for message: {}", message);
+//                // FIXME need to implement ack/no-ack with broker.
+//            }
+//            // Either way we want to be done with this message.
+//            long deliveryTag = delivery.getEnvelope().getDeliveryTag();
+//            channel.basicAck(deliveryTag, false);
+//            LOG.info("Acked message with deliveryTag, {}", deliveryTag);
+//        };
+//
+//        LOG.info("DeliverCallback: {}", deliverCallback);
 
         CancelCallback cancelCallback = (consumerTag) -> {
             LOG.info("ConsumerTag for cancelCallback: {}",consumerTag);
@@ -84,8 +91,12 @@ public class RabbitQueueConsumer implements QueueConsumer {
 
         LOG.info("CancelCallback: {}", cancelCallback);
 
+        Consumer consumer = new FakeConsumer(channel, consumingHandler);
+
         // TODO/FIXME handle the ack in our message processing
-        String consumerTag = channel.basicConsume(declareOk.getQueue(), true, deliverCallback, cancelCallback);
+//        String consumerTag = channel.basicConsume(declareOk.getQueue(), false, deliverCallback, cancelCallback);
+        final String consumerTag = channel.basicConsume(queueName, true, consumer);
+
         LOG.info("consumerTag returned from basicConsume: {}", consumerTag);
     }
 

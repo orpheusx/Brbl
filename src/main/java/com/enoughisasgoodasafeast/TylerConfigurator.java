@@ -14,7 +14,7 @@ import java.lang.Override;
  *
  * <p>Eventual errors and warnings are appended at the end.</p>
  *
- * <p>You may experiment with OFF-logback.xml to Java translation, i.e.
+ * <p>You may experiment with logback.xml to Java translation, i.e.
  * TylerConfigurator generation, at the following URL:</p>
  *
  * <p>     https://logback.qos.ch/translator/services/xml2Java.html </p>

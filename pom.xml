@@ -85,7 +85,7 @@
             <version>1.5.12</version>
         </dependency>
 
-        <!-- The tyler-base lib is only needed to generate a TylerConfiguration class from a OFF-logback.xml file. -->
+        <!-- The tyler-base lib is only needed to generate a TylerConfiguration class from a logback.xml file. -->
         <!--        <dependency>-->
         <!--            <groupId>ch.qos.logback.tyler</groupId>-->
         <!--            <artifactId>tyler-base</artifactId>-->

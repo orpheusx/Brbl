@@ -1,5 +1,6 @@
 package com.enoughisasgoodasafeast;
 
+import com.rabbitmq.client.AMQP;
 import com.rabbitmq.client.ConnectionFactory;
 import com.rabbitmq.client.Connection;
 import com.rabbitmq.client.Channel;
@@ -20,7 +21,7 @@ public class RabbitQueueProducer implements QueueProducer {
     private static final String EXCHANGE_TYPE = "topic";
 
     private final String queueHost;
-    private final String queueName;
+    private final String exchangeName;
     private final String routingKey;
 
     private final Channel channel;
@@ -37,17 +38,17 @@ public class RabbitQueueProducer implements QueueProducer {
         return new RabbitQueueProducer(queueHost, queueName, queueRoutingKey, queueIsDurable);
     }
 
-    private RabbitQueueProducer(String queueHost, String queueName, String routingKey, boolean isDurable)
+    private RabbitQueueProducer(String queueHost, String exchangeName, String routingKey, boolean isDurable)
             throws IOException, TimeoutException {
 
-        LOG.info("Creating RabbitQueueProducer: queueHost: '{}', queueName: '{}', routingKey: '{}', isDurable: {}",
-                queueHost, queueName, routingKey, isDurable);
+        LOG.info("Creating RabbitQueueProducer: queueHost: '{}', exchangeName: '{}', routingKey: '{}', isDurable: {}",
+                queueHost, exchangeName, routingKey, isDurable);
 
         this.queueHost = queueHost;
-        this.queueName = queueName;
+        this.exchangeName = exchangeName;
         this.routingKey = routingKey;
 
-        if (queueHost == null || queueName == null || routingKey == null) {
+        if (queueHost == null || exchangeName == null || routingKey == null) {
             throw new IllegalArgumentException("RabbitQueueProducer missing required configuration.");
         }
 
@@ -56,7 +57,10 @@ public class RabbitQueueProducer implements QueueProducer {
 
         Connection moConnection = factory.newConnection();
         channel = moConnection.createChannel();
-        channel.exchangeDeclare(this.queueName, TOPIC, isDurable);
+        AMQP.Exchange.DeclareOk declareOk = channel.exchangeDeclare(this.exchangeName, TOPIC, isDurable);
+
+        channel.queueDeclare(this.exchangeName, true, false, false, null);
+        channel.queueBind(exchangeName, this.exchangeName, routingKey);
 
         // NB: RabbitMQ provides an extension that provides confirmation from the broker
         // that each message is received.
@@ -69,7 +73,24 @@ public class RabbitQueueProducer implements QueueProducer {
     public void enqueue(Object event) throws IOException {
         String message = (String) event;
         byte[] payload = message.getBytes(StandardCharsets.UTF_8);
-        channel.basicPublish(this.queueName, this.routingKey, null, payload);
+        AMQP.BasicProperties deliveryModeProps = new AMQP.BasicProperties(
+                null,
+                null,
+                null,
+                2 /*Integer deliveryMode,*/,
+                null,
+                null,
+                null,
+                null,
+                null,
+                null,
+                null,
+                null,
+                null,
+                null
+        );
+
+        channel.basicPublish(this.exchangeName, this.routingKey, deliveryModeProps, payload);
         LOG.info(" [x] Enqueued msg '{}'", message);
     }
 
