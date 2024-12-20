@@ -8,6 +8,7 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import java.io.IOException;
+import java.nio.charset.StandardCharsets;
 
 public class FakeConsumer extends DefaultConsumer {
 
@@ -19,6 +20,7 @@ public class FakeConsumer extends DefaultConsumer {
      * Constructs a new instance and records its association to the passed-in channel.
      *
      * @param channel the channel to which this consumer is attached
+     * @param handler the handler that will process incoming messages in some fashion.
      */
     public FakeConsumer(Channel channel, MTHandler handler) {
         super(channel);
@@ -27,21 +29,24 @@ public class FakeConsumer extends DefaultConsumer {
 
     @Override
     public void handleDelivery(String consumerTag, Envelope envelope, AMQP.BasicProperties properties, byte[] body) throws IOException {
-        super.handleDelivery(consumerTag, envelope, properties, body);
-
-        String message = new String(body, "UTF-8");
-        LOG.info("ConsumerTag for deliverCallback: {}", consumerTag);
-        LOG.info(" [x] Receiving on {}: '{}'", envelope.getRoutingKey(), message);
-        boolean ok = this.handler.handle(message);
-        if (ok) {
-            LOG.info("Processed message: {}", message);
-        } else {
-            LOG.error("Delivery failed for message: {}", message);
-            // FIXME need to implement ack/no-ack with broker.
-        }
-        // Either way we want to be done with this message.
+        // super.handleDelivery(consumerTag, envelope, properties, body);
         long deliveryTag = envelope.getDeliveryTag();
-//        channel.basicAck(deliveryTag, false);
-//        LOG.info("Acked message with deliveryTag, {}", deliveryTag);
+
+        try {
+            String message = new String(body, StandardCharsets.UTF_8);
+            LOG.info("ConsumerTag for handleDelivery: {}", consumerTag);
+            LOG.info(" [x] Receiving on {}: '{}'", envelope.getRoutingKey(), message);
+            boolean ok = this.handler.handle(message);
+            if (ok) {
+                LOG.info("Processed message: {}", message);
+            } else {
+                LOG.error("Delivery failed for message: {}", message);
+            }
+        } finally {
+            // Either way we want to be done with this message.
+            LOG.info("Acked message with deliveryTag, {}", deliveryTag);
+            getChannel().basicAck(deliveryTag, false);
+        }
+
     }
 }

@@ -12,8 +12,6 @@ public class RabbitQueueConsumer implements QueueConsumer {
 
     private static final Logger LOG = LoggerFactory.getLogger(RabbitQueueConsumer.class);
 
-    private static final String EXCHANGE_TYPE = "topic";
-
     private final MTHandler consumingHandler;
 
     public static QueueConsumer createQueueConsumer(String configFileName, MTHandler consumingHandler) throws IOException, TimeoutException {
@@ -91,11 +89,12 @@ public class RabbitQueueConsumer implements QueueConsumer {
 
         LOG.info("CancelCallback: {}", cancelCallback);
 
+        // TODO add support for the other Callback interfaces...
         Consumer consumer = new FakeConsumer(channel, consumingHandler);
 
         // TODO/FIXME handle the ack in our message processing
 //        String consumerTag = channel.basicConsume(declareOk.getQueue(), false, deliverCallback, cancelCallback);
-        final String consumerTag = channel.basicConsume(queueName, true, consumer);
+        final String consumerTag = channel.basicConsume(queueName, false, consumer);
 
         LOG.info("consumerTag returned from basicConsume: {}", consumerTag);
     }

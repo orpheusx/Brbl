@@ -81,7 +81,7 @@ The GraalVM output was pretty helpful. It suggested adding to the file that trac
 While researching the problem someone suggested switching to the new configuration system available for logback: logback-tyler
 This provides a class generator that provides a fairly easy to edit Configurator implementation that doesn't use XML or reflection.
 
-Of course, it couldn't be that simple ;-) There seems to be a bug that causes the generated class to not be marked public. The service-provider mechanism added JDK9 in support of the new package system complained of not having access. Simply editing the class to be public appears to have solve the problem. I posted a question to the github discussion board:
+Of course, it couldn't be that simple ;-) There seems to be a bug that causes the generated class to not be marked public. The service-provider mechanism added JDK9 in support of the new package system complained of not having access. Simply editing the class to be public appears to solve the problem. I posted a question to the GitHub discussion board:
 
     https://github.com/qos-ch/logback-tyler/discussions/5
 

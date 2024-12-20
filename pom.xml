@@ -13,8 +13,8 @@
         <maven.compiler.source>23</maven.compiler.source>
         <maven.compiler.target>23</maven.compiler.target>
         <project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
-        <imageName>sndrRcvr</imageName>
-        <mainClass>com.enoughisasgoodasafeast.Sndr</mainClass><!-- FIXME we have multiple mains to support... -->
+        <imageName>burble</imageName>
+        <mainClass>com.enoughisasgoodasafeast.Burble</mainClass>
     </properties>
 
     <dependencies>

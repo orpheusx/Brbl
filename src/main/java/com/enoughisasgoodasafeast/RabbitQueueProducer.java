@@ -1,9 +1,6 @@
 package com.enoughisasgoodasafeast;
 
-import com.rabbitmq.client.AMQP;
-import com.rabbitmq.client.ConnectionFactory;
-import com.rabbitmq.client.Connection;
-import com.rabbitmq.client.Channel;
+import com.rabbitmq.client.*;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -17,8 +14,6 @@ import static com.rabbitmq.client.BuiltinExchangeType.TOPIC;
 public class RabbitQueueProducer implements QueueProducer {
 
     private static final Logger LOG = LoggerFactory.getLogger(RabbitQueueProducer.class);
-
-    private static final String EXCHANGE_TYPE = "topic";
 
     private final String queueHost;
     private final String exchangeName;
@@ -57,7 +52,7 @@ public class RabbitQueueProducer implements QueueProducer {
 
         Connection moConnection = factory.newConnection();
         channel = moConnection.createChannel();
-        AMQP.Exchange.DeclareOk declareOk = channel.exchangeDeclare(this.exchangeName, TOPIC, isDurable);
+        /*AMQP.Exchange.DeclareOk declareOk = */channel.exchangeDeclare(this.exchangeName, TOPIC, isDurable);
 
         channel.queueDeclare(this.exchangeName, true, false, false, null);
         channel.queueBind(exchangeName, this.exchangeName, routingKey);
@@ -73,24 +68,7 @@ public class RabbitQueueProducer implements QueueProducer {
     public void enqueue(Object event) throws IOException {
         String message = (String) event;
         byte[] payload = message.getBytes(StandardCharsets.UTF_8);
-        AMQP.BasicProperties deliveryModeProps = new AMQP.BasicProperties(
-                null,
-                null,
-                null,
-                2 /*Integer deliveryMode,*/,
-                null,
-                null,
-                null,
-                null,
-                null,
-                null,
-                null,
-                null,
-                null,
-                null
-        );
-
-        channel.basicPublish(this.exchangeName, this.routingKey, deliveryModeProps, payload);
+        channel.basicPublish(this.exchangeName, this.routingKey, MessageProperties.PERSISTENT_TEXT_PLAIN/*deliveryModeProps*/, payload);
         LOG.info(" [x] Enqueued msg '{}'", message);
     }
 
