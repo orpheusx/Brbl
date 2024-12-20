@@ -1,0 +1,23 @@
+FROM arm64v8/eclipse-temurin
+#FROM eclipse-temurin:23
+LABEL authors="mark"
+# Need to compile with the flag that sets the libc substitute for the -alpine version.
+# FROM eclipse-temurin:23-alpine
+
+EXPOSE 2424
+EXPOSE 4242
+
+ENV BIN_DIR=/opt/app
+ENV BINARY=burble
+
+RUN mkdir $BIN_DIR
+
+COPY target/$BINARY $BIN_DIR
+
+ENTRYPOINT ["sh", "-c"]
+CMD ["exec $BIN_DIR/$BINARY Rcvr"]
+
+# Any heap sizing or JVM params needed? ECS has its settings, as well.
+
+# Build this container using something like the following:
+#   docker build --platform arm64 -t burble:latest .

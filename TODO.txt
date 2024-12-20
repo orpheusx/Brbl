@@ -53,3 +53,35 @@ _ Client
         Pros: Claims great scalability with WebSockets.
         Cons: Requires learning an entire new language plus a framework for that language.
 
+===== 2024-12-17 ======
+Ok, seem to have resolved the durability problem when parts of the pipeline are not running.
+
+From a shell running on the server container:
+    rabbitmqctl list_queues
+
+Will return the list of current topics/queues and the number of awaiting messages.
+
+Next, containerize and compose-erize the Rcvr, FakeOperator, Sndr, and PlatformGatewayMT applications.
+The RabbitMQ server is already running in a container, of course.
+
+===== 2024-12-18 ======
+
+To avoid futzing with the fine points of Maven and GraalVM, I've written a dispatcher type program, Burble, to allow us to use a single binary for each of our different containers.
+
+Had to do some more work to make both the queues and the messages durable. Seems to be working as expected now.
+
+===== 2024-12-19 ======
+
+Related to reliability, we have some reading to do to understand how we'd need/want to stand up multiple servers in a cluster:
+
+    https://www.rabbitmq.com/docs/quorum-queues#overview
+
+Ok, back to containerization...
+
+Can we build just a single container image with the same binary and pass docker container args through to Burble? With separate args for JVM params?
+
+Ack, I can't build a Linux binary (linux/arm64) on macOS. The instruction sets may be compatible (arm64 and aarch64
+
+
+rabbitmqctl enable_feature_flag all
+
