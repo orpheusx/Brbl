@@ -1,5 +1,6 @@
 FROM eclipse-temurin:23
-LABEL authors="mark"
+LABEL authors="Mark W. Stewart <zouzousdad@gmail.com>"
+
 # Need to compile with the flag that sets the libc substitute for the -alpine version.
 # FROM eclipse-temurin:23-alpine
 
@@ -13,5 +14,5 @@ RUN mkdir $DEST_DIR
 
 COPY target/$JAR_FILE $DEST_DIR
 
-ENTRYPOINT ["sh", "-c"]
-CMD ["exec java -jar $DEST_DIR/$JAR_FILE"]
+ENTRYPOINT ["java", "-jar", "/opt/app/sndrRcvr-1.0-SNAPSHOT-jar-with-dependencies.jar"]
+CMD ["FakeOperator", "one", "two", "three"]

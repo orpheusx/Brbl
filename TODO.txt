@@ -80,8 +80,14 @@ Ok, back to containerization...
 
 Can we build just a single container image with the same binary and pass docker container args through to Burble? With separate args for JVM params?
 
-Ack, I can't build a Linux binary (linux/arm64) on macOS. The instruction sets may be compatible (arm64 and aarch64
+Ack, I can't build a Linux binary on macOS. The instruction sets may be compatible (arm64 and aarch64) but the operating systems are not.
+
+    rabbitmqctl enable_feature_flag all
+
+Get a different version of the RabbitMQ server container: rabbitmq:4.0-alpine
+Compare the size with the one we're using that builds, I think, on top of an Ubuntu image.
 
 
-rabbitmqctl enable_feature_flag all
 
+ 1 experimental option(s) unlocked:
+ - '-H:IncludeResources': Use a resource-config.json in your META-INF/native-image/<groupID>/<artifactID> directory instead. (origin(s): 'META-INF/native-image/com.rabbitmq/amqp-client/native-image.properties' in 'file:///Users/mark/.m2/repository/com/rabbitmq/amqp-client/5.23.0/amqp-client-5.23.0.jar')

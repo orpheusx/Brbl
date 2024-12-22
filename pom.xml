@@ -214,6 +214,7 @@
                         </executions>
                         <configuration>
                             <fallback>false</fallback>
+                            <target>linux-arm64</target>
                         </configuration>
                     </plugin>
                 </plugins>

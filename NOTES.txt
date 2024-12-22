@@ -109,3 +109,35 @@ Recommendations:
  Questions: Why are we getting java.xml and java.rmi included?
  The binary size is significant: 50MB.
 
+ We need a way to produce containers that will run locally on my M1
+ Can we run a Linux VM locally to run the build? Or even a container?
+
+ NOTE: For a moment I thought the --target option of native-image would let us produce an executable for different platforms.
+ This is Java (Write-Once Run Everywhere™) after. But it turns out it's bullshit. After six years of development this is still on the to do list.
+ Given the prevalence of containers which are _only_ supported for Linux its amazing that this hasn't been prioritized.
+ As it stands, we'll need to create a bunch of extra container rigging to produce something that we then copy over into another image.
+
+    https://github.com/spotify/dockerfile-maven is a project for building container images with Docker. It's not still in development, however.
+
+=========== STUFF WE WILL WANT ===========
+
+- Software BOM with security information for our dependencies.
+- Qodana or something free to perform structured code analysis (we need to take some time to configure this to remove bogus or just unhelpful problems.)
+- Container images for arm64 and amd64.
+
+=========== STUFF WE SHOULD LEARN MORE ABOUT ===========
+The modules system introduced in JDK 9.
+The inner workings of Docker so I can evaluate images, how to extend, etc.
+
+Docker progress:
+
+Finally figured out how to specify/pass arguments when running Burble inside a docker container.
+Changed the
+
+docker run -it --rm --name burble -p 2424:2424 -p 4242:4242 burble:0.1 FakeOperator
+
+
+native-image -jar target/sndrRcvr-1.0-SNAPSHOT-jar-with-dependencies.jar -o burble
+    produces a file, burble, that is still fucking massive at 44MB. :-(
+
+
