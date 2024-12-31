@@ -1,6 +1,6 @@
 package com.enoughisasgoodasafeast;
 
-import io.helidon.webclient.api.WebClient;
+//import io.helidon.webclient.api.WebClient;
 //import io.helidon.webclient.tracing.WebClientTracing;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -12,10 +12,10 @@ public class Sndr {
 
     private static final Logger LOG = LoggerFactory.getLogger(Sndr.class);
 
-    public WebClient client;
+//    public WebClient client;
     public QueueConsumer queueConsumer;
 
-    public void init() {
+//    public void init() {
         // This is the JDK provided client
         //try (HttpClient client = HttpClient.newBuilder()
         //        .version(HttpClient.Version.HTTP_2)
@@ -23,7 +23,7 @@ public class Sndr {
         //        .build()) {
         //    this.client = client;
         //}
-    }
+//    }
 
     public Sndr(String uri) {
 
@@ -42,8 +42,8 @@ public class Sndr {
     }
 
     public static void main(String[] args) {
-        System.out.println("Running Sndr main");
-        Sndr sndr = new Sndr("http://localhost:2424");
+        LOG.info("Running Sndr main");
+//        Sndr sndr = new Sndr("http://192.168.1.155:2424"); // FIXME use config for IP
 
 //        HttpClientRequest fooReq = sndr.client.post().path("/mtReceive");//.peek(System.out::println).await();
 //        ClientResponseTyped<String> fooRes = fooReq.request(String.class);

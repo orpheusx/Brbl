@@ -140,4 +140,235 @@ docker run -it --rm --name burble -p 2424:2424 -p 4242:4242 burble:0.1 FakeOpera
 native-image -jar target/sndrRcvr-1.0-SNAPSHOT-jar-with-dependencies.jar -o burble
     produces a file, burble, that is still fucking massive at 44MB. :-(
 
+The container that builds on eclipse-temurin:23 and includes the binary weighs in at 719MB.
 
+Switching to eclipse-temurin:23-alpine reduces the image to a "mere" 581MB.
+Most of the container comes from the installation of
+    apk add --no-cache fontconfig ttf-dejavu gnupg ca-certificates p11-kit-trust musl-locales musl-locales-lang binutils tzdata coreutils openssl (63MB)
+    OpenJDK23U-jdk_aarch64_alpine-linux_hotspot_23.0.1_11.tar.gz (310MB uncompressed)
+The Burble executable is the third-largest item.
+
+We need to add config to the native-image build to specify the musl C lib. This is only applicable to the Linux version, however.
+Musl is not a thing for macOS.
+
+Most people apparently use a container to build their linux image. There's an "official" Maven image repo
+
+docker run -it --rm --name mvnc -v "$HOME/.m2":/root/.m2 -v "$(pwd)":/Users/mark/Development/sndrRcvr/src -w /Users/mark/Development/sndrRcvr/src maven:latest mvn package
+
+We want a container
+- with graalvm 23
+- 3.x Maven
+Initially this doesn't need to be alpine based but the musl thing might require it
+
+This repo looks promising: https://github.com/vegardit/docker-graalvm-maven/blob/main/README.md
+
+https://github.com/vegardit/docker-graalvm-maven/blob/main/README.md
+
+=== Example use of the vegardit image to build a native binary for linux ===
+docker run --rm -it \
+  -v $PWD:/mnt/myproject:rw \       # what's the effect of the :rw part of this?
+  -w /mnt/myproject \
+  vegardit/graalvm-maven:latest-java23 \
+  mvn clean package
+
+Here's how we're using it to
+
+> docker run --rm -it -v "$HOME/.m2/repository":/root/.m2/repository -v "$(pwd)":/mnt/sndrRcvr -w /mnt/sndrRcvr vegardit/graalvm-maven:latest-java23 mvn clean package
+
+Works! Produces a jar file in the target folder of our host OS.
+
+> docker run --rm -it -v "$HOME/.m2/repository":/root/.m2/repository:rw -v "$(pwd)":/mnt/sndrRcvr -w /mnt/sndrRcvr vegardit/graalvm-maven:latest-java23 mvn -Pnative clean package
+
+Works! Produces an ELF executable using the aarch64 instruction set.
+NOTE: the unix `file` command points out it's dynamically linked, however:
+    target/burble: ELF 64-bit LSB pie executable, ARM aarch64, version 1 (SYSV), dynamically linked, interpreter /lib/ld-linux-aarch64.so.1, BuildID[sha1]=99c5d1bf7a89955c2461187540350e00678a5fa1, for GNU/Linux 3.7.0, not stripped
+
+Once the artifact is produced, we can build the docker image that will execute it...
+
+Made a copy of Dockerfile then renamed both.
+    Dockerfile.bin - builds an image that uses a native-image generated executable.
+    Dockerfile.jvm - builds an image that runs a normal jar file using eclipse-temurin:23-alpine.
+
+Use them like so to build the image:
+    docker build -t burble-bin:0.1.0 -f Dockerfile.bin .
+    docker build -t burble-jvm:0.1.0 -f Dockerfile.jvm .
+
+Then to run them:
+    The binary executable version:
+    docker run -it --rm -p 4242:4242 --name burble-bin-rcvr burble-bin:0.1.0 Rcvr
+    docker run -it --rm --name burble-bin-fkop burble-bin:0.1.0 FakeOperator
+    docker run -it --rm --name burble-bin-sndr burble-bin:0.1.0 Sndr
+
+    The JVM version:
+    docker run -it --rm -p 4242:4242 --name burble-jvm-rcvr burble-jvm:0.1.0 Rcvr
+    docker run -it --rm --name burble-jvm-fkop burble-jvm:0.1.0 FakeOperator
+    docker run -it --rm --name burble-jvm-sndr burble-jvm:0.1.0 Sndr
+
+Where the general form is:
+    docker run -it --rm [-p 2424:2424] | [-p 4242:4242] --name burble-jvm burble-jvm:0.1.0 <programName: Rcvr | FakeOperator | Sndr>
+
+The Dockerfiles both default to running FakeOperator.
+
+To run the image without executing the entrypoint/cmd:
+    docker run -it --entrypoint /bin/sh burble-bin:0.1.0
+
+Actually it appears that the binary version running on the alpine container fails because, as noted above, the executable is dynamically linked.
+It fails with a very terse and somewhat misleading error:
+    "exec /opt/app/burble: no such file or directory"
+I think this means that it can't find the expected libc rather than the program itself.
+
+I added a block to the configuration section of the native-maven-plugin setup:
+<buildArgs>
+    <buildArg>--static --libc=musl --enable-sbom</buildArg>
+</buildArgs>
+
+Which seems to be signalling the correct switches in the native-image program but the container that produces the linux binary lacks a needed
+
+docker run --rm -it -v "$HOME/.m2/repository":/root/.m2/repository:rw -v "$(pwd)":/mnt/sndrRcvr -w /mnt/sndrRcvr mstewart/graalvm-maven-musl mvn -Pnative clean package
+
+Notable output from native-image:
+
+"HEAP: Set max heap for improved and more predictable memory usage."
+
+Would be nice if they mentioned the switch/param/flag that controls this. Is the normal JVM flag? Where does it get set?
+
+ "CPU:  Enable more CPU features with '-march=native' for improved performance."
+
+ Added <buildArg>-march=native</buildArg> to the native-maven-plugin config which eliminates the message, so I assume it was the right way to do it.
+
+ 1 experimental option(s) unlocked:
+ - '-H:IncludeResources': Use a resource-config.json in your META-INF/native-image/<groupID>/<artifactID> directory instead. (origin(s): 'META-INF/native-image/com.rabbitmq/amqp-client/native-image.properties' in 'file:///root/.m2/repository/com/rabbitmq/amqp-client/5.23.0/amqp-client-5.23.0.jar')
+
+This is annoying. The lib is providing the needed data so it can be used to produce the native executable, but they've (I guess) changed their mind how this is to be implemented? Worse, they leave it to me to figure out how this is to be represented in the new file.
+I think, for now, we will leave this unaddressed. At least until we're certain of the lib versions we want to use.
+
+::IMPORTANT NOTE::
+As of 12/26/2024, building a fully statically linked graalvm native image is *only* supported on linux for x86_64:
+    https://github.com/oracle/graal/issues/9490
+This is sad. The project seems old enough that it shouldn't still be a problem. There's no cross-compilation either though that is a little more understandable.
+We should try building the musl/statically linked binary on one of our x86 machines just to be sure it will work.
+
+NEXT STEPS:
+X create a working docker-compose.yml to coordinate testing (leave rabbitmq out initially)
+_ create some end-to-end tests
+_ extend the rabbitmq image to add the admin user and any other customized bits we need then add it to the docker-compose.yaml.
+3) create a management CLI using JLine/jansi, etc.
+
+
+
+I swear, where Docker and GraalVM is concerned, every step is a fucking struggle.
+
+Running just a single container via docker-compose.yaml I seem unable to get an HTTP call to the Rcvr web server.
+
+mark@YA-T7RX9LX2PL sndrRcvr % docker compose up -d
+
+mark@YA-T7RX9LX2PL sndrRcvr % curl --verbose http://localhost:4242/health
+* Host localhost:4242 was resolved.
+* IPv6: ::1
+* IPv4: 127.0.0.1
+*   Trying [::1]:4242...
+* Connected to localhost (::1) port 4242
+> GET /health HTTP/1.1
+> Host: localhost:4242
+> User-Agent: curl/8.7.1
+> Accept: */*
+>
+* Request completely sent off
+* Empty reply from server
+* Closing connection
+curl: (52) Empty reply from server
+
+===== 2024-12-28 ======
+Ran the jvm  version of the containers and no longer get the weird HTTP problem. Were the binaries not working?
+
+I re-ran the build_linux.sh script to make sure the executable is what we want.
+
+mark@YA-T7RX9LX2PL sndrRcvr % file target/burble
+target/burble: ELF 64-bit LSB pie executable, ARM aarch64, version 1 (SYSV), dynamically linked, interpreter /lib/ld-linux-aarch64.so.1, BuildID[sha1]=0c26671ef34dfacfcaaea9595bc5e32e0417980a, for GNU/Linux 3.7.0, not stripped
+
+OK, check.
+
+The build uses a Debian-based container while the execution container is "eclipse-temurin:23" (I think this uses ubuntu as its base.)
+Let's try it with "eclipse-temurin:23-jre" as the base layer (this is definitely an Ubuntu image and might be a bit smaller than the JDK version.)
+
+...and, confirmed, that the problem is only with the binary version. Possibly because of the Debian-Ubuntu schism?
+
+No, even when I change the Dockerfile of the image that runs the program to use the same Debian-based image that built the program AND when running curl from within that container.
+
+$ cat /etc/os-release
+PRETTY_NAME="Debian GNU/Linux 12 (bookworm)"
+NAME="Debian GNU/Linux"
+VERSION_ID="12"
+VERSION="12 (bookworm)"
+VERSION_CODENAME=bookworm
+ID=debian
+HOME_URL="https://www.debian.org/"
+SUPPORT_URL="https://www.debian.org/support"
+BUG_REPORT_URL="https://bugs.debian.org/"
+
+$ cat /proc/version
+Linux version 6.10.11-linuxkit (root@buildkitsandbox) (gcc (Alpine 13.2.1_git20240309) 13.2.1 20240309, GNU ld (GNU Binutils) 2.42) #1 SMP Thu Oct  3 10:17:28 UTC 2024
+
+Why is the gcc showing Alpine?
+
+Hmm, the RabbitMQ supplied image that we're using--running Noble Numbat, version 24.04.1 LTS--shows the same gcc info. Maybe this is normal?
+
+$ ldd /opt/app/burble
+        linux-vdso.so.1 (0x0000ffffa22a2000)
+        libz.so.1 => /lib/aarch64-linux-gnu/libz.so.1 (0x0000ffffa2230000)
+        libc.so.6 => /lib/aarch64-linux-gnu/libc.so.6 (0x0000ffff9ea50000)
+        /lib/ld-linux-aarch64.so.1 (0x0000ffffa2265000)
+
+===== 2024-12-30 ======
+
+Curious if we get a smaller image if we build the jre instead of the jdk...
+With JDK...
+burble-jvm                               0.1.0            912143180f41   41 hours ago   801MB
+With JRE...
+burble-jvm                               0.1.0            7171dc515c27   3 minutes ago   507MB
+
+So, yay. The first actual reduction we've seen. GraalVM binaries are still fucking huge.
+Baseline manual test (sending messages through the pipeline) appears to work fine.
+
+What could we gain by putting a JRE on top of something like debian:stable-slim (which is used as the base by vegardit/graalvm-maven, which we use for building linux binaries.)
+
+debian                                   stable-slim      5f21ebd35844   7 days ago       136MB
+eclipse-temurin                          23               c2a3aba09776   2 months ago     712MB
+
+How does the Ubuntu base for eclipse-temurin compare to slim?
+
+While investigating this I checked out https://hub.docker.com/_/eclipse-temurin.
+Two things of note:
+They show how to setup the JDK using a reference to one of their images:
+
+    FROM <base image>
+    ENV JAVA_HOME=/opt/java/openjdk
+    COPY --from=eclipse-temurin:23 $JAVA_HOME $JAVA_HOME
+    ENV PATH="${JAVA_HOME}/bin:${PATH}"
+
+They recommend building a custom JRE using jlink. Is this worth the bother?
+There's also an eclipse-temurin:23.0.1_11-jre-alpine image.
+See https://github.com/docker-library/repo-info/blob/master/repos/eclipse-temurin/local/23-jre-alpine.md
+
+eclipse-temurin                          23.0.1_11-jre-alpine   623a424ca41d   2 months ago     291MB
+Inspecting the layers it appears that the JRE comprises ~161MB of this image.
+NOTE: busybox, which combines ~400 commands into a single program, doesn't include curl but *does* include wget so we won't need the former to do basic, intra-container testing.
+
+Adding our code only adds 8MB:
+burble-jvm                               0.1.0                  52f06679217c   2 minutes ago   298MB
+
+This is a decent tradeoff.
+
+Another good tip here to avoid having to rebuild the image every time the Maven produced jar changes is to mount the host path onto the container. So given,
+
+    FROM eclipse-temurin:21.0.2_13-jdk
+    CMD ["java", "-jar", "/opt/app/japp.jar"]
+
+We can run the container like this:
+    docker build -t <tag> .
+    docker run -it -v /path/on/host/system/jars:/opt/app <tag>
+
+What syntax do we use for a docker-compose file to do this?
+
+TODO
+_ Since building a fully statically linked graalvm native image is *only* supported on linux for x86_64 we should bust out our large memory Macbook.

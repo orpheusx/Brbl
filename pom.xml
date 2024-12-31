@@ -59,11 +59,11 @@
         </dependency>
 
         <!-- https://mvnrepository.com/artifact/org.slf4j/jul-to-slf4j -->
-        <dependency>
+        <!--<dependency>
             <groupId>org.slf4j</groupId>
             <artifactId>jul-to-slf4j</artifactId>
             <version>2.0.16</version>
-        </dependency>
+        </dependency>-->
 
         <!-- https://mvnrepository.com/artifact/org.slf4j/slf4j-api -->
         <dependency>
@@ -82,7 +82,7 @@
         <dependency>
             <groupId>ch.qos.logback</groupId>
             <artifactId>logback-core</artifactId>
-            <version>1.5.12</version>
+            <version>1.5.15</version>
         </dependency>
 
         <!-- The tyler-base lib is only needed to generate a TylerConfiguration class from a logback.xml file. -->
@@ -194,7 +194,7 @@
                     <plugin>
                         <!-- https://mvnrepository.com/artifact/org.graalvm.buildtools/native-maven-plugin -->
                         <groupId>org.graalvm.buildtools</groupId>
-                        <artifactId>native-maven-plugin</artifactId>
+                                <artifactId>native-maven-plugin</artifactId>
                         <version>${native.maven.plugin.version}</version>
                         <executions>
                             <execution>
@@ -215,6 +215,10 @@
                         <configuration>
                             <fallback>false</fallback>
                             <target>linux-arm64</target>
+                            <buildArgs>
+                                <!--<buildArg>&#45;&#45;static &#45;&#45;libc=musl &#45;&#45;enable-sbom</buildArg>-->
+                                <buildArg>-march=native</buildArg>
+                            </buildArgs>
                         </configuration>
                     </plugin>
                 </plugins>

@@ -1,0 +1,21 @@
+FROM vegardit/graalvm-maven:latest-java23
+#FROM eclipse-temurin:23-jre
+#FROM eclipse-temurin:23
+LABEL authors="Mark W. Stewart <zouzousdad@gmail.com>"
+# Need to compile with the flag that sets the libc substitute for the -alpine version.
+# FROM eclipse-temurin:23-alpine
+
+EXPOSE 2424
+EXPOSE 4242
+
+ENV BIN_DIR=/opt/app
+ENV BINARY=burble
+
+RUN mkdir $BIN_DIR
+
+COPY target/$BINARY $BIN_DIR
+
+ENTRYPOINT ["/opt/app/burble"]
+CMD ["FakeOperator"]
+
+# Any heap sizing or JVM params needed? ECS has its settings, as well.
