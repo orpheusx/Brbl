@@ -9,10 +9,10 @@ import org.slf4j.LoggerFactory;
 import static io.helidon.http.Status.Family.SUCCESSFUL;
 
 public class HttpMTHandler implements MTHandler {
+
     private static final Logger LOG = LoggerFactory.getLogger(HttpMTHandler.class);
 
     private final String uri;
-
     private final WebClient client;
 
     public HttpMTHandler(String uri) {
@@ -26,10 +26,14 @@ public class HttpMTHandler implements MTHandler {
     }
 
     public boolean handle(String payload) {
+        return handle("/mtReceive", payload);
+    }
+
+    public boolean handle(String pathInfo, String payload) {
         LOG.info("Sending message, '{}'", payload);
 
         // FIXME need more robust error handling here...including retry logic.
-        ClientResponseTyped<String> res = client.post().path("/mtReceive").submit(payload, String.class);
+        ClientResponseTyped<String> res = client.post().path(pathInfo).submit(payload, String.class);
         LOG.info("Send response {}: {}", res.status(), res.entity());
         Status status = res.status();
         if (status.family() != SUCCESSFUL) {
@@ -39,5 +43,9 @@ public class HttpMTHandler implements MTHandler {
             return true;
         }
 
+    }
+
+    public static void main(String[] args) {
+        new HttpMTHandler("http://localhost:4242");
     }
 }

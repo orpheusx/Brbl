@@ -222,7 +222,7 @@ I added a block to the configuration section of the native-maven-plugin setup:
     <buildArg>--static --libc=musl --enable-sbom</buildArg>
 </buildArgs>
 
-Which seems to be signalling the correct switches in the native-image program but the container that produces the linux binary lacks a needed
+Which seems to be signalling the correct switches in the native-image program but the container that produces the linux binary lacks the referenced library.
 
 docker run --rm -it -v "$HOME/.m2/repository":/root/.m2/repository:rw -v "$(pwd)":/mnt/sndrRcvr -w /mnt/sndrRcvr mstewart/graalvm-maven-musl mvn -Pnative clean package
 
@@ -252,8 +252,7 @@ NEXT STEPS:
 X create a working docker-compose.yml to coordinate testing (leave rabbitmq out initially)
 _ create some end-to-end tests
 _ extend the rabbitmq image to add the admin user and any other customized bits we need then add it to the docker-compose.yaml.
-3) create a management CLI using JLine/jansi, etc.
-
+_ create a management CLI using JLine/Jansi, etc.
 
 
 I swear, where Docker and GraalVM is concerned, every step is a fucking struggle.
@@ -339,7 +338,7 @@ How does the Ubuntu base for eclipse-temurin compare to slim?
 
 While investigating this I checked out https://hub.docker.com/_/eclipse-temurin.
 Two things of note:
-They show how to setup the JDK using a reference to one of their images:
+They show how to set up the JDK using a reference to one of their images:
 
     FROM <base image>
     ENV JAVA_HOME=/opt/java/openjdk
@@ -372,3 +371,35 @@ What syntax do we use for a docker-compose file to do this?
 
 TODO
 _ Since building a fully statically linked graalvm native image is *only* supported on linux for x86_64 we should bust out our large memory Macbook.
+X Create a merged PlatformGatewayMT and MO generator for testing purposes.
+
+Digging into the testcontainers project and found an image for RabbitMQ that's built on an Alpine base.
+As expected it's smaller than the non -alpine version:
+rabbitmq                                 4.0-management          14c30a03410f   3 months ago   425MB
+rabbitmq                                 4.0-management-alpine   74bf73c53b96   3 months ago   295MB
+
+Testcontainers supports running docker-compose files though the logging output is dramatically different from what we see running those files via docker. See https://codeal.medium.com/how-to-run-docker-compose-with-testcontainers-7d1ba73afeeb (it mentions the use of the volumes section of the compose file that, for things like postgres, can be used to run ddl scripts.
+
+
+We want to be able to do this for integration testing.
+That said, testing things we've noted to be possibly problematic--having different components come up out of order or restarting--would seem to require a per-container level of control.
+
+Side-note: It appears possible to use Testcontainers with Docker alternatives, OrbStack and Colima. See http://rockyourcode.com/testcontainers-with-orbstack/ and http://rockyourcode.com/testcontainers-with-colima. Also https://github.com/testcontainers/testcontainers-java/issues/5034#issuecomment-1036433226
+
+Probably not worth the extra effort unless we have problems with Docker.
+
+===== 2025-01-02 ======
+
+Working on EndToEndMessaging:
+
+The docker setup code informs me:
+    'container_name' property set for service 'brkr' but this property is not supported by Testcontainers, consider removing it
+But clearly it's more than just a suggestion because it throws an ExceptionInInitializerError that kills the container startup.
+
+This is tracked in https://github.com/testcontainers/testcontainers-java/issues/2472, but they don't seem to be interested in fixing it; a perfectly reasonable PR adding support for it--https://github.com/testcontainers/testcontainers-java/pull/2741--was closed.
+So I've commented out the container_name in the docker-compose-jvm.yaml file.
+
+Reworked
+Created an integration test, EndToEndMessaging that uses this file. The @Container annotation is supposed to start the docker process, but it doesn't seem to be doing so. Adding a static block that calls the .start() method after the annotation is a simple workaround even if it's a bit disappointing.
+
+Next up: using specific containers to test ordering dependencies.

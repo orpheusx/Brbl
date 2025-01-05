@@ -12,7 +12,7 @@ General Needs
 
 === 04/12/2024 ========
 
-We now have a matched pair of queue components for producing to and consuming from a Rabbit broker.
+We now have a matched pair of queue components producing to and consuming from a Rabbit broker.
 
 TODO
 Programming stuff:
@@ -91,3 +91,6 @@ Compare the size with the one we're using that builds, I think, on top of an Ubu
 
  1 experimental option(s) unlocked:
  - '-H:IncludeResources': Use a resource-config.json in your META-INF/native-image/<groupID>/<artifactID> directory instead. (origin(s): 'META-INF/native-image/com.rabbitmq/amqp-client/native-image.properties' in 'file:///Users/mark/.m2/repository/com/rabbitmq/amqp-client/5.23.0/amqp-client-5.23.0.jar')
+
+
+

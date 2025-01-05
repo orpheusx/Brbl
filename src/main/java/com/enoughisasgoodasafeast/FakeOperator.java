@@ -6,6 +6,8 @@ import org.slf4j.LoggerFactory;
 import java.io.IOException;
 import java.util.concurrent.TimeoutException;
 
+import static com.enoughisasgoodasafeast.SharedConstants.*;
+
 /**
  * FIXME we would like the Operator logic to be neutral where the queuing implementation is concerned.
  * This class is "Fake" because it combines direct knowledge of RabbitMQ and the work needed to process
@@ -48,7 +50,7 @@ public class FakeOperator {
                 if(payload.contains("hello")) {
 
                     // Expects a number followed by a space followed by "hello"
-                    String[] inputs = payload.split(" ", 2);
+                    String[] inputs = payload.split(TEST_SPACE_TOKEN,2);
                     if (inputs.length != 2) {
                         LOG.error("Unexpected input: {}", payload);
                         return false;

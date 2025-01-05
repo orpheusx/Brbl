@@ -8,7 +8,6 @@ import io.helidon.webserver.http.ServerResponse;
 import org.slf4j.LoggerFactory;
 
 import java.io.IOException;
-//import java.util.logging.Logger;
 import org.slf4j.Logger;
 
 import static com.enoughisasgoodasafeast.SharedConstants.*;
@@ -22,7 +21,6 @@ import java.util.concurrent.TimeoutException;
 
 public class Rcvr extends WebService {
 
-//    private static final Logger LOG = Logger.getLogger(Rcvr.class.getName());
     private static final Logger LOG = LoggerFactory.getLogger(Rcvr.class);
 
     public void init() {
@@ -43,10 +41,12 @@ public class Rcvr extends WebService {
                         }
                 )
                 .routing(router -> {
+                        // Supported endpoints:
+                        router.get(HEALTH_ENDPOINT, new HealthCheckHandler());
+                        router.post(ENQUEUE_ENDPOINT, new EnqueueMessageHandler(queueProducer));
+                        // Some test only endpoints:
                         router.get("/foo", new HowdyTestResponseHandler());
                         router.post("/hello", new GoodbyeTestResponseHandler(queueProducer));
-                        router.get("/health", new HealthCheckHandler());
-                        router.post("/enqueue", new EnqueueMessageHandler(queueProducer));
                     }
                 )
                 .build()
