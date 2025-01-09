@@ -12,20 +12,23 @@ public class RabbitQueueConsumer implements QueueConsumer {
 
     private static final Logger LOG = LoggerFactory.getLogger(RabbitQueueConsumer.class);
 
-    private final MTHandler consumingHandler;
-
     public static QueueConsumer createQueueConsumer(String configFileName, MTHandler consumingHandler) throws IOException, TimeoutException {
         Properties props = ConfigLoader.readConfig(configFileName);
+        return createQueueConsumer(props, consumingHandler);
+    }
 
+    public static QueueConsumer createQueueConsumer(Properties props, MTHandler consumingHandler) throws IOException, TimeoutException {
         String queueHost = props.getProperty("queue.host");
+        int queuePort = Integer.parseInt(props.getProperty("queue.port"));
         String queueName = props.getProperty("queue.name");
         String queueRoutingKey = props.getProperty("queue.routingKey");
         boolean isQueueDurable = Boolean.parseBoolean(props.getProperty("queue.durable"));
 
-        return new RabbitQueueConsumer(queueHost, queueName, queueRoutingKey, isQueueDurable, consumingHandler);
+        return new RabbitQueueConsumer(queueHost, queuePort, queueName, queueRoutingKey, isQueueDurable, consumingHandler);
     }
 
     private RabbitQueueConsumer(String queueHost,
+                                int queuePort,
                                 String queueName,
                                 String routingKey,
                                 boolean durable,
@@ -39,10 +42,9 @@ public class RabbitQueueConsumer implements QueueConsumer {
             throw new IllegalArgumentException("RabbitQueueConsumer missing required configuration.");
         }
 
-        this.consumingHandler = consumingHandler;
-
         ConnectionFactory factory = new ConnectionFactory();
         factory.setHost(queueHost);
+        factory.setPort(queuePort);
         // Setup socket connection, negotiate protocol version and authentication
         Connection connection = factory.newConnection();
 
@@ -64,24 +66,24 @@ public class RabbitQueueConsumer implements QueueConsumer {
         channel.basicQos(1); // FIXME not sure we want this always but for testing acks...
 
         // TODO move this into a separate class.
-//        DeliverCallback deliverCallback = (consumerTag, delivery) -> {
-//            String message = new String(delivery.getBody(), "UTF-8");
-//            LOG.info("ConsumerTag for deliverCallback: {}", consumerTag);
-//            LOG.info(" [x] Receiving on {}: '{}'", delivery.getEnvelope().getRoutingKey(), message);
-//            boolean ok = this.consumingHandler.handle(message);
-//            if (ok) {
-//                LOG.info("Processed message: {}", message);
-//            } else {
-//                LOG.error("Delivery failed for message: {}", message);
-//                // FIXME need to implement ack/no-ack with broker.
-//            }
-//            // Either way we want to be done with this message.
-//            long deliveryTag = delivery.getEnvelope().getDeliveryTag();
-//            channel.basicAck(deliveryTag, false);
-//            LOG.info("Acked message with deliveryTag, {}", deliveryTag);
-//        };
-//
-//        LOG.info("DeliverCallback: {}", deliverCallback);
+        //        DeliverCallback deliverCallback = (consumerTag, delivery) -> {
+        //            String message = new String(delivery.getBody(), "UTF-8");
+        //            LOG.info("ConsumerTag for deliverCallback: {}", consumerTag);
+        //            LOG.info(" [x] Receiving on {}: '{}'", delivery.getEnvelope().getRoutingKey(), message);
+        //            boolean ok = this.consumingHandler.handle(message);
+        //            if (ok) {
+        //                LOG.info("Processed message: {}", message);
+        //            } else {
+        //                LOG.error("Delivery failed for message: {}", message);
+        //                // FIXME need to implement ack/no-ack with broker.
+        //            }
+        //            // Either way we want to be done with this message.
+        //            long deliveryTag = delivery.getEnvelope().getDeliveryTag();
+        //            channel.basicAck(deliveryTag, false);
+        //            LOG.info("Acked message with deliveryTag, {}", deliveryTag);
+        //        };
+        //
+        //        LOG.info("DeliverCallback: {}", deliverCallback);
 
         CancelCallback cancelCallback = (consumerTag) -> {
             LOG.info("ConsumerTag for cancelCallback: {}",consumerTag);
@@ -93,7 +95,6 @@ public class RabbitQueueConsumer implements QueueConsumer {
         Consumer consumer = new FakeConsumer(channel, consumingHandler);
 
         // TODO/FIXME handle the ack in our message processing
-//        String consumerTag = channel.basicConsume(declareOk.getQueue(), false, deliverCallback, cancelCallback);
         final String consumerTag = channel.basicConsume(queueName, false, consumer);
 
         LOG.info("consumerTag returned from basicConsume: {}", consumerTag);

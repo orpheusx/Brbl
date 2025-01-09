@@ -29,7 +29,7 @@ public class PlatformGateway extends WebService {
 //    public Properties props;
     public String rcvrUri;
     public int rcvrPort;
-    private final HttpMTHandler client;
+    private HttpMTHandler client;
     public RecordingHandler recordingHandler;
 
     public enum MessageDirection {
@@ -44,12 +44,13 @@ public class PlatformGateway extends WebService {
         direction = MessageDirection.MT;
         String destinationUrl = String.format("http://%s:%d", rcvrUri, rcvrPort);
 
-        client = new HttpMTHandler(destinationUrl);
         recordingHandler = new RecordingHandler();
     }
 
      public PlatformGateway(String destinationUrl) throws IOException {
-         client = new HttpMTHandler(destinationUrl);
+        direction = MessageDirection.MT;
+        client = new HttpMTHandler(destinationUrl);// FIXME These are actually MOs so we should change the name of the class
+        recordingHandler = new RecordingHandler();
      }
 
     public void init() {
@@ -114,7 +115,7 @@ public class PlatformGateway extends WebService {
     }
 
      public static void main(String[] args) throws IOException {
-         PlatformGateway platformGateway = new PlatformGateway("http://192.168.1.155:4242");
+         PlatformGateway platformGateway = new PlatformGateway(/*"http://192.168.1.155:14242"*/);
          platformGateway.init();
      }
 }

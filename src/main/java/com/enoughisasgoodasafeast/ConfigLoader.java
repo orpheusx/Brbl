@@ -5,6 +5,7 @@ import org.slf4j.LoggerFactory;
 
 import java.io.IOException;
 import java.io.InputStream;
+import java.util.Map;
 import java.util.Properties;
 
 public class ConfigLoader {
@@ -29,8 +30,25 @@ public class ConfigLoader {
                 LOG.info("{}: {}={}", fileName, key, val);
             });
 
+            // Override .properties file with env vars
+            final Map<String, String> env = System.getenv();
+            env.forEach((key, val) -> {
+                LOG.info("env: {}={}", key, val);
+                String previousVal = props.getProperty(key);
+                if (props.get(key) != null) {
+                    props.setProperty(key, val);
+                    LOG.info("*** Overriding {}: {} -> {}", key, previousVal, val);
+                }
+                props.setProperty(key, val);
+            });
+
             return props;
         }
+    }
+
+    // Just for testing
+    public static void main(String[] args) throws IOException {
+        ConfigLoader.readConfig("rcvr.properties");
     }
 
 }

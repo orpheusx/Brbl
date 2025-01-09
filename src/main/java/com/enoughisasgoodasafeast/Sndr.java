@@ -4,6 +4,7 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import java.io.IOException;
+import java.util.Properties;
 import java.util.concurrent.TimeoutException;
 
 public class Sndr {
@@ -22,12 +23,14 @@ public class Sndr {
             //}
     //    }
 
-    public Sndr(String uri) {
+    public void init() {
+        LOG.info("Initializing SNDR");
 
         try {
-            HttpMTHandler httpMtHandler = new HttpMTHandler(uri);
+            final Properties properties = ConfigLoader.readConfig("sndr.properties");
+            HttpMTHandler httpMtHandler = (HttpMTHandler) HttpMTHandler.newHandler(properties);
             queueConsumer = RabbitQueueConsumer.createQueueConsumer(
-                    "sndr.properties", httpMtHandler);
+                    properties, httpMtHandler);
         } catch (IOException | TimeoutException e) {
             throw new RuntimeException(e);
         }
@@ -39,23 +42,23 @@ public class Sndr {
     }
 
     public static void main(String[] args) {
-        LOG.info("Running Sndr main");
-//        Sndr sndr = new Sndr("http://192.168.1.155:2424"); // FIXME use config for IP
+        Sndr sndr = new Sndr();
+        sndr.init();
 
-//        HttpClientRequest fooReq = sndr.client.post().path("/mtReceive");//.peek(System.out::println).await();
-//        ClientResponseTyped<String> fooRes = fooReq.request(String.class);
-//        LOG.info("/foo response status: {}", fooRes.status());
-//        LOG.info("/foo response content: {}", fooRes.entity());
-//
-//        HttpClientRequest enqueueReq = sndr.client.post(ENQUEUE_ENDPOINT);
-//        HttpClientResponse enqueueRes = enqueueReq.
-//                submit("{\"id\": \"123\",\"msg\": \"this is message 0\"}");
-//        LOG.info("/enqueue response status: {}",enqueueRes.status());
-//        LOG.info("/enqueue response content: {}", enqueueRes.entity().as(String.class));
-//
-//        HttpClientRequest healthReq = sndr.client.get().path(HEALTH_ENDPOINT);
-//        ClientResponseTyped<String> healthRes = healthReq.request(String.class);
-//        LOG.info("/health response status: {}", healthRes.status());
-//        LOG.info("No response content expected.");
+        //        HttpClientRequest fooReq = sndr.client.post().path("/mtReceive");//.peek(System.out::println).await();
+        //        ClientResponseTyped<String> fooRes = fooReq.request(String.class);
+        //        LOG.info("/foo response status: {}", fooRes.status());
+        //        LOG.info("/foo response content: {}", fooRes.entity());
+        //
+        //        HttpClientRequest enqueueReq = sndr.client.post(ENQUEUE_ENDPOINT);
+        //        HttpClientResponse enqueueRes = enqueueReq.
+        //                submit("{\"id\": \"123\",\"msg\": \"this is message 0\"}");
+        //        LOG.info("/enqueue response status: {}",enqueueRes.status());
+        //        LOG.info("/enqueue response content: {}", enqueueRes.entity().as(String.class));
+        //
+        //        HttpClientRequest healthReq = sndr.client.get().path(HEALTH_ENDPOINT);
+        //        ClientResponseTyped<String> healthRes = healthReq.request(String.class);
+        //        LOG.info("/health response status: {}", healthRes.status());
+        //        LOG.info("No response content expected.");
     }
 }

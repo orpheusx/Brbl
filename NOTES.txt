@@ -399,7 +399,102 @@ But clearly it's more than just a suggestion because it throws an ExceptionInIni
 This is tracked in https://github.com/testcontainers/testcontainers-java/issues/2472, but they don't seem to be interested in fixing it; a perfectly reasonable PR adding support for it--https://github.com/testcontainers/testcontainers-java/pull/2741--was closed.
 So I've commented out the container_name in the docker-compose-jvm.yaml file.
 
-Reworked
 Created an integration test, EndToEndMessaging that uses this file. The @Container annotation is supposed to start the docker process, but it doesn't seem to be doing so. Adding a static block that calls the .start() method after the annotation is a simple workaround even if it's a bit disappointing.
 
+Reworked PlatformGatewayMT to act as both a MO source and the MT destination.
+
 Next up: using specific containers to test ordering dependencies.
+
+Scenarios:
+- what should Rcvr do if the broker disappears?
+    Currently, when messages are received we actually return the following to each calling request:
+        connection is already closed due to connection error; protocol method: #method&lt;connection.close&gt;(reply-code=320, reply-text=CONNECTION_FORCED - broker forced connection closure with reason &#x27;shutdown&#x27;, class-id=0, method-id=0)connection is already closed due to connection error; protocol method: #method&lt;connection.close&gt;(reply-code=320, reply-text=CONNECTION_FORCED - broker forced connection closure with reason &#x27;shutdown&#x27;, class-id=0, method-id=0)connection is already closed due to connection error; protocol method: #method&lt;connection.close&gt;(reply-code=320, reply-text=CONNECTION_FORCED - broker forced connection closure with reason &#x27;shutdown&#x27;, class-id=0, method-id=0)connection is already closed due to connection error; protocol method: #method&lt;connection.close&gt;(reply-code=320, reply-text=CONNECTION_FORCED - broker forced connection closure with reason &#x27;shutdown&#x27;, class-id=0, method-id=0)connection is already closed due to connection error; protocol method: #method&lt;connection.close&gt;(reply-code=320, reply-text=CONNECTION_FORCED - broker forced connection closure with reason &#x27;shutdown&#x27;, class-id=0, method-id=0)Complete.
+
+    Obviously we shouldn't do this.
+    Does it recover when the broker comes back?
+
+    Restarted the broker container and got the following in the Rcvr log:
+
+        2025-01-05 10:38:44,542 ERROR [] [AMQP Connection 192.168.1.155:5672] c.r.c.impl.ForgivingExceptionHandler - Caught an exception during connection recovery!
+        java.io.IOException: null
+        	at com.rabbitmq.client.impl.AMQChannel.wrap(AMQChannel.java:140)
+        	at com.rabbitmq.client.impl.AMQChannel.wrap(AMQChannel.java:136)
+        	at com.rabbitmq.client.impl.AMQConnection.start(AMQConnection.java:406)
+        	at com.rabbitmq.client.impl.recovery.RecoveryAwareAMQConnectionFactory.newConnection(RecoveryAwareAMQConnectionFactory.java:71)
+        	at com.rabbitmq.client.impl.recovery.AutorecoveringConnection.recoverConnection(AutorecoveringConnection.java:628)
+        	at com.rabbitmq.client.impl.recovery.AutorecoveringConnection.beginAutomaticRecovery(AutorecoveringConnection.java:589)
+        	at com.rabbitmq.client.impl.recovery.AutorecoveringConnection.lambda$addAutomaticRecoveryListener$3(AutorecoveringConnection.java:524)
+        	at com.rabbitmq.client.impl.AMQConnection.notifyRecoveryCanBeginListeners(AMQConnection.java:839)
+        	at com.rabbitmq.client.impl.AMQConnection.doFinalShutdown(AMQConnection.java:816)
+        	at com.rabbitmq.client.impl.AMQConnection$MainLoop.run(AMQConnection.java:700)
+        	at java.base/java.lang.Thread.run(Thread.java:1575)
+        Caused by: com.rabbitmq.client.ShutdownSignalException: connection error
+        	at com.rabbitmq.utility.ValueOrException.getValue(ValueOrException.java:66)
+        	at com.rabbitmq.utility.BlockingValueOrException.uninterruptibleGetValue(BlockingValueOrException.java:36)
+        	at com.rabbitmq.client.impl.AMQChannel$BlockingRpcContinuation.getReply(AMQChannel.java:552)
+        	at com.rabbitmq.client.impl.AMQConnection.start(AMQConnection.java:336)
+        	... 8 common frames omitted
+        Caused by: java.io.EOFException: null
+        	at java.base/java.io.DataInputStream.readUnsignedByte(DataInputStream.java:297)
+        	at com.rabbitmq.client.impl.Frame.readFrom(Frame.java:91)
+        	at com.rabbitmq.client.impl.SocketFrameHandler.readFrame(SocketFrameHandler.java:199)
+        	at com.rabbitmq.client.impl.AMQConnection$MainLoop.run(AMQConnection.java:687)
+        	... 1 common frames omitted
+
+However, when we sent more traffic, the Rcvr handled it and was able to send it to the broker. Then I started the FakeOperator and the messages again passed through.
+
+So is there a callback available to know when the broker is available?
+
+===== 2025-01-07 ======
+Having yet more fun with Testcontainers. >:-[
+
+To explore the availability scenarios above, I'm programmatically creating containers for each application.
+
+If I try starting a Rcvr container without a RabbitMQ broker running I get a complaint from InternalCommandPortListeningCheck that seems to stem from the call to withExposedPorts() that's used to connect with the Rcvr's web server.
+
+It's clear, however, that to really have our components be testable in this way we need to provide a direct means of configuring ports.
+Added an override mechanism to ConfigLoader that reads the properties file and the environment vars, overriding the former with the latter where they overlap.
+
+Need a similar mechanism for PlatformGateway to provide it the effective http port for the Rcvr...
+Hacked a fix for this but still running into the InternalCommandPortListeningCheck:
+    https://github.com/testcontainers/testcontainers-java/issues/6730
+
+Fucking hell, maybe it's just easier to add bash.
+Did that but also needed to rebuild the jar file (which I had been neglecting.) Time to set up a shared mount for the containers so we don't need to rebuild the container everytime we make a change to the Java code (assuming we even remember to do that!)
+
+===== 2025-01-09 ======
+ServiceAvailabilityTest.testRcvrReconnect:
+I have most of the containers running and passing messages along, up to where Sndr is supposed to call the PlatformGateway's web server to deliver the generated MTs.
+Having trouble communicating with the PlatformGateway program that's running directly on the host (not in a container like the rest.)
+
+Let's try...
+Run PlatformGateway (its web server using the same sndr.properties configuration, just listening for calls)
+Run the Sndr container with bash:
+
+    docker run -it --entrypoint /bin/bash burble-jvm:0.1.0
+
+then use wget to post some data:
+
+    wget --post-data 'wtf dude 2'  http://192.168.1.155:2424/mtReceive
+    Connecting to 192.168.1.155:2424 (192.168.1.155:2424)
+    saving to 'mtReceive'
+    mtReceive            100% |********************************************************************************************|     2  0:00:00 ETA
+    'mtReceive' saved
+
+So as long as we got the url right, it should work.
+Someone on stackoverflow suggested using 'host.docker.internal' as the host name for the container host. That actually works from
+a bash shell inside a running container:
+    wget --post-data 'wtf dude 2'  http://host.docker.internal:2424/mtReceive
+    Connecting to host.docker.internal:2424 (192.168.65.254:2424)
+    saving to 'mtReceive'
+    mtReceive            100% |********************************************************************************************|     2  0:00:00 ETA
+    'mtReceive' saved
+
+Confirmed that the running program handled it:
+    2025-01-09 15:58:12,929 INFO  [] [[0x67cf6f99 0x537fdca4] WebServer socket] c.e.PlatformGateway - Received content: wtf dude 2
+
+When running PlatformGateway, it tells us
+    2025-01-09 15:57:27,162 INFO  [] [start @default (/0.0.0.0:2424)] io.helidon.webserver.ServerListener - [0x67cf6f99] http://0.0.0.0:2424 bound for socket '@default'
+
+Okay, got it sussed. Test is passing.
+

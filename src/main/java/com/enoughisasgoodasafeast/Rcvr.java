@@ -17,6 +17,7 @@ import static io.helidon.http.Status.OK_200;
 
 import java.time.Duration;
 import java.time.temporal.ChronoUnit;
+import java.util.Properties;
 import java.util.concurrent.TimeoutException;
 
 public class Rcvr extends WebService {
@@ -27,14 +28,17 @@ public class Rcvr extends WebService {
         LOG.info("Initializing RCVR");
 
         QueueProducer queueProducer;
+        int webServerPort;
         try {
-            queueProducer = RabbitQueueProducer.createQueueProducer("rcvr.properties");
+            final Properties properties = ConfigLoader.readConfig("rcvr.properties");
+            queueProducer = RabbitQueueProducer.createQueueProducer(properties);
+            webServerPort = Integer.parseInt(properties.getProperty("listener.port"));
         } catch (IOException | TimeoutException e) {
             throw new RuntimeException(e);
         }
 
         WebServer.builder()
-                .port(4242)
+                .port(webServerPort)
                 .connectionConfig(config -> {
                             config.connectTimeout(Duration.of(CONNECTION_TIMEOUT_SECONDS, ChronoUnit.SECONDS));
                             config.keepAlive(true);
@@ -52,7 +56,6 @@ public class Rcvr extends WebService {
                 .build()
                 .start();
     }
-
 
     private static abstract class BaseHandler implements Handler {
         static final Header serverHeader = HeaderValues.createCached(SERVER, SERVER_NAME); //
@@ -73,21 +76,6 @@ public class Rcvr extends WebService {
             super.handle(req, res);
             res.status(OK_200);
             res.send();
-        }
-    }
-
-    private static class HowdyTestResponseHandler extends BaseHandler {
-        static final String contentStr = "howdy\n";
-        static final byte[] content = contentStr.getBytes();
-        static final int contentLen = content.length;
-
-        @Override
-        public void handle(ServerRequest req, ServerResponse res) throws Exception {
-            super.handle(req, res);
-            res.header(HeaderValues.create(HeaderNames.CONTENT_LENGTH, contentLen));
-            res.status(OK_200);
-            res.send(content);
-            LOG.info(contentStr);
         }
     }
 
@@ -113,6 +101,21 @@ public class Rcvr extends WebService {
             res.status(OK_200);
             res.send("OK");
             LOG.info("/enqueue: request content: {}", rcvText);
+        }
+    }
+
+    private static class HowdyTestResponseHandler extends BaseHandler {
+        static final String contentStr = "howdy\n";
+        static final byte[] content = contentStr.getBytes();
+        static final int contentLen = content.length;
+
+        @Override
+        public void handle(ServerRequest req, ServerResponse res) throws Exception {
+            super.handle(req, res);
+            res.header(HeaderValues.create(HeaderNames.CONTENT_LENGTH, contentLen));
+            res.status(OK_200);
+            res.send(content);
+            LOG.info(contentStr);
         }
     }
 

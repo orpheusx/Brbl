@@ -1,0 +1,50 @@
+# A compose file that is the equivalent of running docker manually.
+#   docker run -it --rm -p 4242:4242 --name burble-bin-rcvr burble-bin:0.1.0 Rcvr
+#   docker run -it --rm --name burble-bin-fkop burble-bin:0.1.0 FakeOperator
+#   docker run -it --rm -p 2424:2424 --name burble-bin-sndr burble-bin:0.1.0 Sndr
+# The brkr is started with the following:
+#   docker run -it --rm --name rabbitmq -p 5672:5672 -p 15672:15672 rabbitmq:4.0-management
+
+services:
+
+  brkr:
+#    container_name: brkr
+    image: rabbitmq:4.0-management-alpine
+    ports:
+      - "5672:5672"
+      - "15672:15672"
+    restart: always
+    healthcheck:
+      # See https://stackoverflow.com/questions/69893966/how-to-check-rabbitmq-connectionhealth-check-up-or-not
+      # use the flag --erlang-cookie if setting the erlang
+      # cookie was necessary (comment by red-riding-hood)
+      # test: rabbitmq-diagnostics -q ping --erlang-cookie "mycookie"
+      test: rabbitmq-diagnostics -q ping
+      interval: 30s
+      timeout: 10s
+      retries: 5
+      start_period: 10s
+
+  rcvr:
+#    container_name: rcvr
+    image: burble-jvm:0.1.0
+    ports:
+      - "4242:4242"
+    command: Rcvr
+    depends_on:
+      brkr:
+        condition: service_healthy
+
+  fakeOperator:
+#    container_name: operator
+    image: burble-jvm:0.1.0
+    command: FakeOperator
+    depends_on:
+      - rcvr
+
+  sndr:
+#    container_name: sndr
+    image: burble-jvm:0.1.0
+    command: Sndr
+    depends_on:
+      - fakeOperator

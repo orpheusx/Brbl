@@ -24,6 +24,12 @@ CMD ["FakeOperator"]
 #RUN apt-get update && apt-get install -y curl
 # For Alpine:
 #   RUN apk --no-cache add curl
-
+# Note: Alpine's busybox includes wget which is probably sufficient.
 
 RUN /bin/sh -c set -eux; ARCH="$(apk --print-arch)"; case "${ARCH}" in aarch64) ESUM='b56eaedc094cb9107be2d5be9ad34c3dd9492c45aa671d102b5829a488cfc744'; BINARY_URL='https://github.com/adoptium/temurin23-binaries/releases/download/jdk-23.0.1%2B11/OpenJDK23U-jre_aarch64_alpine-linux_hotspot_23.0.1_11.tar.gz'; ;; x86_64) ESUM='38a1b20b5ee8869b20e9f9aefdc91eedf245584d35287842a66540f0745dd3d0'; BINARY_URL='https://github.com/adoptium/temurin23-binaries/releases/download/jdk-23.0.1%2B11/OpenJDK23U-jre_x64_alpine-linux_hotspot_23.0.1_11.tar.gz'; ;; *) echo "Unsupported arch: ${ARCH}"; exit 1; ;; esac; wget -O /tmp/openjdk.tar.gz ${BINARY_URL}; wget -O /tmp/openjdk.tar.gz.sig ${BINARY_URL}.sig; export GNUPGHOME="$(mktemp -d)"; gpg --batch --keyserver keyserver.ubuntu.com --recv-keys 3B04D753C9050D9A5D343F39843C48A565F8F04B; gpg --batch --verify /tmp/openjdk.tar.gz.sig /tmp/openjdk.tar.gz; rm -r "${GNUPGHOME}" /tmp/openjdk.tar.gz.sig; echo "${ESUM} */tmp/openjdk.tar.gz" | sha256sum -c -; mkdir -p "$JAVA_HOME"; tar --extract --file /tmp/openjdk.tar.gz --directory "$JAVA_HOME" --strip-components 1 --no-same-owner ; rm -f /tmp/openjdk.tar.gz ${JAVA_HOME}/lib/src.zip; # buildkit
+
+# We're installing bash because of https://github.com/testcontainers/testcontainers-java/issues/6730
+# Likely this doesn't really help if we run afoul of the port-is-listening check. Leaving it in for now but...
+RUN apk update
+RUN apk upgrade
+RUN apk add bash

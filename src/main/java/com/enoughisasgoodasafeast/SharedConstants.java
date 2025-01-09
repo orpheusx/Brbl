@@ -7,4 +7,5 @@ public interface SharedConstants {
     String HEALTH_ENDPOINT = "/health";
     String ENQUEUE_ENDPOINT = "/enqueue";
     long CONNECTION_TIMEOUT_SECONDS = 30L;
+    String STANDARD_RABBITMQ_PORT = "5672";
 }

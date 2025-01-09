@@ -9,6 +9,7 @@ import java.nio.charset.StandardCharsets;
 import java.util.Properties;
 import java.util.concurrent.TimeoutException;
 
+import static com.enoughisasgoodasafeast.SharedConstants.STANDARD_RABBITMQ_PORT;
 import static com.rabbitmq.client.BuiltinExchangeType.TOPIC;
 
 public class RabbitQueueProducer implements QueueProducer {
@@ -16,30 +17,36 @@ public class RabbitQueueProducer implements QueueProducer {
     private static final Logger LOG = LoggerFactory.getLogger(RabbitQueueProducer.class);
 
     private final String queueHost;
+    private final int queuePort;
     private final String exchangeName;
     private final String routingKey;
 
     private final Channel channel;
 
     public static QueueProducer createQueueProducer(String configFileName) throws IOException, TimeoutException {
-        Properties props = ConfigLoader.readConfig(configFileName);
+        Properties properties = ConfigLoader.readConfig(configFileName);
+        return createQueueProducer(properties);
+    }
 
+    public static QueueProducer createQueueProducer(Properties props) throws IOException, TimeoutException {
         String queueHost = props.getProperty("queue.host");
+        int queuePort = Integer.parseInt(props.getProperty("queue.port", STANDARD_RABBITMQ_PORT));
         String queueName = props.getProperty("queue.name");
         String queueRoutingKey = props.getProperty("queue.routingKey");
 
-        boolean queueIsDurable = Boolean.parseBoolean(props.getProperty("queue.durable"));
+        boolean queueIsDurable = Boolean.parseBoolean(props.getProperty("queue.durablex"));
 
-        return new RabbitQueueProducer(queueHost, queueName, queueRoutingKey, queueIsDurable);
+        return new RabbitQueueProducer(queueHost, queuePort, queueName, queueRoutingKey, queueIsDurable);
     }
 
-    private RabbitQueueProducer(String queueHost, String exchangeName, String routingKey, boolean isDurable)
+    private RabbitQueueProducer(String queueHost, int queuePort, String exchangeName, String routingKey, boolean isDurable)
             throws IOException, TimeoutException {
 
-        LOG.info("Creating RabbitQueueProducer: queueHost: '{}', exchangeName: '{}', routingKey: '{}', isDurable: {}",
-                queueHost, exchangeName, routingKey, isDurable);
+        LOG.info("Creating RabbitQueueProducer: queueHost: '{}', queuePort: '{}', exchangeName: '{}', routingKey: '{}', isDurable: {}",
+                queueHost, queuePort, exchangeName, routingKey, isDurable);
 
         this.queueHost = queueHost;
+        this.queuePort = queuePort;
         this.exchangeName = exchangeName;
         this.routingKey = routingKey;
 
@@ -49,10 +56,12 @@ public class RabbitQueueProducer implements QueueProducer {
 
         ConnectionFactory factory = new ConnectionFactory();
         factory.setHost(this.queueHost);
+        factory.setPort(this.queuePort);
 
         Connection moConnection = factory.newConnection();
         channel = moConnection.createChannel();
-        /*AMQP.Exchange.DeclareOk declareOk = */channel.exchangeDeclare(this.exchangeName, TOPIC, isDurable);
+        /*AMQP.Exchange.DeclareOk declareOk = */
+        channel.exchangeDeclare(this.exchangeName, TOPIC, isDurable);
 
         channel.queueDeclare(this.exchangeName, true, false, false, null);
         channel.queueBind(exchangeName, this.exchangeName, routingKey);
@@ -72,6 +81,7 @@ public class RabbitQueueProducer implements QueueProducer {
         LOG.info(" [x] Enqueued msg '{}'", message);
     }
 
+    // Test only
     public static void main(String[] args) throws IOException, TimeoutException {
         QueueProducer rqp = RabbitQueueProducer.createQueueProducer("queue.properties");
         long timestamp = System.currentTimeMillis();

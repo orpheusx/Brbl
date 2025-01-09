@@ -4,6 +4,7 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import java.io.IOException;
+import java.util.Properties;
 import java.util.concurrent.TimeoutException;
 
 import static com.enoughisasgoodasafeast.SharedConstants.*;
@@ -23,9 +24,10 @@ public class FakeOperator {
     public void init() throws IOException, TimeoutException {
         LOG.info("Initializing FakeOperator");
         queueProducer = RabbitQueueProducer.createQueueProducer("sndr.properties");
-        QueueProducerMTHandler mtHandler = new QueueProducerMTHandler(queueProducer);
+        QueueProducerMTHandler producerMTHandler = new QueueProducerMTHandler(queueProducer);
         queueConsumer = RabbitQueueConsumer.createQueueConsumer(
-                "rcvr.properties", mtHandler);
+                "rcvr.properties", producerMTHandler);
+        // FIXME add a startup messsage that signals readiness...
     }
 
     public static void main(String[] args) throws IOException, TimeoutException {
@@ -67,6 +69,10 @@ public class FakeOperator {
                 throw new RuntimeException(e);
             }
             return true;
+        }
+
+        public MTHandler newHandler(Properties properties) {
+            throw new UnsupportedOperationException("TODO placeholder");
         }
     }
 
