@@ -18,6 +18,10 @@ import static com.enoughisasgoodasafeast.SharedConstants.ENQUEUE_ENDPOINT;
 import static io.helidon.http.Status.OK_200;
 import static java.time.temporal.ChronoUnit.*;
 
+/**
+ * This is a simulated and generic representation of a 3rd party message gateway intended for use with unit/integration
+ * testing.
+ */
 public class PlatformGateway extends WebService {
 
     private static final Logger LOG = LoggerFactory.getLogger(PlatformGateway.class);
@@ -37,19 +41,20 @@ public class PlatformGateway extends WebService {
         MT  // Mobile Terminated
     }
 
+    /* Used by EndToEndMessagingTest*/
     public PlatformGateway() throws IOException {
         Properties props = ConfigLoader.readConfig("gateway.properties");
         rcvrUri = props.getProperty("rcvr.host");
         rcvrPort = Integer.parseInt(props.getProperty("rcvr.port"));
-        direction = MessageDirection.MT;
+        direction = MessageDirection.MT; // Add to config?
         String destinationUrl = String.format("http://%s:%d", rcvrUri, rcvrPort);
-
+        client = (HttpMTHandler) HttpMTHandler.newHandler(props); //new HttpMTHandler(destinationUrl);
         recordingHandler = new RecordingHandler();
     }
 
      public PlatformGateway(String destinationUrl) throws IOException {
         direction = MessageDirection.MT;
-        client = new HttpMTHandler(destinationUrl);// FIXME These are actually MOs so we should change the name of the class
+        client = new HttpMTHandler(destinationUrl);
         recordingHandler = new RecordingHandler();
      }
 

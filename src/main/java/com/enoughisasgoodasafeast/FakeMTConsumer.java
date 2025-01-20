@@ -10,9 +10,12 @@ import org.slf4j.LoggerFactory;
 import java.io.IOException;
 import java.nio.charset.StandardCharsets;
 
-public class FakeConsumer extends DefaultConsumer {
+/**
+ * An implementation of Rabbit's DefaultConsumer that processes messages from a queue using an MTHandler impl.
+ */
+public class FakeMTConsumer extends DefaultConsumer {
 
-    private static final Logger LOG = LoggerFactory.getLogger(FakeConsumer.class);
+    private static final Logger LOG = LoggerFactory.getLogger(FakeMTConsumer.class);
 
     private final MTHandler handler;
 
@@ -22,7 +25,7 @@ public class FakeConsumer extends DefaultConsumer {
      * @param channel the channel to which this consumer is attached
      * @param handler the handler that will process incoming messages in some fashion.
      */
-    public FakeConsumer(Channel channel, MTHandler handler) {
+    public FakeMTConsumer(Channel channel, MTHandler handler) {
         super(channel);
         this.handler = handler;
     }

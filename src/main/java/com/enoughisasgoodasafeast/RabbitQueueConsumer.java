@@ -92,7 +92,7 @@ public class RabbitQueueConsumer implements QueueConsumer {
         LOG.info("CancelCallback: {}", cancelCallback);
 
         // TODO add support for the other Callback interfaces...
-        Consumer consumer = new FakeConsumer(channel, consumingHandler);
+        Consumer consumer = new FakeMTConsumer(channel, consumingHandler);
 
         // TODO/FIXME handle the ack in our message processing
         final String consumerTag = channel.basicConsume(queueName, false, consumer);

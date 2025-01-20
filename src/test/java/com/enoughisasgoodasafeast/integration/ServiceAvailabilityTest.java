@@ -12,6 +12,7 @@ import org.testcontainers.junit.jupiter.Container;
 import org.testcontainers.junit.jupiter.Testcontainers;
 
 import java.io.IOException;
+import java.net.InetAddress;
 import java.time.Duration;
 import java.util.HashMap;
 import java.util.List;
@@ -56,36 +57,43 @@ public class ServiceAvailabilityTest {
 //                    //.withTimes(2)
 //                    .withStartupTimeout(Duration.of(60, ChronoUnit.SECONDS)));
 
+    @Test
+    public void testRcvrReconnect() {
+        // TBD
+    }
 
     @Test
-    public void testRcvrReconnect() throws IOException {
+    public void testBasicMessageSend() throws IOException {
+
+        // -------------------------------------- Setup Rabbit broker ----------------------------------------------//
         demandStart(brokerContainer);
         if (!brokerContainer.isRunning()) {
             LOG.error("Broker container still isn't running. Testcontainers sucks.");
         } else {
             LOG.info("Thank christ, the fucking broker container started.");
         }
-        final Integer brokerPort =/* 5672;*/brokerContainer.getMappedPort(Integer.parseInt(STANDARD_RABBITMQ_PORT));
-        LOG.info("broker running on {}:{}", brokerContainer.getHost(), brokerPort);
 
+        final Integer brokerPort =/* 5672;*/brokerContainer.getMappedPort(Integer.parseInt(STANDARD_RABBITMQ_PORT));
+        final String brokerHost = InetAddress.getLocalHost().getHostAddress();//brokerContainer.getHost();
+        LOG.info("Broker running on {}:{}", brokerHost, brokerPort);
+
+        // Override base value for these properties with the Testcontainer lib's randomized port.
         Map<String, String> envOverrides = new HashMap<>();
         envOverrides.put("queue.port", String.valueOf(brokerPort));
+        envOverrides.put("queue.host", brokerHost);
 
+        // -------------------------------------- Setup RCVR -----------------------------------------------------//
         final GenericContainer<?> rcvrContainer = new GenericContainer<>("burble-jvm:0.1.0")
                 .withCommand("Rcvr")
-                .withExposedPorts(4242) // requires bash to be installed in the running container image. Busybox doesn't do this!
+                .withExposedPorts(4242) // requires bash to be installed in the running container image but Busybox doesn't include bash!
                 .withEnv(envOverrides);
 
         demandStart(rcvrContainer);
-
-        Slf4jLogConsumer rcvrLogConsumer = new Slf4jLogConsumer(LOG);
-        rcvrContainer.followOutput(rcvrLogConsumer);
 
         Integer rcvrPort = rcvrContainer.getMappedPort(4242);
         String rcvrHost = rcvrContainer.getHost();
 
         LOG.info("Rcvr host and port: {} {}", rcvrHost, rcvrPort);
-
 
         if (!rcvrContainer.isRunning()) {
             LOG.error("Rcvr container still isn't running. Testcontainers sucks.");
@@ -93,14 +101,13 @@ public class ServiceAvailabilityTest {
             LOG.info("Thank christ, the fucking rcvr container started.");
         }
 
+
+        // -------------------------------------- Setup FKOP -----------------------------------------------------//
         final GenericContainer<?> fkopContainer = new GenericContainer<>("burble-jvm:0.1.0")
                 .withCommand("FakeOperator")
                 .withEnv(envOverrides);
 
         demandStart(fkopContainer);
-
-        Slf4jLogConsumer fkopLogConsumer = new Slf4jLogConsumer(LOG);
-        fkopContainer.followOutput(fkopLogConsumer);
 
         if (!fkopContainer.isRunning()) {
             LOG.error("Fkop container still isn't running. Testcontainers sucks.");
@@ -108,14 +115,14 @@ public class ServiceAvailabilityTest {
             LOG.info("Thank christ, the fucking Fkop container started.");
         }
 
+
+        waitSeconds(4);
+        // -------------------------------------- Setup SNDR -----------------------------------------------------//
         final GenericContainer<?> sndrContainer = new GenericContainer<>("burble-jvm:0.1.0")
                 .withCommand("Sndr")
                 .withEnv(envOverrides);
 
         demandStart(sndrContainer);
-
-        Slf4jLogConsumer sndrLogConsumer = new Slf4jLogConsumer(LOG).withMdc("SNDR  ","SNDR");
-        sndrContainer.followOutput(sndrLogConsumer);
 
         if (!sndrContainer.isRunning()) {
             LOG.error("Sndr container still isn't running. Testcontainers sucks.");
@@ -124,7 +131,7 @@ public class ServiceAvailabilityTest {
         }
 
 
-        final String effectiveRcvrUrl = String.format("http://%s:%d", /*rcvrHost*/"192.168.1.155", rcvrPort);
+        final String effectiveRcvrUrl = String.format("http://%s:%d", rcvrHost/*"192.168.1.155"*/, rcvrPort);
         final PlatformGateway gateway = new PlatformGateway(effectiveRcvrUrl);
         gateway.init();
 
@@ -150,10 +157,16 @@ public class ServiceAvailabilityTest {
             gateway.sendMoTraffic(message);
         }
 
-        waitSeconds(3); // FIXME alternative way to wait for the results to arrive?
+        // FIXME Use a polling while loop to try (almost) immediately then a couple times more with longer waits in between
 
-        final List<String> responses = gateway.recordingHandler.retrieve();
-        assertEquals(messages.length, responses.size(), "Received count doesn't match the number sent.");
+        int resultCheckAttempts = 0;
+        List<String> responses = gateway.recordingHandler.retrieve();
+        while ((responses.size() < messages.length) && (++resultCheckAttempts < 5)) { // pretty generous latency
+            LOG.info("Messages received by recordingHandler: {}", responses.size());
+            waitSeconds(1);
+            responses = gateway.recordingHandler.retrieve();
+        }
+        assertEquals(messages.length, responses.size(), "Received count doesn't match the number sent. Checked " + resultCheckAttempts + " times.");
 
         // check the ordering and performed transformation
         for (int i = 0; i < messages.length; i++) {
@@ -165,6 +178,8 @@ public class ServiceAvailabilityTest {
                 assertEquals("goodbye", rcvdParts[1]);
             }
         }
+
+        LOG.info("Messages sent, received, and verified.");
     }
 
     private void  demandStart(GenericContainer container) {
@@ -174,11 +189,14 @@ public class ServiceAvailabilityTest {
         } else {
             LOG.info("Container already running.");
         }
+        Slf4jLogConsumer logConsumer = new Slf4jLogConsumer(LOG);
+        container.followOutput(logConsumer);
+        waitSeconds(2); // FIXME get the fuck out of here
     }
 
     private void waitSeconds(int num) {
         try {
-            LOG.info("waiting {} secs", num);
+            LOG.info("Waiting {} secs", num);
             Thread.sleep(Duration.ofSeconds(num));
         } catch (InterruptedException e) {
             LOG.error("waitSeconds was interrupted", e);

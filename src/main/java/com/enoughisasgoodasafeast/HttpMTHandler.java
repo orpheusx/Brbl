@@ -32,10 +32,10 @@ public class HttpMTHandler implements MTHandler {
     }
 
     public static MTHandler newHandler(Properties properties) {
-        String protocol = properties.getProperty("platform.mt.protocol"); // TODO TLS and HTTP/2
+        String protocol = properties.getProperty("platform.mt.protocol"); // TODO HTTP/2, also make constants
         String host = properties.getProperty("platform.mt.host");
         int port = Integer.parseInt(properties.getProperty("platform.mt.port"));
-        String pathInfo = properties.getProperty("platform.mt.pathInfo"); //FIXME check for leading '/'
+        String pathInfo = properties.getProperty("platform.mt.pathInfo"); //FIXME check for leading slash
         String endpoint = String.format("%s://%s:%d", protocol, host, port);
         return new HttpMTHandler(endpoint);
     }

@@ -34,7 +34,7 @@ public class RabbitQueueProducer implements QueueProducer {
         String queueName = props.getProperty("queue.name");
         String queueRoutingKey = props.getProperty("queue.routingKey");
 
-        boolean queueIsDurable = Boolean.parseBoolean(props.getProperty("queue.durablex"));
+        boolean queueIsDurable = Boolean.parseBoolean(props.getProperty("queue.durable"));
 
         return new RabbitQueueProducer(queueHost, queuePort, queueName, queueRoutingKey, queueIsDurable);
     }

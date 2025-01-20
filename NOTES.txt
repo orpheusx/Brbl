@@ -496,5 +496,31 @@ Confirmed that the running program handled it:
 When running PlatformGateway, it tells us
     2025-01-09 15:57:27,162 INFO  [] [start @default (/0.0.0.0:2424)] io.helidon.webserver.ServerListener - [0x67cf6f99] http://0.0.0.0:2424 bound for socket '@default'
 
-Okay, got it sussed. Test is passing.
+
+RANDOM NOTE: https://eclipse.dev/openj9/ OpenJ9 JVM touts faster startup, less memory.
+
+===== 2025-01-18 ======
+
+ServiceAvailabilityTest is still broken due to some innocuous refactoring...
+
+Sndr.init is called (and throws an exception) _after_ the test message are sent and received by the Rcvr:
+
+    2025-01-14 15:54:43,187 INFO  [] [docker-java-stream-788704569] c.e.i.ServiceAvailabilityTest - STDERR: Caused by: com.rabbitmq.client.ShutdownSignalException: channel error; protocol method: #method<channel.close>(reply-code=406, reply-text=PRECONDITION_FAILED - inequivalent arg 'durable' for exchange 'test.mt' in vhost '/': received 'true' but current is 'false', class-id=40, method-id=10)
+
+Both the Sndr and FakeOperator can set up the test.mt exchange. Both use the sndr.properties to set the durable property.
+
+That said, even before this the FakeOperator throws almost the same exception for the test.mo queue:
+
+    2025-01-18 13:43:10,542 INFO  [] [docker-java-stream-1817243090] c.e.i.ServiceAvailabilityTest - STDERR: Caused by: com.rabbitmq.client.ShutdownSignalException: channel error; protocol method: #method<channel.close>(reply-code=406, reply-text=PRECONDITION_FAILED - inequivalent arg 'durable' for exchange 'test.mo' in vhost '/': received 'true' but current is 'false', class-id=40, method-id=10)
+
+The ordering may simply be an artifact of the logging setup that uses Slf4jLogConsumer to view the container output.
+
+Pared it back to just the rabbit broker and rcvr.
+Verified that the messages can be sent to rcvr and  with rabbitmqctl list_queues (from a shell inside the broker container) that they are received.
+
+Next, turned off the Rcvr and turned on the FakeOperator:
+    2025-01-19 10:17:04,408 INFO  [] [docker-java-stream-1832978947] c.e.i.ServiceAvailabilityTest - STDOUT: 2025-01-19 15:17:04.406636+00:00 [error] <0.774.0> operation basic.consume caused a channel exception not_found: no queue 'test.mo' in vhost '/'
+
+ Looks like some configuration file errors were causing the trouble.
+ Working now.
 
