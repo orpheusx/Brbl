@@ -524,3 +524,22 @@ Next, turned off the Rcvr and turned on the FakeOperator:
  Looks like some configuration file errors were causing the trouble.
  Working now.
 
+===== 2025-01-20 ======
+
+The Maven test goal wasn't picking up my integration tests. This is because IntelliJ had auto-imported the older JUnit Test class/annotation instead of the newer Jupiter JUnit 5 version.
+
+Now they run as expected though the Surefire output is lacking the nice formatted .html file. (The regular output are a bunch of text files, one for each test. Really not useful.)
+
+Figured out how to make the surefire plugins (which are so freaking old and pull in so many additional dependencies) generate the readable HTML test report whenever the test goal is run.
+
+Oh, also it appears that running the two container-based tests individually works but running them sequentially via Maven's test goal does not. The PlatformGateway instance isn't shutdown (and port released) before the next instance tries to start.
+
+    2025-01-20 13:50:29,449 ERROR [ff0af9f3-e9de-446f-b242-e4506119c47a] [main] io.helidon.webserver.LoomServer - Failed to start listener: /0.0.0.0:2424
+    java.util.concurrent.ExecutionException: java.io.UncheckedIOException: Failed to start server
+    ...
+    Caused by: java.net.BindException: Address already in use
+
+Hmm, added a stop() method to PlatformGateway that calls through to the contained WebServer's stop() method.
+Seems to have resolved the problem.
+
+On to the next test...

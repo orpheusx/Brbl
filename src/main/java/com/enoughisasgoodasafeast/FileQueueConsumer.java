@@ -7,12 +7,10 @@ import java.nio.file.Path;
 import java.nio.file.Paths;
 
 public class FileQueueConsumer implements QueueConsumer {
-    private Path queueFile;
     private long pollIntervalMs;
-    private BufferedReader reader;
+    private final BufferedReader reader;
 
     public FileQueueConsumer(Path queueFile) throws IOException {
-        this.queueFile = queueFile;
         this.reader = Files.newBufferedReader(queueFile);
     }
 
@@ -35,8 +33,9 @@ public class FileQueueConsumer implements QueueConsumer {
     public static void main(String[] args) throws IOException {
         Path source = Paths.get("src/test/resources/testMessages.txt");
         FileQueueConsumer rcvr = new FileQueueConsumer(source);
-        Object message = null;
-        while ((message = rcvr.dequeue()) != null) {
+        Object message = rcvr.dequeue();
+        while (message != null) {
+            message = rcvr.dequeue();
             System.out.println(message);
         }
     }

@@ -1,9 +1,9 @@
 package com.enoughisasgoodasafeast.integration;
 
+import com.enoughisasgoodasafeast.ConfigLoader;
 import com.enoughisasgoodasafeast.PlatformGateway;
 import com.enoughisasgoodasafeast.SharedConstants;
-import org.junit.Test;
-
+import org.junit.jupiter.api.Test;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.testcontainers.containers.ComposeContainer;
@@ -12,9 +12,10 @@ import org.testcontainers.junit.jupiter.Testcontainers;
 
 import java.io.File;
 import java.io.IOException;
-import java.time.Duration;
+import java.net.InetAddress;
 import java.util.List;
 
+import static com.enoughisasgoodasafeast.util.Functions.waitSeconds;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 
 @Testcontainers
@@ -41,8 +42,11 @@ public class EndToEndMessagingTest {
 
     @Test
     public void testSendAndVerifyResponse() throws IOException {
+        String rcvrHost = InetAddress.getLocalHost().getHostAddress();
+        String rcvrPort = ConfigLoader.readConfig("rcvr.properties").getProperty("listener.port");
+        String rcvrUri = String.format("http://%s:%s", rcvrHost, rcvrPort);
+        final PlatformGateway gateway = new PlatformGateway(rcvrUri);
 
-        final PlatformGateway gateway = new PlatformGateway();
         gateway.init();
 
         final String[] messages = {
@@ -63,9 +67,13 @@ public class EndToEndMessagingTest {
             gateway.sendMoTraffic(message);
         }
 
-        waitSeconds(3); // FIXME alternative way to wait for the results to arrive?
-
-        final List<String> responses = gateway.recordingHandler.retrieve();
+        int resultCheckAttempts = 0;
+        List<String> responses = gateway.recordingHandler.retrieve();
+        while ((responses.size() < messages.length) && (++resultCheckAttempts < 5)) { // pretty generous latency
+            LOG.info("Messages received by recordingHandler: {}", responses.size());
+            waitSeconds(1);
+            responses = gateway.recordingHandler.retrieve();
+        }
         assertEquals(messages.length, responses.size(), "Received count doesn't match the number sent.");
 
         // check the ordering and performed transformation
@@ -79,14 +87,14 @@ public class EndToEndMessagingTest {
             }
         }
 
+        gateway.stop();
+
     }
 
-    private void waitSeconds(int num) {
-        try {
-            Thread.sleep(Duration.ofSeconds(num));
-        } catch (InterruptedException e) {
-            LOG.error("waitSeconds was interrupted", e);
-        }
+    @Test
+    public void testOperatorBaseline() {
+        // run a docker compose file with a real, functioning Operator implementation
+        // then test the inputs and outputs
     }
 
 }

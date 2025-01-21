@@ -7,11 +7,9 @@ import io.helidon.webserver.http.ServerResponse;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
-import java.io.IOException;
 import java.time.Duration;
 import java.util.ArrayList;
 import java.util.List;
-import java.util.Properties;
 
 import static com.enoughisasgoodasafeast.SharedConstants.CONNECTION_TIMEOUT_SECONDS;
 import static com.enoughisasgoodasafeast.SharedConstants.ENQUEUE_ENDPOINT;
@@ -30,38 +28,36 @@ public class PlatformGateway extends WebService {
 
     public int port = 2424; // the port we listen on
     public MessageDirection direction = MessageDirection.MT;
-//    public Properties props;
-    public String rcvrUri;
-    public int rcvrPort;
+    public String destinationUrl;
     private HttpMTHandler client;
     public RecordingHandler recordingHandler;
+    private WebServer webServer;
 
     public enum MessageDirection {
         MO, // Mobile Originated
         MT  // Mobile Terminated
     }
 
-    /* Used by EndToEndMessagingTest*/
-    public PlatformGateway() throws IOException {
-        Properties props = ConfigLoader.readConfig("gateway.properties");
-        rcvrUri = props.getProperty("rcvr.host");
-        rcvrPort = Integer.parseInt(props.getProperty("rcvr.port"));
-        direction = MessageDirection.MT; // Add to config?
-        String destinationUrl = String.format("http://%s:%d", rcvrUri, rcvrPort);
-        client = (HttpMTHandler) HttpMTHandler.newHandler(props); //new HttpMTHandler(destinationUrl);
-        recordingHandler = new RecordingHandler();
-    }
-
-     public PlatformGateway(String destinationUrl) throws IOException {
-        direction = MessageDirection.MT;
-        client = new HttpMTHandler(destinationUrl);
-        recordingHandler = new RecordingHandler();
+    // public PlatformGateway() throws IOException {
+    //     Properties props = ConfigLoader.readConfig("gateway.properties");
+    //     rcvrHost = InetAddress.getLocalHost().getHostAddress(); // rcvrUri = props.getProperty("rcvr.host");
+    //     rcvrPort = Integer.parseInt(props.getProperty("rcvr.port"));
+    //     direction = MessageDirection.MT; // Add to config?
+    //     String destinationUrl = String.format("http://%s:%d", rcvrHost, rcvrPort);
+    //     client = /*(HttpMTHandler) HttpMTHandler.newHandler(props); */ new HttpMTHandler(destinationUrl);
+    //     recordingHandler = new RecordingHandler();
+    // }
+//
+     public PlatformGateway(String destinationUrl) {
+        this.destinationUrl = destinationUrl;
      }
 
     public void init() {
         LOG.info("Initializing PlatformGateway[{}]", direction);
 
-        WebServer.builder()
+        recordingHandler = new RecordingHandler();
+
+        webServer = WebServer.builder()
                 .port(this.port)
                 .connectionConfig(config -> {
                             config.connectTimeout(Duration.of(CONNECTION_TIMEOUT_SECONDS, SECONDS));
@@ -73,6 +69,13 @@ public class PlatformGateway extends WebService {
                 })
                 .build()
                 .start();
+
+        client = new HttpMTHandler(destinationUrl);
+    }
+
+    public void stop() {
+        webServer.stop();
+        LOG.info("Stopped PlatformGateway webServer.");
     }
 
     public static class RecordingHandler implements Handler {
@@ -80,7 +83,7 @@ public class PlatformGateway extends WebService {
         private final ArrayList<String> recorder = new ArrayList<>();
 
         @Override
-        public void handle(ServerRequest req, ServerResponse res) throws Exception {
+        public void handle(ServerRequest req, ServerResponse res) {
             String rcvText = req.content().as(String.class);
             LOG.info("Received content: {}", rcvText);
 
@@ -119,8 +122,8 @@ public class PlatformGateway extends WebService {
         this.client.handle(ENQUEUE_ENDPOINT, message); // FIXME consider using a shared constant for the pathInfo here and in Rcvr
     }
 
-     public static void main(String[] args) throws IOException {
-         PlatformGateway platformGateway = new PlatformGateway(/*"http://192.168.1.155:14242"*/);
-         platformGateway.init();
-     }
+     // public static void main(String[] args) throws IOException {
+     //     PlatformGateway platformGateway = new PlatformGateway(/*"http://192.168.1.155:14242"*/);
+     //     platformGateway.init();
+     // }
 }

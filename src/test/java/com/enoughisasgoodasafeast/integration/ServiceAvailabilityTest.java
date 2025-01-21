@@ -2,7 +2,7 @@ package com.enoughisasgoodasafeast.integration;
 
 import com.enoughisasgoodasafeast.PlatformGateway;
 import com.enoughisasgoodasafeast.SharedConstants;
-import org.junit.Test;
+import org.junit.jupiter.api.Test;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.testcontainers.containers.GenericContainer;
@@ -13,13 +13,17 @@ import org.testcontainers.junit.jupiter.Testcontainers;
 
 import java.io.IOException;
 import java.net.InetAddress;
-import java.time.Duration;
+import java.net.UnknownHostException;
+import java.util.Arrays;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.stream.Stream;
 
 import static com.enoughisasgoodasafeast.SharedConstants.STANDARD_RABBITMQ_PORT;
+import static com.enoughisasgoodasafeast.util.Functions.waitSeconds;
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.fail;
 
 @Testcontainers
 public class ServiceAvailabilityTest {
@@ -27,42 +31,10 @@ public class ServiceAvailabilityTest {
     private static final Logger LOG = LoggerFactory.getLogger(ServiceAvailabilityTest.class);
 
     @Container
-    /*private static*/final RabbitMQContainer brokerContainer = new RabbitMQContainer("rabbitmq:4.0-management");
+    final RabbitMQContainer brokerContainer = new RabbitMQContainer("rabbitmq:4.0-management");
+    // NOTE: RabbitMQContainer is still INCUBATING according to https://java.testcontainers.org/modules/rabbitmq/
 
-    // This class is still INCUBATING according to https://java.testcontainers.org/modules/rabbitmq/
-
-
-    // TODO Subclass GenericContainer for each our different containerized applications
-//    @Container
-//    private static final GenericContainer<?> rcvrContainer = new GenericContainer<>("burble-jvm:0.1.0")
-//            .withCommand("Rcvr")
-//            .withExposedPorts(4242) // requires bash to be installed in the running container image. Busybox doesn't do this!
-//            .withEnv("");
-
-
-//    @Container
-//    private static final GenericContainer<?> fkopContainer = new GenericContainer<>("burble-jvm:0.1.0")
-//            .withCommand("FakeOperator")
-//            .waitingFor(new LogMessageWaitStrategy()
-//                    .withRegEx(".*consumerTag returned from basicConsume.*\\s")
-//                    //.withTimes(2)
-//                    .withStartupTimeout(Duration.of(5, ChronoUnit.SECONDS)));
-    ;
-//
-//    @Container
-//    private static final GenericContainer<?> sndrContainer = new GenericContainer<>("burble-jvm:0.1.0")
-//            .withCommand("Sndr")
-//            .waitingFor(new LogMessageWaitStrategy()
-//                    .withRegEx(".*consumerTag returned from basicConsume.*\\s")
-//                    //.withTimes(2)
-//                    .withStartupTimeout(Duration.of(60, ChronoUnit.SECONDS)));
-
-    @Test
-    public void testRcvrReconnect() {
-        // TBD
-    }
-
-    @Test
+    //@Test
     public void testBasicMessageSend() throws IOException {
 
         // -------------------------------------- Setup Rabbit broker ----------------------------------------------//
@@ -131,12 +103,146 @@ public class ServiceAvailabilityTest {
         }
 
 
-        final String effectiveRcvrUrl = String.format("http://%s:%d", rcvrHost/*"192.168.1.155"*/, rcvrPort);
+        final String effectiveRcvrUrl = String.format("http://%s:%d", rcvrHost, rcvrPort);
         final PlatformGateway gateway = new PlatformGateway(effectiveRcvrUrl);
         gateway.init();
-
         sendMessages(gateway);
+        gateway.stop();
     }
+
+    @Test
+    public void testRcvrReconnect() throws UnknownHostException {
+        //-------------------------- Setup Broker -----------------------------------------------------//
+        demandStart(brokerContainer);
+        if (!brokerContainer.isRunning()) {
+            fail("Broker failed to start.");
+        }
+        final Integer brokerPort = brokerContainer.getMappedPort(Integer.parseInt(STANDARD_RABBITMQ_PORT));
+        final String brokerHost = InetAddress.getLocalHost().getHostAddress();
+        LOG.info("Broker running on {}:{}", brokerHost, brokerPort);
+
+        // Override base value for these properties with the Testcontainer lib's randomized port.
+        Map<String, String> envOverrides = new HashMap<>();
+        envOverrides.put("queue.port", String.valueOf(brokerPort));
+        envOverrides.put("queue.host", brokerHost);
+
+        //-------------------------- Setup RCVR -----------------------------------------------------//
+        final GenericContainer<?> rcvrContainer = new GenericContainer<>("burble-jvm:0.1.0")
+                .withCommand("Rcvr")
+                .withExposedPorts(4242)
+                .withEnv(envOverrides);
+        demandStart(rcvrContainer);
+        if (!rcvrContainer.isRunning()) {
+            fail("Rcvr failed to start.");
+        }
+
+        Integer rcvrPort = rcvrContainer.getMappedPort(4242);
+        String rcvrHost = rcvrContainer.getHost();
+        LOG.info("Rcvr host and port: {} {}", rcvrHost, rcvrPort);
+
+
+        //-------------------------- Send first batch to RCVR -----------------------------------------------------//
+        // Don't start the other components yet but starting sending input to the Rcvr.
+        String effectiveRcvrUrl = String.format("http://%s:%d", rcvrHost, rcvrPort);
+        PlatformGateway gateway = new PlatformGateway(effectiveRcvrUrl);
+        gateway.init();
+
+        final String[] messages1 = {
+                "21 hello",
+                "22 hello",
+                "23 hello",
+                "24 hello",
+                "25 hello"
+        };
+
+        for (String message : messages1) {
+            gateway.sendMoTraffic(message);
+        }
+
+        gateway.stop();
+
+        //-------------------------- Shutdown RCVR -----------------------------------------------------//
+        rcvrContainer.stop();
+        if (rcvrContainer.isRunning()) {
+            fail("Rcvr failed to stop");
+        }
+
+        //-------------------------- Re-start RCVR -----------------------------------------------------//
+        LOG.info("Okay Rcvr stopped...restarting it");
+        demandStart(rcvrContainer);
+        if(!rcvrContainer.isRunning()) {
+            fail("Rcvr failed to start the second time.");
+        }
+
+        // The port for the new container may have changed
+        rcvrPort = rcvrContainer.getMappedPort(4242);
+        LOG.info("Rcvr host and port for second start: {} {}", rcvrHost, rcvrPort);
+
+        effectiveRcvrUrl = String.format("http://%s:%d", rcvrHost, rcvrPort);
+        gateway = new PlatformGateway(effectiveRcvrUrl);
+        gateway.init();
+
+        final String[] messages2 = {
+                "26 hello",
+                "27 hello",
+                "28 hello",
+                "29 hello",
+                "30 hello"
+        };
+
+        for (String message : messages2) {
+            gateway.sendMoTraffic(message);
+        }
+
+        // -------------------------------------- Setup FKOP -----------------------------------------------------//
+        final GenericContainer<?> fkopContainer = new GenericContainer<>("burble-jvm:0.1.0")
+                .withCommand("FakeOperator")
+                .withEnv(envOverrides);
+        demandStart(fkopContainer);
+        if (!fkopContainer.isRunning()) {
+            fail("Fkop didn't start.");
+        }
+
+        // -------------------------------------- Setup SNDR -----------------------------------------------------//
+        final GenericContainer<?> sndrContainer = new GenericContainer<>("burble-jvm:0.1.0")
+                .withCommand("Sndr")
+                .withEnv(envOverrides);
+        demandStart(sndrContainer);
+        if (!sndrContainer.isRunning()) {
+            fail("Sndr didn't start.");
+        }
+
+        // -------------------------------------- Evaluate results -----------------------------------------------------//
+
+        int resultCheckAttempts = 0;
+
+        final String[] sentMessages = Stream.concat(Arrays.stream(messages1), Arrays.stream(messages2))
+                .toArray(String[]::new);
+
+        List<String> responses = gateway.recordingHandler.retrieve();
+        while ((responses.size() < sentMessages.length) && (++resultCheckAttempts < 5)) { // pretty generous latency
+            LOG.info("Messages received by recordingHandler: {}", responses.size());
+            waitSeconds(1);
+            responses = gateway.recordingHandler.retrieve();
+        }
+        LOG.info("Messages: {}", String.join(" | ", responses));
+
+        assertEquals(sentMessages.length, responses.size(),
+                "Received count doesn't match the number sent. Checked " + resultCheckAttempts + " times.");
+
+        // check the ordering and performed transformation
+        for (int i = 0; i < sentMessages.length; i++) {
+            String[] sentParts = sentMessages[i].split(SharedConstants.TEST_SPACE_TOKEN,2); // FIXME make the space a shared constant
+            String[] rcvdParts = responses.get(i).split(SharedConstants.TEST_SPACE_TOKEN,2);
+
+            assertEquals(sentParts[0], rcvdParts[0]);
+            if (sentParts[1].equals("hello")) {
+                assertEquals("goodbye", rcvdParts[1]);
+            }
+        }
+
+    }
+
 
     // TODO refactor this into a util class that EndToEndMessagingTest also uses
     private void sendMessages(PlatformGateway gateway) {
@@ -157,8 +263,6 @@ public class ServiceAvailabilityTest {
             gateway.sendMoTraffic(message);
         }
 
-        // FIXME Use a polling while loop to try (almost) immediately then a couple times more with longer waits in between
-
         int resultCheckAttempts = 0;
         List<String> responses = gateway.recordingHandler.retrieve();
         while ((responses.size() < messages.length) && (++resultCheckAttempts < 5)) { // pretty generous latency
@@ -166,7 +270,8 @@ public class ServiceAvailabilityTest {
             waitSeconds(1);
             responses = gateway.recordingHandler.retrieve();
         }
-        assertEquals(messages.length, responses.size(), "Received count doesn't match the number sent. Checked " + resultCheckAttempts + " times.");
+        assertEquals(messages.length, responses.size(),
+                "Received count doesn't match the number sent. Checked " + resultCheckAttempts + " times.");
 
         // check the ordering and performed transformation
         for (int i = 0; i < messages.length; i++) {
@@ -180,9 +285,10 @@ public class ServiceAvailabilityTest {
         }
 
         LOG.info("Messages sent, received, and verified.");
+
     }
 
-    private void  demandStart(GenericContainer container) {
+    private void  demandStart(GenericContainer<?> container) {
         if (!container.isRunning()) {
             LOG.info("Container {} not running...starting it", container.getClass());
             container.start();
@@ -192,15 +298,6 @@ public class ServiceAvailabilityTest {
         Slf4jLogConsumer logConsumer = new Slf4jLogConsumer(LOG);
         container.followOutput(logConsumer);
         waitSeconds(2); // FIXME get the fuck out of here
-    }
-
-    private void waitSeconds(int num) {
-        try {
-            LOG.info("Waiting {} secs", num);
-            Thread.sleep(Duration.ofSeconds(num));
-        } catch (InterruptedException e) {
-            LOG.error("waitSeconds was interrupted", e);
-        }
     }
 
 }

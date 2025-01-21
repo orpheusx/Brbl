@@ -30,8 +30,8 @@ public class Burble {
             case "fakeoperator" ->
                 FakeOperator.main(args);
 
-            case "platformgatewaymt" ->
-                PlatformGateway.main(args);
+            // case "platformgatewaymt" ->
+            //    PlatformGateway.main(args);
 
             default ->
                 LOG.error("Unrecognized program: {}", program);
