@@ -19,7 +19,7 @@ public class HttpMTHandler implements MTHandler {
 
     public HttpMTHandler(String endpoint) {
         this.endpoint = endpoint;
-        LOG.info("Creating HttpMTHandler with URI: {}", endpoint);
+        LOG.info("Creating HttpMTHandler with URL {}", endpoint);
 
          client = WebClient.builder()
                 //.addService(WebClientTracing.create())

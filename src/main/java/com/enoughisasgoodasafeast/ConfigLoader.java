@@ -27,13 +27,13 @@ public class ConfigLoader {
             props.load(resourceStream);
 
             props.forEach((key, val) -> {
-                LOG.info("{}: {}={}", fileName, key, val);
+                LOG.debug("{}: {}={}", fileName, key, val);
             });
 
             // Override .properties file with env vars
             final Map<String, String> env = System.getenv();
             env.forEach((key, val) -> {
-                LOG.info("env: {}={}", key, val);
+                LOG.debug("env: {}={}", key, val);
                 String previousVal = props.getProperty(key);
                 if (props.get(key) != null) {
                     props.setProperty(key, val);
