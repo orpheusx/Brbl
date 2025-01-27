@@ -50,7 +50,7 @@ public class RabbitQueueConsumer implements QueueConsumer {
 
         Channel channel = connection.createChannel();
 
-        // The RabbitMQ docs stupidly use a bare string for the exchange type, despite the nice enum that's available.
+        // The RabbitMQ docs use a bare string for the exchange type, despite the nice enum that's available.
         // We use the enum because we're not animals.
         // This creates topic only if it doesn't already exist.
         channel.exchangeDeclare(queueName, BuiltinExchangeType.TOPIC, durable); // FIXME leave the durability to the topic producer?
@@ -63,7 +63,7 @@ public class RabbitQueueConsumer implements QueueConsumer {
         LOG.info("AMQP.Queue.BindOk: protocolClassId={} protocolMethodId={} protocolMethodName={}",
                 bindOk.protocolClassId(), bindOk.protocolMethodId(), bindOk.protocolMethodName());
 
-        channel.basicQos(1); // FIXME not sure we want this always but for testing acks...
+        channel.basicQos(3); // An important number where retrying/re-queueing is concerned.
 
         // TODO move this into a separate class.
         //        DeliverCallback deliverCallback = (consumerTag, delivery) -> {
@@ -92,7 +92,7 @@ public class RabbitQueueConsumer implements QueueConsumer {
         LOG.info("CancelCallback: {}", cancelCallback);
 
         // TODO add support for the other Callback interfaces...
-        Consumer consumer = new FakeMTConsumer(channel, consumingHandler);
+        Consumer consumer = new MTConsumer(channel, consumingHandler);
 
         // TODO/FIXME handle the ack in our message processing
         final String consumerTag = channel.basicConsume(queueName, false, consumer);
@@ -101,14 +101,14 @@ public class RabbitQueueConsumer implements QueueConsumer {
     }
 
     @Override
-    public Object dequeue() throws IOException {
+    public Object dequeue() throws IOException { // FIXME remove from interface since we're not using it?
         return null;
     }
 
     @Override
     public long getPollIntervalMs() {
         return 0;
-    }
+    } // FIXME this only makes sense for SQS
 
     @Override
     public QueueConsumer setPollIntervalMs(long pollIntervalMs) {

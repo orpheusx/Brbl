@@ -227,6 +227,30 @@
                 </executions>
             </plugin>
 
+<!--            <plugin>-->
+<!--                <groupId>com.spotify</groupId>-->
+<!--                <artifactId>dockerfile-maven-plugin</artifactId>-->
+<!--                <version>1.4.13</version>-->
+<!--                <executions>-->
+<!--                    <execution>-->
+<!--                        <id>default</id>-->
+<!--                        <goals>-->
+<!--                            <goal>build</goal>-->
+<!--                            <goal>push</goal>-->
+<!--                        </goals>-->
+<!--                    </execution>-->
+<!--                </executions>-->
+<!--                <configuration>-->
+<!--                    <repository>spotify/foobar</repository>-->
+<!--                    <tag>${project.version}</tag>-->
+<!--                    <buildArgs>-->
+<!--                        <JAR_FILE>${project.build.finalName}.jar</JAR_FILE>-->
+<!--                        &lt;!&ndash; <DOCKER_FILE>Dockerfile.jvm</DOCKER_FILE>&ndash;&gt;-->
+<!--                    </buildArgs>-->
+<!--&lt;!&ndash;                    <dockerfile.contextDirectory>/Users/mark/Development/sndrRcvr/jvm</dockerfile.contextDirectory>&ndash;&gt;-->
+<!--                </configuration>-->
+<!--            </plugin>-->
+
         </plugins>
     </build>
 

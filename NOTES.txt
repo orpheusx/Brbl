@@ -14,7 +14,7 @@ for queues
 
     e.g.
 
-    whatsapp.us.mo  - the platform is whatsapp, the regions is the United States, the direction is Mobile Originated.
+    whatsapp.us.mo  - the platform is whatsapp, the region is the United States, the direction is Mobile Originated.
 
     test.local.mo   - the platform is a developer/test, the region is the scope of the test resources (likely a dev machine), the direction is Mobile Originated.
 
@@ -542,4 +542,75 @@ Oh, also it appears that running the two container-based tests individually work
 Hmm, added a stop() method to PlatformGateway that calls through to the contained WebServer's stop() method.
 Seems to have resolved the problem.
 
-On to the next test...
+===== 2025-01-23 ======
+
+On to the next test...testGatewayUnavailable
+
+Added code to support the "restart" of the simulated platform gateway; requires creating a new instance of the web server.
+
+Remembered that the current Sndr really doesn't support retrying, it always acks the message so they won't be delivered ever if the endpoint was missing when the message was received.
+
+While researching the topic I came across:
+    https://github.com/joshdevins/rabbitmq-ha-client (NOTE: this is a fairly old project)
+
+ https://www.rabbitmq.com/docs/consumers#acknowledgement-modes covers the basics here with additional documents for the details.
+
+ If a message to a given user is rejected/nacked for gateway availability reasons we want all subsequent messages to be held (not sent) until the first message has been delivered. This consideration is only for individual sessions. Other messages behave according to their sessions.
+
+Side-note: tried integrating spotify's dockerfile-maven-plugin (https://github.com/spotify/dockerfile-maven/blob/master/docs/usage.md) into our pom.xml. Didn't work. Will need to circle around later. It's too simple to write a shell script that does it to spend the time now.
+
+
+===== 2025-01-24 ======
+Wrote rbc.sh to handle rebuilding container after making changes to the non-test code.
+TODO
+_ restructure Dockerfile-jvm to move the application code to the end; it's not caching layers effectively.
+_ Clean up the design of PlatformGateway and HttpMTHandler.
+
+Continuing work on testGatewayUnavailable...
+
+When I added the methods to PlatformGateway to simulate throttling or availability I found that the broker would only requeue/retry the first (failed) message in very rapid succession. This is because the queue consumer declares:
+    channel.basicQos(1);
+The parameter is named "prefetchCount" which seems like an internally appropriate name but a bit confusing to the developer
+
+===== 2025-01-24 ======
+
+Setting channel.basicQos(3) will change the behavior such that the first three messages are retried/re-queued.
+At least anecdotally, they are getting re-processed in the same order as they were put onto the queue.
+
+The scenario we want to handle is, for a given user session with an ordered sequence of events, where the first message is rejected and re-queued the second message is attempted and succeeds. A subsequent delivery attempt for the first message may succeed but the damage is done.
+
+In addition to a some logic to detect send errors due to the structure of a message (rather than a service outage or throttling situation) we need some session logic to prevent out-of-order messaging.
+
+Added a GatewaySimStrategy that simply rejects the first message it sees to approximate the problem.
+Calling the com.rabbitmq.client.Channel impl's basicQos() method with a value of 3 we see a final ordering in the current version testGatewayUnavailable:
+
+    Messages received: [27 goodbye, 28 goodbye, 26 goodbye, 29 goodbye, 30 goodbye]
+
+ Here it tries to send a batch of 3 messages. The first is re-queued but the second and third can be sent immediately.
+
+RANDOM NOTE: When we start measuring perf we should make sure to only use System::nanoTime. Apparently the getMillis() is subject to adjustment such that it's possible for it to go backwards!
+Also, check out the JMH Java microbenchmark harness: https://github.com/openjdk/jmh and
+
+======== Initial Thoughts about the internals of a real Operator implementation ========
+I've been considering whether it would make sense to use Records for this application. Most of the articles I've read don't really explain what domains Records might improve. They wave their hands about Data Transfer Objects which, almost always, feel like a terrible idea. Then I found the following https://blogs.oracle.com/javamagazine/post/records-come-to-java where the author notes:
+"... the 'records are nominal tuples' design choice means you should expect that records will work best where you might use tuples in other languages. This includes use cases such as compound map keys or to simulate multi-return from a method. An example compound map key might look like this:
+    record OrderPartition(CurrencyPair pair, Side side) {}"
+
+This has some appeal. Immutable tuples pulled from APIs or similar data sources that can be composed easily and without loads of boilerplate. The compact constructor form also provides a nice place for fail-fast validation.
+
+The Operator, unlike the Editor tools (that will follow), should not need to mutate any of the data it uses. Also Record Patterns (see https://docs.oracle.com/en/java/javase/22/language/record-patterns.html) could prove useful for the processing logic we need to write.
+
+Along these lines and making the Java parts of the system fit well with the functional design of RabbitMQ and (possibly) Phoenix LiveView, consider reading https://www.oreilly.com/library/view/a-functional-approach/9781098109912/ which discusses ways to make Java more functional for the benefits that brings. The author has a blog at https://belief-driven-design.com/looking-at-java-21-switch-pattern-matching-14648/.
+
+
+===== 2025-01-24 ======
+Continuing to think about the session based ordering logic...
+
+We need to add a notion of session groups and sequence order state to our (probably overly simplistic) message model.
+Then, I'm thinking, we would reject/re-queue any message from a given session that is not the next expected message.
+
+Start by assuming all the messages are from the same session?
+
+Okay, implemented logic that seems to enforce ordered message delivery by a hardcoded session.
+
+

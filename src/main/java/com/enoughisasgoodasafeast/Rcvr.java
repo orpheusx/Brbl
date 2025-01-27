@@ -67,12 +67,15 @@ public class Rcvr extends WebService {
     }
 
     /**
-     * FIXME Is there a RabbitMQ connection/channel health check we could use here?
+     * This will only address the functionality of the Rcvr itself, not the target queuing system.
      */
     private static class HealthCheckHandler extends BaseHandler {
+
+        final static Header OK_CONTENT_LEN_HEADER = HeaderValues.create(HeaderNames.CONTENT_LENGTH, 0);
+
         @Override
         public void handle(ServerRequest req, ServerResponse res) throws Exception {
-            res.header(HeaderValues.create(HeaderNames.CONTENT_LENGTH, 0));
+            res.header(OK_CONTENT_LEN_HEADER);
             super.handle(req, res);
             res.status(OK_200);
             res.send();
