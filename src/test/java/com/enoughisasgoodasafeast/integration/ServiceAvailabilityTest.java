@@ -204,25 +204,24 @@ public class ServiceAvailabilityTest {
         //-------------------------- Send first batch -----------------------------------------------------//
         final String rcvrHost = rcvrContainer.getHost(); // FIXME usually returns "localhost"; use InetAdress instead?
         String effectiveRcvrUrl = String.format("http://%s:%d", rcvrHost, rcvrContainer.getMappedPort(rcvrExposedPort));
-        PlatformGateway gateway = new PlatformGateway(effectiveRcvrUrl, new GatewaySimStrategy());
+        PlatformGateway gateway = new PlatformGateway(effectiveRcvrUrl, new GatewaySimStrategy(1));
         gateway.init();
 
-//        final String[] messages1 = {
-//                "21 hello", "22 hello", "23 hello", "24 hello", "25 hello"
-//        };
-//        for (String message : messages1) {
-//            gateway.sendMoTraffic(message);
-//        }
+        final String[] messages1 = {
+                "21 hello", "22 hello", "23 hello", "24 hello", "25 hello"
+        };
+        for (String message : messages1) {
+            gateway.sendMoTraffic(message);
+        }
 
         // -------------------------------------- Evaluate results -----------------------------------------------------//
         // Check the ordering and performed transformation
-//        evaluateSentAndReceived(gateway, messages1);
+        evaluateSentAndReceived(gateway, messages1);
 
         // Clear the gateway recordings
         gateway.resetHistory();
 
         // Make the gateway unavailable
-        //gateway.rejectAllTraffic();
         gateway.filterTrafficByStrategy(true);
 
         final String[] messages2 = {
@@ -232,25 +231,52 @@ public class ServiceAvailabilityTest {
             gateway.sendMoTraffic(message);
         } // We expect some errors in the Sndr log output, but hopefully it will recover.
 
-        waitSeconds(3); // smelly code
+        waitSeconds(3); // this is kind of smelly
 
         evaluateSentAndReceived(gateway, messages2);
 
         // Release the webserver port
         gateway.stop();
+
+        // --------------- Same test with a slightly different strategy (2nd message fails)
+        gateway = new PlatformGateway(effectiveRcvrUrl, new GatewaySimStrategy(3));
+        gateway.init();
+        gateway.filterTrafficByStrategy(true); // This is rather unwieldy...
+        final String[] messages3 = {
+                "31 hello", "32 hello", "33 hello", "34 hello", "35 hello"
+        };
+        // resend
+        for (String message : messages3) {
+            gateway.sendMoTraffic(message);
+        }
+        // Check the ordering and performed transformation
+        evaluateSentAndReceived(gateway, messages3);
+
+        // Release the webserver port
+        gateway.stop();
+
+        // --------------- Same test with a slightly different strategy (5th and final message fails)
+        gateway = new PlatformGateway(effectiveRcvrUrl, new GatewaySimStrategy(5));
+        gateway.init();
+        gateway.filterTrafficByStrategy(true); // This is rather unwieldy...
+        final String[] messages4 = {
+                "36 hello", "37 hello", "38 hello", "39 hello", "40 hello"
+        };
+        // resend
+        for (String message : messages4) {
+            gateway.sendMoTraffic(message);
+        }
+        // Check the ordering and performed transformation
+        evaluateSentAndReceived(gateway, messages4);
+
+        // Release the webserver port
+        gateway.stop();
     }
+
     private void sendMessagesAndEvaluateResults(PlatformGateway gateway) {
         final String[] messages = {
-                "21 hello",
-                "22 hello",
-                "23 hello",
-                "24 hello",
-                "25 hello",
-                "26 hello",
-                "27 hello",
-                "28 hello",
-                "29 hello",
-                "30 hello",
+                "21 hello", "22 hello", "23 hello", "24 hello", "25 hello",
+                "26 hello", "27 hello", "28 hello", "29 hello", "30 hello",
         };
 
         for (String message : messages) {

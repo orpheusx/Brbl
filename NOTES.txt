@@ -593,8 +593,7 @@ Also, check out the JMH Java microbenchmark harness: https://github.com/openjdk/
 
 ======== Initial Thoughts about the internals of a real Operator implementation ========
 I've been considering whether it would make sense to use Records for this application. Most of the articles I've read don't really explain what domains Records might improve. They wave their hands about Data Transfer Objects which, almost always, feel like a terrible idea. Then I found the following https://blogs.oracle.com/javamagazine/post/records-come-to-java where the author notes:
-"... the 'records are nominal tuples' design choice means you should expect that records will work best where you might use tuples in other languages. This includes use cases such as compound map keys or to simulate multi-return from a method. An example compound map key might look like this:
-    record OrderPartition(CurrencyPair pair, Side side) {}"
+"...the 'records are nominal tuples' design choice means you should expect that records will work best where you might use tuples in other languages. This includes use cases such as compound map keys or to simulate multi-return from a method. An example compound map key might look like this: record OrderPartition(CurrencyPair pair, Side side) {}"
 
 This has some appeal. Immutable tuples pulled from APIs or similar data sources that can be composed easily and without loads of boilerplate. The compact constructor form also provides a nice place for fail-fast validation.
 
@@ -603,7 +602,7 @@ The Operator, unlike the Editor tools (that will follow), should not need to mut
 Along these lines and making the Java parts of the system fit well with the functional design of RabbitMQ and (possibly) Phoenix LiveView, consider reading https://www.oreilly.com/library/view/a-functional-approach/9781098109912/ which discusses ways to make Java more functional for the benefits that brings. The author has a blog at https://belief-driven-design.com/looking-at-java-21-switch-pattern-matching-14648/.
 
 
-===== 2025-01-24 ======
+===== 2025-01-27 ======
 Continuing to think about the session based ordering logic...
 
 We need to add a notion of session groups and sequence order state to our (probably overly simplistic) message model.
@@ -612,5 +611,7 @@ Then, I'm thinking, we would reject/re-queue any message from a given session th
 Start by assuming all the messages are from the same session?
 
 Okay, implemented logic that seems to enforce ordered message delivery by a hardcoded session.
+It's hideous looking--we should take a crack at revamping it, possibly with pattern matching--but appears to do what we need.
+Let's create some additional variations of the problem to make sure it covers everything we can think of.
 
-
+===== 2025-01-28 ======

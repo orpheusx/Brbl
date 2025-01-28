@@ -107,7 +107,7 @@ public class MTConsumer extends DefaultConsumer {
         }
     }
 
-    public class SessionState {
+    private class SessionState {
         public SessionState(int seqNum, boolean wasSent) {
             this.seqNum = seqNum;
             this.wasSent = wasSent;
