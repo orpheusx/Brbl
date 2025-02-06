@@ -615,3 +615,80 @@ It's hideous looking--we should take a crack at revamping it, possibly with patt
 Let's create some additional variations of the problem to make sure it covers everything we can think of.
 
 ===== 2025-01-28 ======
+To further test, error handling I need an actual session construct. The tests currently assume only a single session.
+
+Where should this be constructed? In the Rcvr or the Operator?
+
+
+===== 2025-01-29 ======
+RANDOM NOTE: Auth0 has a pretty nice free tier with 25K users, 5 orgs, unlimited Okta & Social connections (not sure what that means), a custom domain with branded domains, and some DoS protection. No credit card. Seems cool.
+
+
+Initial Domain Modelling for Operator:
+
+Customer---hasMany--->User
+|
++---hasMany---> Script
+
+Both Customer and User have the same properties: countryCode, languageCode, brblId, platformId*
+A Script is an interface with properties: id, next[] (returns a list of Script ids).
+A Session is an interface with properties: id, currentScript, user (User)
+
+An MT is an output from the execution of a Script in the context of a Session.
+An MO is an input to the execution of a Script in the context of a Session.
+
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+Side-notes:
+To address both the "insufficient resolution" and the back-in-time problem with System.currentTimeMillis() I found a class--NanoClock--the provides the wall-clock utility of currentTimeMillis and the better resolution of System.nanoTime() avoiding the impact host adjustments of the clock:
+    https://github.com/jenetics/jenetics/blob/master/jenetics/src/main/java/io/jenetics/util/NanoClock.java
+
+For testing purposes if/when we have ML support we could initiate a chat from the MO side and have the system respond. Validation would be weird though.
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+===== 2025-01-30 ======
+https://www.bandwidth.com/pricing/ shows some reasonable figures e.g. $0.004/message on a U.S. 10DLC.
+
+Random Note of the Day: turso.tech created a fork of SQLite that includes accommodation for vector search--commonly used with RAG-based ML applications. This might be an interesting thing to use instead of spinning up a shared Postgres instance. The folks behind this also founded ScyllaDB. In an interview, Glauber Costa commented that SQLite's creators reserved implementation
+
+===== 2025-02-01 ===
+From https://openjdk.org/jeps/499: "Structured concurrency is an approach to concurrent programming that preserves the natural relationship between tasks and subtasks, which leads to more readable, maintainable, and reliable concurrent code. The term 'structured concurrency' was coined by Martin Sústrik and popularized by Nathaniel J. Smith. Ideas from other languages, such as Erlang's hierarchical supervisors, inform the design of error handling in structured concurrency."
+
+Neat. Let's try it out. **Still** in preview for the upcoming Java 24 which is annoying but if the API is close to complete...
+
+
+===== 2025-02-04 ===
+
+https://www.allareacodes.com/canadian_area_codes.htm
+
+Once I started using StructuredConcurrency/virtual thread preview features I had to add
+
+        <configuration>
+            <argLine>--enable-preview</argLine>
+        </configuration>
+
+to the maven-surefire-plugin. You can almost hear that old code creaking despite the fact that it continues to make new releases...
+
+The built-in test runners were less pedantic. The IDE added the feature flag to the compiler automatically but not surefire.
+
+One of the tests failed with an ExceptionInInitializer. This was enough to cause surefire (ironically) to fail to produce the surefire.html file.
+
+com.enoughisasgoodasafeast.integration.EndToEndMessagingTest complained "Caused by: org.testcontainers.containers.ContainerLaunchException: Local Docker Compose exited abnormally with code 1 whilst running command: compose up -d"
+
+It didn't fail a second time so we'll move on...
+
+===== 2025-02-05 ===
+
+https://www.rabbitmq.com/docs/shovel is interesting for operational purposes. It can move messages between queues.
+
+https://www.rabbitmq.com/docs/publishers#concurrency drops a bomb on multiple threads writing to the same channel:
+    "In general, publishing on a shared 'publishing context' (channel in AMQP 0-9-1, connection in STOMP, session in AMQP 1.0 and so on) should be avoided and considered unsafe."
+    " Doing so can result in incorrect framing of data frames on the wire. That leads to connection closure."
+
+So channel per thread?
+
+Looking at https://www.rabbitmq.com/docs/publishers#connection-recovery it appears that the Java client supports automatic recovery of connections and topology (queues, exchanges, bindings, and consumers) so maybe the heartbeat setup isn't something we need to explicitly handle. Perhaps it is enough to handle the cases where we receive a message and the queue is incommunicado.
+
+Confirmed that if a queue comes back after being gone. The existing client/code will send the message quite happily.
+
+Use a local temporary store to continue accepting messages? sqlite?
+

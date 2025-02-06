@@ -10,6 +10,14 @@ import java.util.Properties;
 
 import static io.helidon.http.Status.Family.SUCCESSFUL;
 
+/**
+ * This is a very thin wrapper that, currently, doesn't handle any of the issues (throttling, transient outages, etc.)
+ * with sending to a 3rd party messaging API (e.g. Slack, WhatsApp, etc.)
+ * We should not consider it ready for anything but light, integration/unit testing.
+ * A real implementation should use the application.yaml configuration support (for TLS setup, metrics, tracking)
+ * provided by Helidon.
+ * It might also want to leverage virtual threads to avoid blocking platform threads.
+ */
 public class HttpMTHandler implements MTHandler {
 
     private static final Logger LOG = LoggerFactory.getLogger(HttpMTHandler.class);
@@ -27,10 +35,6 @@ public class HttpMTHandler implements MTHandler {
                 .build();
     }
 
-    public boolean handle(String payload) {
-        return handle("/mtReceive", payload); // FIXME for fuck's sake use the fucking config, you fucking fuck
-    }
-
     public static MTHandler newHandler(Properties properties) {
         String protocol = properties.getProperty("platform.mt.protocol"); // TODO HTTP/2, also make constants
         String host = properties.getProperty("platform.mt.host");
@@ -38,6 +42,10 @@ public class HttpMTHandler implements MTHandler {
         String pathInfo = properties.getProperty("platform.mt.pathInfo"); //FIXME check for leading slash
         String endpoint = String.format("%s://%s:%d", protocol, host, port);
         return new HttpMTHandler(endpoint);
+    }
+
+    public boolean handle(String payload) {
+        return handle("/mtReceive", payload); // FIXME for fuck's sake use the fucking config, you fucking fuck
     }
 
     public boolean handle(String pathInfo, String payload) {
@@ -48,11 +56,13 @@ public class HttpMTHandler implements MTHandler {
         LOG.info("Send response {}: {}", res.status(), res.entity());
         Status status = res.status();
         if (status.family() != SUCCESSFUL) {
-            LOG.error("Post to {} failed: {}", endpoint, status.code());
+            LOG.error("Post to {} failed: {}", endpoint, status);
             return false;
-        } else {
+        }
+        else {
             return true;
         }
+
 
     }
 

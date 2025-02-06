@@ -23,8 +23,10 @@ public class RabbitQueueConsumer implements QueueConsumer {
         String queueName = props.getProperty("queue.name");
         String queueRoutingKey = props.getProperty("queue.routingKey");
         boolean isQueueDurable = Boolean.parseBoolean(props.getProperty("queue.durable"));
+        int heartbeatTimeoutSeconds = SharedConstants.STANDARD_HEARTBEAT_TIMEOUT_SECONDS;
 
-        return new RabbitQueueConsumer(queueHost, queuePort, queueName, queueRoutingKey, isQueueDurable, consumingHandler);
+        return new RabbitQueueConsumer(queueHost, queuePort, queueName, queueRoutingKey, isQueueDurable,
+                consumingHandler, heartbeatTimeoutSeconds);
     }
 
     private RabbitQueueConsumer(String queueHost,
@@ -32,7 +34,8 @@ public class RabbitQueueConsumer implements QueueConsumer {
                                 String queueName,
                                 String routingKey,
                                 boolean durable,
-                                MTHandler consumingHandler)
+                                MTHandler consumingHandler,
+                                int requestedHeartbeatTimeout)
             throws IOException, TimeoutException {
 
         LOG.info("Creating RabbitQueueConsumer: queueHost: '{}', queueName: '{}', routingKey: '{}'",
@@ -45,6 +48,8 @@ public class RabbitQueueConsumer implements QueueConsumer {
         ConnectionFactory factory = new ConnectionFactory();
         factory.setHost(queueHost);
         factory.setPort(queuePort);
+        factory.setRequestedHeartbeat(requestedHeartbeatTimeout);
+
         // Setup socket connection, negotiate protocol version and authentication
         Connection connection = factory.newConnection();
 
@@ -97,7 +102,8 @@ public class RabbitQueueConsumer implements QueueConsumer {
         // TODO/FIXME handle the ack in our message processing
         final String consumerTag = channel.basicConsume(queueName, false, consumer);
 
-        LOG.info("consumerTag returned from basicConsume: {}", consumerTag);
+        LOG.info("ConsumerTag returned from basicConsume: {}", consumerTag);
+        LOG.info("Negotiated heartbeat: {} seconds", connection.getHeartbeat());
     }
 
     @Override

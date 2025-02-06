@@ -27,9 +27,9 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.fail;
 
 @Testcontainers
-public class ServiceAvailabilityTest {
+public class ServiceAvailabilityIT {
 
-    private static final Logger LOG = LoggerFactory.getLogger(ServiceAvailabilityTest.class);
+    private static final Logger LOG = LoggerFactory.getLogger(ServiceAvailabilityIT.class);
     private static final String BURBLE_CONTAINER = "burble-jvm:0.1.0";
 
     @Container
@@ -38,38 +38,52 @@ public class ServiceAvailabilityTest {
 
     @Test
     public void testBasicMessageSend() throws IOException {
-        // -------------------------------------- Setup Rabbit broker ----------------------------------------------//
-        demandStart(brokerContainer);
-        Map<String, String> envOverrides = getOverridesForBroker(brokerContainer);
+        /*final*/GenericContainer<?> rcvrContainer = null;
+        /*final*/GenericContainer<?> fkopContainer = null;
+        /*final*/GenericContainer<?> sndrContainer = null;
+        try {
+            // -------------------------------------- Setup Rabbit broker ----------------------------------------------//
+            demandStart(brokerContainer);
+            Map<String, String> envOverrides = getOverridesForBroker(brokerContainer);
 
-        // -------------------------------------- Setup RCVR -----------------------------------------------------//
-        final int rcvrExposedPort = Integer.parseInt(ConfigLoader.readConfig("rcvr.properties").getProperty("listener.port"));
-        final GenericContainer<?> rcvrContainer = new GenericContainer<>(BURBLE_CONTAINER)
-                .withCommand("Rcvr")
-                .withExposedPorts(rcvrExposedPort)
-                .withEnv(envOverrides);
-        demandStart(rcvrContainer);
+            // -------------------------------------- Setup RCVR -----------------------------------------------------//
+            final int rcvrExposedPort = Integer.parseInt(ConfigLoader.readConfig("rcvr.properties").getProperty("listener.port"));
+            rcvrContainer = new GenericContainer<>(BURBLE_CONTAINER)
+                    .withCommand("Rcvr")
+                    .withExposedPorts(rcvrExposedPort)
+                    .withEnv(envOverrides);
+            demandStart(rcvrContainer);
 
-        // -------------------------------------- Setup FKOP -----------------------------------------------------//
-        final GenericContainer<?> fkopContainer = new GenericContainer<>(BURBLE_CONTAINER)
-                .withCommand("FakeOperator")
-                .withEnv(envOverrides);
-        demandStart(fkopContainer);
+            // -------------------------------------- Setup FKOP -----------------------------------------------------//
+            fkopContainer = new GenericContainer<>(BURBLE_CONTAINER)
+                    .withCommand("FakeOperator")
+                    .withEnv(envOverrides);
+            demandStart(fkopContainer);
 
-        // -------------------------------------- Setup SNDR -----------------------------------------------------//
-        final GenericContainer<?> sndrContainer = new GenericContainer<>(BURBLE_CONTAINER)
-                .withCommand("Sndr")
-                .withEnv(envOverrides);
-        demandStart(sndrContainer);
+            // -------------------------------------- Setup SNDR -----------------------------------------------------//
+            sndrContainer = new GenericContainer<>(BURBLE_CONTAINER)
+                    .withCommand("Sndr")
+                    .withEnv(envOverrides);
+            demandStart(sndrContainer);
 
-        // -------------------------------------- Push traffic ---------------------------------------------------//
-        final String effectiveRcvrUrl = String.format("http://%s:%d",
-                rcvrContainer.getHost(), rcvrContainer.getMappedPort(rcvrExposedPort));
-        final PlatformGateway gateway = new PlatformGateway(effectiveRcvrUrl);
+            // -------------------------------------- Push traffic ---------------------------------------------------//
+            final String effectiveRcvrUrl = String.format("http://%s:%d",
+                    rcvrContainer.getHost(), rcvrContainer.getMappedPort(rcvrExposedPort));
+            final PlatformGateway gateway = new PlatformGateway(effectiveRcvrUrl);
 
-        gateway.init();
-        sendMessagesAndEvaluateResults(gateway);
-        gateway.stop();
+            gateway.init();
+            sendMessagesAndEvaluateResults(gateway);
+            gateway.stop();
+        } finally {
+            // Kind of a hack. Could we use the try-with-resource with the full set of containers to
+            // insure a shutdown?
+            if (rcvrContainer != null) rcvrContainer.stop();
+            if (fkopContainer != null) fkopContainer.stop();
+            if (sndrContainer != null) sndrContainer.stop();
+
+            brokerContainer.stop();
+        }
+
     }
 
     @Test

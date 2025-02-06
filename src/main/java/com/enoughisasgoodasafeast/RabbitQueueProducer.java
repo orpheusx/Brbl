@@ -35,11 +35,14 @@ public class RabbitQueueProducer implements QueueProducer {
         String queueRoutingKey = props.getProperty("queue.routingKey");
 
         boolean queueIsDurable = Boolean.parseBoolean(props.getProperty("queue.durable"));
+        int heartbeatTimeoutSeconds = SharedConstants.STANDARD_HEARTBEAT_TIMEOUT_SECONDS;
 
-        return new RabbitQueueProducer(queueHost, queuePort, queueName, queueRoutingKey, queueIsDurable);
+
+        return new RabbitQueueProducer(queueHost, queuePort, queueName, queueRoutingKey, queueIsDurable, heartbeatTimeoutSeconds);
     }
 
-    private RabbitQueueProducer(String queueHost, int queuePort, String exchangeName, String routingKey, boolean isDurable)
+    private RabbitQueueProducer(String queueHost, int queuePort, String exchangeName, String routingKey,
+                                boolean isDurable, int requestedHeartbeatTimeout)
             throws IOException, TimeoutException {
 
         LOG.info("Creating RabbitQueueProducer: queueHost: '{}', queuePort: '{}', exchangeName: '{}', routingKey: '{}', isDurable: {}",
@@ -57,6 +60,7 @@ public class RabbitQueueProducer implements QueueProducer {
         ConnectionFactory factory = new ConnectionFactory();
         factory.setHost(this.queueHost);
         factory.setPort(this.queuePort);
+        factory.setRequestedHeartbeat(requestedHeartbeatTimeout);
 
         Connection moConnection = factory.newConnection();
         channel = moConnection.createChannel();
@@ -65,6 +69,10 @@ public class RabbitQueueProducer implements QueueProducer {
 
         channel.queueDeclare(this.exchangeName, true, false, false, null);
         channel.queueBind(exchangeName, this.exchangeName, routingKey);
+
+        // Heartbeat frames will be sent approx moConnection.getHeartbeat() / 2 seconds
+        // After two missed heartbeats, the peer is considered to be unreachable.
+        LOG.info("Negotiated heartbeat: {} seconds", moConnection.getHeartbeat());
 
         // NB: RabbitMQ provides an extension that provides confirmation from the broker
         // that each message is received.
@@ -82,7 +90,7 @@ public class RabbitQueueProducer implements QueueProducer {
     }
 
     // Test only
-    public static void main(String[] args) throws IOException, TimeoutException {
+    public static void main() throws IOException, TimeoutException {
         QueueProducer rqp = RabbitQueueProducer.createQueueProducer("queue.properties");
         long timestamp = System.currentTimeMillis();
 

@@ -1,13 +1,12 @@
 package com.enoughisasgoodasafeast.util;
 
-import com.enoughisasgoodasafeast.integration.EndToEndMessagingTest;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import java.time.Duration;
 
 public class Functions {
-    private static final Logger LOG = LoggerFactory.getLogger(EndToEndMessagingTest.class);
+    private static final Logger LOG = LoggerFactory.getLogger(Functions.class);
 
     public static void waitSeconds(int num) {
         try {

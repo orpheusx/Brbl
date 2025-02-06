@@ -67,7 +67,8 @@ public class Rcvr extends WebService {
     }
 
     /**
-     * This will only address the functionality of the Rcvr itself, not the target queuing system.
+     * Only address the functionality of the Rcvr itself, not the target queuing system.
+     * So we
      */
     private static class HealthCheckHandler extends BaseHandler {
 
@@ -99,7 +100,7 @@ public class Rcvr extends WebService {
             LOG.info("/enqueue requested");
             String rcvText = req.content().as(String.class);
 
-            queueProducer.enqueue(rcvText);
+            queueProducer.enqueue(rcvText); // TODO catch exceptions and persist the incoming message in a temp store?
 
             res.status(OK_200);
             res.send("OK");

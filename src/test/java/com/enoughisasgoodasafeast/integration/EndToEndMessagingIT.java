@@ -19,9 +19,9 @@ import static com.enoughisasgoodasafeast.util.Functions.waitSeconds;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 
 @Testcontainers
-public class EndToEndMessagingTest {
+public class EndToEndMessagingIT {
 
-    private static final Logger LOG = LoggerFactory.getLogger(EndToEndMessagingTest.class);
+    private static final Logger LOG = LoggerFactory.getLogger(EndToEndMessagingIT.class);
     public static final String COMPOSE_FILE_UNDER_TEST = "./docker-compose-jvm.yaml";
 
     // Apparently marking the annotated member static signals the test harness to reuse it for all the @Test methods.
@@ -37,7 +37,7 @@ public class EndToEndMessagingTest {
 
     static {
         LOG.info("Starting the Burble containers from {}", COMPOSE_FILE_UNDER_TEST);
-        brblContainers.start(); // the @Container annotation isn't starting the container so we have to call start() manually
+//        brblContainers.start(); // the @Container annotation isn't starting the container so we have to call start() manually
     }
 
     @Test
@@ -89,12 +89,6 @@ public class EndToEndMessagingTest {
 
         gateway.stop();
 
-    }
-
-    @Test
-    public void testOperatorBaseline() {
-        // run a docker compose file with a real, functioning Operator implementation
-        // then test the inputs and outputs
     }
 
 }

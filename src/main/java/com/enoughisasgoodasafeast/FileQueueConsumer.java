@@ -30,17 +30,17 @@ public class FileQueueConsumer implements QueueConsumer {
         return this;
     }
 
-    // public static String testSwitchCase(Integer value) {
-    //     return switch (value) {
-    //         case 42 -> "Life, the Universe, and Everything";
-    //         // Use a guard clause
-    //         case Integer i when i > 0 -> "An integer greater than zero";
-    //         case null -> "Nothing to see. Move along...";
-    //         default -> "Any other integer value that isn't null " + value;
-    //     };
-    // }
+     public static String testSwitchCase(Integer value) {
+         return switch (value) {
+             case 42 -> "Life, the Universe, and Everything";
+             // Use a guard clause
+             case Integer i when i > 0 -> "An integer greater than zero";
+             case null -> "Nothing to see. Move along...";
+             default -> "Any other integer value that isn't null " + value;
+         };
+     }
 
-    public static void main(String[] args) throws IOException {
+    public static void main() throws IOException {
         Path source = Paths.get("src/test/resources/testMessages.txt");
         FileQueueConsumer rcvr = new FileQueueConsumer(source);
         Object message = rcvr.dequeue();
@@ -48,10 +48,9 @@ public class FileQueueConsumer implements QueueConsumer {
             message = rcvr.dequeue();
             System.out.println(message);
         }
-        //System.out.println(FileQueueConsumer.testSwitchCase(42));
-        //System.out.println(FileQueueConsumer.testSwitchCase(13));
-        //System.out.println(FileQueueConsumer.testSwitchCase(-5));
-        //System.out.println(FileQueueConsumer.testSwitchCase(null));
-
+        System.out.println(FileQueueConsumer.testSwitchCase(42));
+        System.out.println(FileQueueConsumer.testSwitchCase(13));
+        System.out.println(FileQueueConsumer.testSwitchCase(-5));
+        System.out.println(FileQueueConsumer.testSwitchCase(null));
     }
 }
