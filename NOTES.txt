@@ -692,3 +692,25 @@ Confirmed that if a queue comes back after being gone. The existing client/code 
 
 Use a local temporary store to continue accepting messages? sqlite?
 
+===== 2025-02-06 =====
+
+Should we change Script to Page and create a new Script that represents a collection of Pages?
+Or go the opposite direction and create a Book construct that represents a graph of Scripts?
+
+Got a simple, state machine working with a test that attaches a chain of Scripts.
+
+===== 2025-02-07 =====
+
+Typically, we deal with directed, acyclic graphs but a Customer might want to engage in conversation that might loop around.
+We can and probably should drop the acyclic part.
+Our reporting metrics will want to be able to show numbers not just for how many users reached a particular node but also how they got there (the sequence of edges.)
+
+There are libraries that provide more general graph functionality. For example, https://jgrapht.org/guide/UserOverview.
+Question: do we need more functionality? I don't think so. At least not for the purposes of walking a User through a graph of Scripts.
+
+
+===== 2025-02-08 =====
+
+Thinking about the more complex logic processing needs, I think the Script record will need some additional data (e.g. the list of choices displayed in the previous script) as well as specialized logic. This could be done as a single object or the data and logic could be a separated into a structured string (as a new field to Script) and a static function that mapped to the Script's type.
+
+If a single object the data would still need to be parsed at initialization time.

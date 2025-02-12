@@ -1,5 +1,6 @@
 package com.enoughisasgoodasafeast.operator;
 
+import com.enoughisasgoodasafeast.QueueProducer;
 import io.jenetics.util.NanoClock;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -18,12 +19,17 @@ public class Session {
     final long startTimeNanos;
     Script currentScript;
 
-    public Session(UUID id, Script currentScript, User user) {
+    // processing resources
+    QueueProducer producer; // different ones depending on the Platform
+    // Db manager goes here...
+
+    public Session(UUID id, Script currentScript, User user, QueueProducer producer) {
         startTimeNanos = NanoClock.systemUTC().nanos();
         this.id = id;
         this.currentScript = currentScript;
         this.user = user;
-        LOG.info("Created Session: {}", id);
+        this.producer = producer;
+        LOG.info("Created Session {} for User {}", id, user.id());
     }
 
 }

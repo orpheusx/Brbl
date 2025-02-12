@@ -102,8 +102,8 @@ public class RabbitQueueConsumer implements QueueConsumer {
         // TODO/FIXME handle the ack in our message processing
         final String consumerTag = channel.basicConsume(queueName, false, consumer);
 
-        LOG.info("ConsumerTag returned from basicConsume: {}", consumerTag);
         LOG.info("Negotiated heartbeat: {} seconds", connection.getHeartbeat());
+        LOG.info("ConsumerTag returned from basicConsume: {}", consumerTag);
     }
 
     @Override

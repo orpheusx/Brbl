@@ -1,5 +1,9 @@
 package com.enoughisasgoodasafeast;
 
+import io.jenetics.util.NanoClock;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+
 import java.io.IOException;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
@@ -8,10 +12,13 @@ import java.nio.file.Paths;
 
 public class FileQueueProducer implements QueueProducer {
 
-    private Path queueDirectory;
+    private static final Logger LOG = LoggerFactory.getLogger(FileQueueProducer.class);
 
-    public FileQueueProducer(Path queueDirectory) {
+    private final Path queueDirectory;
+
+    public FileQueueProducer(Path queueDirectory) throws IOException {
         this.queueDirectory = queueDirectory;
+        LOG.info("Using FileQueueProducer writing to {}", queueDirectory.toRealPath());
         if (!Files.exists(this.queueDirectory)) {
             throw new IllegalArgumentException("The queue directory, " +
                     this.queueDirectory.toString() + ", doesn't exist.");
@@ -20,14 +27,14 @@ public class FileQueueProducer implements QueueProducer {
 
     @Override
     public void enqueue(Object event) {
-        String eventText = (String) event;
-        long receivedAt = System.currentTimeMillis();
+        MTMessage mt = (MTMessage)event;
+        long receivedAt = NanoClock.systemUTC().nanos();
         try {
-            Files.writeString(Paths.get(
-                    queueDirectory.toString(),
-                    receivedAt + ".txt"),
-                    eventText,
-                    StandardCharsets.UTF_8);
+            Files.writeString(
+                    Paths.get(queueDirectory.toString(),receivedAt + ".txt"),
+                    mt.text(),
+                    StandardCharsets.UTF_8
+            );
         } catch (IOException e) {
             throw new RuntimeException(e);
         }

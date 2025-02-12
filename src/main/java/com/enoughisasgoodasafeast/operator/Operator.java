@@ -5,9 +5,9 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import java.io.IOException;
-import java.util.List;
-import java.util.Map;
-import java.util.UUID;
+import java.nio.file.Path;
+import java.nio.file.Paths;
+import java.util.*;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ExecutionException;
 import java.util.concurrent.StructuredTaskScope;
@@ -27,31 +27,51 @@ public class Operator {
 
     private final Platform defaultPlatform = Platform.BRBL;
 
-    private QueueConsumer queueConsumer;
+    // private QueueConsumer queueConsumer;
     private QueueProducer queueProducer;
 
-
-    public void init() throws IOException, TimeoutException {
-        // LOG.info("Initializing Brbl Operator");
-        // queueProducer = RabbitQueueProducer.createQueueProducer("sndr.properties");
-        // FakeOperator.QueueProducerMTHandler producerMTHandler = new FakeOperator.QueueProducerMTHandler(queueProducer);
-        // queueConsumer = RabbitQueueConsumer.createQueueConsumer(
-        //         "rcvr.properties", producerMTHandler);
+    public Operator(QueueProducer queueProducer) {
+        this.queueProducer = queueProducer;
     }
 
+    public void init() throws IOException, TimeoutException {
+        LOG.info("Initializing Brbl Operator");
+//         queueProducer = RabbitQueueProducer.createQueueProducer("sndr.properties");
+//         FakeOperator.QueueProducerMTHandler producerMTHandler = new FakeOperator.QueueProducerMTHandler(queueProducer);
+        // queueConsumer = RabbitQueueConsumer.createQueueConsumer(
+        //         "rcvr.properties", producerMTHandler);
+        // Other resources? Connections to database/distributed caches?
+    }
+
+    /**
+     * @param message
+     * @return
+     */
     boolean process(MOMessage message) {
         Session session;
         try {
             session = getUserSession(message);
         } catch (InterruptedException | ExecutionException e) {
-            LOG.info("Failed to retrieve/construct Session: {}", e.getCause().getMessage());
-            throw new RuntimeException(e);
+            LOG.error("Failed to retrieve/construct Session", e);
+            return false;
         }
-        return process(session, message);
+
+        try {
+            return process(session, message);
+        } catch (IOException e) {
+            LOG.error("Processing error", e);
+            return false;
+        }
+
     }
 
-    boolean process(Session session, MOMessage moMessage) {
-        return true;
+    boolean process(Session session, MOMessage moMessage) throws IOException {
+        Script current = session.currentScript;
+        Script next = current.evaluate(session, moMessage);
+        if (next != null) {
+            session.currentScript = next;
+        }
+        return true; // when would this be false?
     }
 
     /*
@@ -61,18 +81,22 @@ public class Operator {
         // We need a Session
         Session session = sessionsCache.get(message.from());
         if (session == null) {
-            LOG.info("No session found for sender, {}.", message.from());
+            LOG.info("No session for sender, {}.", message.from());
             try (var scope = new StructuredTaskScope.ShutdownOnFailure()) {
-                Supplier<User> user     = scope.fork(() -> findOrCreateUser(message.from(), message.to()));
+                Supplier<User> user = scope.fork(() -> findOrCreateUser(message.from(), message.to()));
                 Supplier<Script> script = scope.fork(() -> findStartingScript(message));
                 scope.join().throwIfFailed(); // TODO consider using joinUntil() to enforce a collective timeout.
 
                 // Create and persist the new Session
-                session = new Session(UUID.randomUUID(), script.get(), user.get());
+                session = new Session(UUID.randomUUID(), script.get(), user.get(), getQueueProducer(message.platform()));
                 addToSessionsCache(session);
             }
         }
         return session;
+    }
+
+    QueueProducer getQueueProducer(Platform platform) {
+        return queueProducer;
     }
 
     /*
@@ -99,24 +123,42 @@ public class Operator {
                     deriveCountryCodeFromId(from),
                     defaultLanguageList(from, to)); // We won't know everything about the user
             userCache.put(from, user);
-            LOG.info("Cached User: {}", user);
+            LOG.info("Cached {}", user);
         }
         return user;
     }
 
     Script findStartingScript(MOMessage message) {
-        Script startingScript = scriptCache.get(message.to()); // TODO expand this to look for keyword in message, other logic
+        Script startingScript = scriptCache.get(message.to());
         if (startingScript == null) {
+            // TODO Expand this to look for keyword in message, other logic.
             // TODO fetch from Redis/Postgres/file system...
             LOG.info("No script found for {}. Using default for platform, {}.", message.to(), message.platform());
-            startingScript = defaultScript(message.platform(), message.to());//new Script(UUID.randomUUID(), "TEST_SCRIPT", null, null);
+
+            startingScript = switch (message.to()) {
+                case "1234" -> new Script("PrintWithPrefix", ScriptType.PrintWithPrefix, null, "1234");
+                case "2345" -> new Script("ReverseText", ScriptType.ReverseText, null, "2345");
+                case "3456" -> new Script("HelloGoodbye", ScriptType.HelloGoodbye, null, "3456");
+                case "4567" -> {
+                    // Chain Scripts together
+                    Script one = new Script("first_step", ScriptType.PrintWithPrefix, null);
+                    Script two = new Script("second_step", ScriptType.ReverseText, one);
+                    Script tre = new Script("third_step", ScriptType.HelloGoodbye, two);
+                    one.next().add(two);
+                    two.next().add(tre);
+                    yield one;
+                }
+                default -> defaultScript(message.platform(), message.to());
+            };
+
+            scriptCache.put(message.to(), startingScript);
         }
         return startingScript;
     }
 
     Script defaultScript(Platform platform, String shortCodeOrKeywordOrChannelName) {
         // TODO use params to determine the correct initial script.
-        return new Script(UUID.randomUUID(), "TEST_SCRIPT", null, null);
+        return new Script("TEST SCRIPT RESPONSE PREFIX", ScriptType.PrintWithPrefix, null, "DefaultScript");
     }
 
     Map<Platform, String> defaultPlatformMap(String from) {

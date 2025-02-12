@@ -59,7 +59,7 @@ public record User(
             }
         }
 
-        LOG.info("Created User: {}", id);
+        LOG.info("Created User (id:{})", id);
     }
 
     void fail(String message) {
