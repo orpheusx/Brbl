@@ -11,9 +11,6 @@ import java.util.ArrayList;
 import java.util.List;
 import java.util.UUID;
 
-import static org.testcontainers.shaded.com.google.common.collect.Iterables.getFirst;
-import static org.testcontainers.shaded.com.google.common.collect.Iterables.retainAll;
-
 /**
  * The instructions for processing a message.
  * (Trying this as a Record for now. The state will have to be tracked separately.)
@@ -22,9 +19,8 @@ import static org.testcontainers.shaded.com.google.common.collect.Iterables.reta
  * @param text
  * @param next
  * @param previous
- * @param await
  */
-public record Script(UUID id, String text, ScriptType type, List<Script> next, Script previous, String label, boolean await) {
+public record Script(UUID id, String text, ScriptType type, List<ResponseLogic> next, Script previous, String label) {
 
     private static final Logger LOG = LoggerFactory.getLogger(Script.class);
 
@@ -46,11 +42,11 @@ public record Script(UUID id, String text, ScriptType type, List<Script> next, S
     }
 
     public Script(String text, ScriptType type, Script previous) {
-        this(null, text, type, List.of(), previous, null, true);
+        this(null, text, type, null, previous, null);
     }
 
     public Script(String text, ScriptType type, Script previous, String label) {
-        this(null, text, type, List.of(), previous, label, true);
+        this(null, text, type, null, previous, label);
     }
 
     public boolean hasNext() {
@@ -61,7 +57,7 @@ public record Script(UUID id, String text, ScriptType type, List<Script> next, S
         return null != previous;
     }
 
-    public List<Script> next() {
+    public List<ResponseLogic> next() {
         return next;
     }
 
@@ -96,6 +92,14 @@ public record Script(UUID id, String text, ScriptType type, List<Script> next, S
             case HelloGoodbye ->
                 SimpleTestScript.HelloGoodbyeResponseScript.evaluate(session, moMessage);
 
+            // NOTE: practically speaking there's no reason to have any of the above. Most Scripts should
+            // be of the following types or more specific versions thereof. Simple chaining conversations can
+            // simply have a single logic list.
+            case PresentMulti ->
+                    Multi.Present.evaluate(session, moMessage);
+
+            case ProcessMulti ->
+                    Multi.Process.evaluate(session, moMessage);
         };
     }
 

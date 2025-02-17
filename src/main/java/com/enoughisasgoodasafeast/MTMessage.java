@@ -25,4 +25,14 @@ public record MTMessage(UUID id, Instant created, String from, String to, String
     public MTMessage(String from, String to, String text) {
         this(UUID.randomUUID(), NanoClock.systemUTC().instant(), from, to, text);
     }
+
+    /**
+     * A helper function that understands that the from and to fields of the MT must be the reverse of the MO.
+     * @param moMessage the message for which we're responding.
+     * @param mtText the text of the response.
+     * @return a new MT response message.
+     */
+    public static MTMessage create(MOMessage moMessage, String mtText) {
+        return new MTMessage(moMessage.to(), moMessage.from(), mtText);
+    }
 }

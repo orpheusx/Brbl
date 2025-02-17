@@ -27,6 +27,12 @@ public class OperatorTest {
     public static final MOMessage mo3 = new MOMessage(
             MOBILE_MX, SHORT_CODE_1, "Adiós Brbl"
     );
+    public static final MOMessage mo4 = new MOMessage(
+            MOBILE_MX, SHORT_CODE_4, "Color quiz"
+    );
+    public static final MOMessage mo5 = new MOMessage(
+            MOBILE_MX, SHORT_CODE_4, "Flort"
+    );
 
 //    @Test
 //    void process() {
@@ -82,6 +88,30 @@ public class OperatorTest {
                 assertEquals(s2.startTimeNanos, s3.startTimeNanos);
                 assertEquals(s2.user, s3.user);
             });
+        });
+    }
+
+    @Test
+    void findStartingScriptAndStepThrough() {
+        assertDoesNotThrow(() -> {
+            var operator = new Operator(new FileQueueProducer(Paths.get("./target")));
+            var session = operator.getUserSession(mo4);
+
+            Script firstScript = operator.findStartingScript(mo4);
+            assertNotNull(firstScript, "Failed to return first Script.");
+            assertEquals(ScriptType.PresentMulti, firstScript.type());
+            assertEquals("ColorQuiz", firstScript.label());
+
+            Script secondScript = firstScript.evaluate(session, mo4);
+            System.out.println(secondScript);
+            assertEquals(ScriptType.ProcessMulti, secondScript.type());
+            session.currentScript = secondScript; // Required! Normally occurs in Operator method, process(Session, MOMessage).
+
+            Script finalScript = secondScript.evaluate(session, mo5);
+            System.out.println(finalScript);
+            assertEquals(ScriptType.PrintWithPrefix, finalScript.type());
+            session.currentScript = finalScript;
+
         });
     }
 

@@ -80,6 +80,7 @@ Trying to compile the project with native-image yielded errors related to logbac
 The GraalVM output was pretty helpful. It suggested adding to the file that tracks usages of reflection.
 While researching the problem someone suggested switching to the new configuration system available for logback: logback-tyler
 This provides a class generator that provides a fairly easy to edit Configurator implementation that doesn't use XML or reflection.
+In addition to making Graal happy the initialization will be faster and more efficient for the lack of XML.
 
 Of course, it couldn't be that simple ;-) There seems to be a bug that causes the generated class to not be marked public. The service-provider mechanism added JDK9 in support of the new package system complained of not having access. Simply editing the class to be public appears to solve the problem. I posted a question to the GitHub discussion board:
 
@@ -714,3 +715,39 @@ Question: do we need more functionality? I don't think so. At least not for the 
 Thinking about the more complex logic processing needs, I think the Script record will need some additional data (e.g. the list of choices displayed in the previous script) as well as specialized logic. This could be done as a single object or the data and logic could be a separated into a structured string (as a new field to Script) and a static function that mapped to the Script's type.
 
 If a single object the data would still need to be parsed at initialization time.
+
+===== 2025-02-13 =====
+
+Steve Carey kindly offered to provide a login to his sftp server (scarey.net) where I could put backups. Also, an Ubuntu container that I could use for load test or remote access, etc. What a mensch!
+He needs a public key for this purpose.
+
+~> ssh-keygen -t ed25519 -C "Key for scarey's sftp server/other services"
+Generating public/private ed25519 key pair.
+Enter file in which to save the key (/Users/mark/.ssh/id_ed25519):
+Created directory '/Users/mark/.ssh'.
+Enter passphrase (empty for no passphrase):
+I left the passphrase empty because I've not been the best about remembering such things.
+
+I emailed him the public key.
+
+When I told him about this project and asked him about his thoughts on hosting it from home he sent a link to a thread on reddit that pointed to https://www.servethehome.com/introducing-project-tinyminimicro-home-lab-revolution/
+
+This led me to looking at some other stuff including gitea.com which offers a free-for-open-source self-hosted version of their GitHub-like software.  GitLab, which Steve uses on his home lab, also offers a free version for "personal projects."
+
+We're not quite at this point yet, I think, but useful for when we have a baseline ready.
+
+
+
+===== 2025-02-16 =====
+
+Sitting in Logan, waiting to get on a plane to Florida.
+
+Next: replace the List<Script> field, "next" in the Script class with a List<ResponseLogic>
+
+Discovered an interesting wrinkle of sorts about Records with fields that are collections.
+I was passing List.of() in one of the constructors which resulted in the next field being an immutable collection.
+In my canonical constructor I had logic that initializes the field with an empty, mutable ArrayList.
+For the kind of objects graphs we're building we **have to be able** to add elements to the next list.
+Even then the order of object creation is difficult.
+
+Created a OperatorTest.
