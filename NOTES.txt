@@ -745,9 +745,36 @@ Sitting in Logan, waiting to get on a plane to Florida.
 Next: replace the List<Script> field, "next" in the Script class with a List<ResponseLogic>
 
 Discovered an interesting wrinkle of sorts about Records with fields that are collections.
-I was passing List.of() in one of the constructors which resulted in the next field being an immutable collection.
+I was passing List.of() as a parameter to one of the constructors which resulted in the "next" field being an immutable collection.
 In my canonical constructor I had logic that initializes the field with an empty, mutable ArrayList.
-For the kind of objects graphs we're building we **have to be able** to add elements to the next list.
+For the kind of objects graphs we're building we **have to be able** to add elements to the next list to be able to link objects together in a graph of Scripts.
 Even then the order of object creation is difficult.
 
 Created a OperatorTest.
+
+
+===== 2025-02-19 =====
+In Orlando...
+The problem with EndToEndMessagingIT were due to changes in the host name not reflected in the rcvr.properties file. I'm not sure of the best way to programmatically deal with this.
+Compounding the problem, the integration test container images are baked with the .properties files and jar inside. It would be better if we could use some of the dockerfile machinery to have it read those resources from the file system...
+
+===== 2025-02-20 =====
+Flying home.
+I'm giving up for now on the integration tests. Neither of them are working now.
+Both of the test runner plugins make the dubious choice of not rendering a report if there are failures. Not helpful. Maybe I should fork them and make my own.
+
+At any rate, I added a buffer to the Session that will hold the messages produced in the course of an MOMessage event. This raises some questions about how to avoid concurrently modification of a Session and all it's bits, however.
+
+===== 2025-02-26 =====
+Sick for the last five days... ugh.
+
+So, yeah, access to the Session likely needs to synchronized to avoid problems when there are 2+ messages received for the same instance. Further complication: if we use a shared cache (e.g. Redis) the object equality of two deserialized Sessions might be an issue.
+
+This assumes that the callbacks from the rabbit client are
+
+We might use the solution to this to help deal with the lack of thread-safety in the Rabbit channel used to add messages.
+
+https://www.rabbitmq.com/client-libraries/java-api-guide#concurrency
+
+They recommend pooling channels. There's a Spring-based connection pool impl, but I'd rather not bring in all that stuff.
+

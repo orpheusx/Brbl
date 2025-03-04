@@ -16,7 +16,7 @@ public class SimpleEchoResponseScript {
         String mtText = String.format("%s: %s", session.currentScript.text(), moMessage.text());
         // Remember the from and to fields of the MT must be the reverse of the MO
         MTMessage mt = new MTMessage(moMessage.to(), moMessage.from(), mtText);
-        session.producer.enqueue(mt);
+        session.sendBuffered(mt);
         StringBuilder builder = new StringBuilder("Evaluated MO text '");
         builder
                 .append(moMessage.text())

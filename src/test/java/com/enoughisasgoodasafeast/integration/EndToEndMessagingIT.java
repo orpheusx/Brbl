@@ -28,7 +28,7 @@ public class EndToEndMessagingIT {
     // Per https://java.testcontainers.org/test_framework_integration/junit_5/
     // Obviously, parallel execution is not supported.
 
-    @Container
+//    @Container
     private static final ComposeContainer brblContainers = new ComposeContainer(
             new File(COMPOSE_FILE_UNDER_TEST))
             .withLocalCompose(true);
@@ -37,12 +37,13 @@ public class EndToEndMessagingIT {
 
     static {
         LOG.info("Starting the Burble containers from {}", COMPOSE_FILE_UNDER_TEST);
-//        brblContainers.start(); // the @Container annotation isn't starting the container so we have to call start() manually
+        brblContainers.start(); // the @Container annotation isn't starting the container so we have to call start() manually
     }
 
-    @Test
+//    @Test
     public void testSendAndVerifyResponse() throws IOException {
         String rcvrHost = InetAddress.getLocalHost().getHostAddress();
+        LOG.info("Assuming rcvrHost is {}", rcvrHost);
         String rcvrPort = ConfigLoader.readConfig("rcvr.properties").getProperty("listener.port");
         String rcvrUri = String.format("http://%s:%s", rcvrHost, rcvrPort);
         final PlatformGateway gateway = new PlatformGateway(rcvrUri);

@@ -1,7 +1,6 @@
 package com.enoughisasgoodasafeast.operator;
 
 import com.enoughisasgoodasafeast.MOMessage;
-import com.enoughisasgoodasafeast.SharedConstants;
 
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -82,7 +81,7 @@ public record Script(UUID id, String text, ScriptType type, List<ResponseLogic> 
      * FIXME Maybe instead of null we return a symbolic Script that indicates the end of Script.
      */
     public Script evaluate(Session session, MOMessage moMessage) throws IOException {
-        return switch (session.currentScript.type) {
+        return switch (session.currentScript().type) {
             case PrintWithPrefix ->
                 SimpleTestScript.SimpleEchoResponseScript.evaluate(session, moMessage);
 

@@ -17,6 +17,7 @@ import static io.helidon.http.Status.Family.SUCCESSFUL;
  * A real implementation should use the application.yaml configuration support (for TLS setup, metrics, tracking)
  * provided by Helidon.
  * It might also want to leverage virtual threads to avoid blocking platform threads.
+ * FIXME Seriously, fix this shit.
  */
 public class HttpMTHandler implements MTHandler {
 
@@ -40,7 +41,7 @@ public class HttpMTHandler implements MTHandler {
         String host = properties.getProperty("platform.mt.host");
         int port = Integer.parseInt(properties.getProperty("platform.mt.port"));
         String pathInfo = properties.getProperty("platform.mt.pathInfo"); //FIXME check for leading slash
-        String endpoint = String.format("%s://%s:%d", protocol, host, port);
+        String endpoint = String.format("%s://%s:%d/%s", protocol, host, port, pathInfo);
         return new HttpMTHandler(endpoint);
     }
 
@@ -62,8 +63,6 @@ public class HttpMTHandler implements MTHandler {
         else {
             return true;
         }
-
-
     }
 
     public static void main(String[] args) {

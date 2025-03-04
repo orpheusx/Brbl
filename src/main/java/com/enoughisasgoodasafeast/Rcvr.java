@@ -150,6 +150,8 @@ public class Rcvr extends WebService {
             String sndText = inputs[0] + " goodbye";
             queueProducer.enqueue(sndText);
 
+//            MOMessage newMO = new MOMessage(...);
+
             res.status(OK_200);
             res.send();
         }

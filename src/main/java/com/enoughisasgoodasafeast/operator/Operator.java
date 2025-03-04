@@ -44,10 +44,11 @@ public class Operator {
     }
 
     /**
-     * @param message
-     * @return
+     * Find/setup session and process message, tracking state changes in the session.
+     * @param message the message being processed.
+     * @return true if processing was complete, false if incomplete.
      */
-    boolean process(MOMessage message) {
+    public boolean process(MOMessage message) {
         Session session;
         try {
             session = getUserSession(message);
@@ -66,18 +67,24 @@ public class Operator {
     }
 
     boolean process(Session session, MOMessage moMessage) throws IOException {
-        Script current = session.currentScript;
-        Script next = current.evaluate(session, moMessage);
-        if (next != null) {
-            session.currentScript = next;
+        synchronized (session) {
+            Script current = session.currentScript;
+            Script next = current.evaluate(session, moMessage);
+            if (next != null) {
+                session.currentScript = next;
+            }
+            return true; // when would this be false?
         }
-        return true; // when would this be false?
     }
 
     /*
-     * Use StructuredConcurrency to fetch user and script
+     * Fetch/create Session for the given identifier.
+     * Use StructuredConcurrency to fetch user and script.
+     * Because we use a pool of Channels we may be processing 2+ messages from a user concurrently. So we
+     * synchronize the method to avoid out-of-order processing. This is not ideal but, hopefully, safe.
+     * Think about ways to limit the scope of the lock to just the session.
      */
-    Session getUserSession(MOMessage message) throws InterruptedException, ExecutionException {
+    synchronized Session getUserSession(MOMessage message) throws InterruptedException, ExecutionException {
         // We need a Session
         Session session = sessionsCache.get(message.from());
         if (session == null) {
@@ -96,6 +103,7 @@ public class Operator {
     }
 
     QueueProducer getQueueProducer(Platform platform) {
+        // We may need to add different handling for each Platform.
         return queueProducer;
     }
 
@@ -109,7 +117,7 @@ public class Operator {
     private Session addToSessionsCache(Session session) {
         session.user.platformIds().forEach((platform, id) -> {
             sessionsCache.put(id, session);
-            LOG.info("Cached Session {}, platform {}", id, platform);
+            LOG.info("Cached Session id: {}, platform: {}", id, platform);
         });
         return session;
     }

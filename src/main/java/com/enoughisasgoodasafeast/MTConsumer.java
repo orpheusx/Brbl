@@ -45,7 +45,7 @@ public class MTConsumer extends DefaultConsumer {
         /*
          * Each time we receive a message there are the following possibilities
          * 1) the message is the first message in the session sequence
-         * 2) the message is not
+         * 2) the message is not the first message.
          */
 
         String[] messageParts = message.split(SharedConstants.TEST_SPACE_TOKEN, 2);

@@ -27,7 +27,7 @@ public class ConfigLoader {
             props.load(resourceStream);
 
             props.forEach((key, val) -> {
-                LOG.debug("{}: {}={}", fileName, key, val);
+                LOG.info("{}: {}={}", fileName, key, val);
             });
 
             // Override .properties file with env vars
