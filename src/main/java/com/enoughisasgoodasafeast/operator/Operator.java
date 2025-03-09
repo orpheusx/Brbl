@@ -1,17 +1,14 @@
 package com.enoughisasgoodasafeast.operator;
 
 import com.enoughisasgoodasafeast.*;
+import com.github.benmanes.caffeine.cache.Cache;
+import com.github.benmanes.caffeine.cache.Caffeine;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import java.io.IOException;
-import java.nio.file.Path;
-import java.nio.file.Paths;
 import java.util.*;
-import java.util.concurrent.ConcurrentHashMap;
-import java.util.concurrent.ExecutionException;
-import java.util.concurrent.StructuredTaskScope;
-import java.util.concurrent.TimeoutException;
+import java.util.concurrent.*;
 import java.util.function.Supplier;
 
 import static com.enoughisasgoodasafeast.operator.Telecom.deriveCountryCodeFromId;
@@ -20,14 +17,17 @@ public class Operator {
 
     private static final Logger LOG = LoggerFactory.getLogger(Operator.class);
 
-    // Replace use of ConcurrentHashMap with Caffeine instead since it has a time-based expiration impl.
-    private final ConcurrentHashMap<String, Session> sessionsCache = new ConcurrentHashMap<>();
+    // Replaced ConcurrentHashMap with Caffeine cache
+    Cache <String, Session> sessionCache = Caffeine.newBuilder()
+            .expireAfterAccess(20, TimeUnit.MINUTES)
+            .build();
+
     private final ConcurrentHashMap<String, User> userCache = new ConcurrentHashMap<>();
     private final ConcurrentHashMap<String, Script> scriptCache = new ConcurrentHashMap<>();
 
     private final Platform defaultPlatform = Platform.BRBL;
 
-    // private QueueConsumer queueConsumer;
+    private QueueConsumer queueConsumer;
     private QueueProducer queueProducer;
 
     public Operator(QueueProducer queueProducer) {
@@ -38,8 +38,8 @@ public class Operator {
         LOG.info("Initializing Brbl Operator");
 //         queueProducer = RabbitQueueProducer.createQueueProducer("sndr.properties");
 //         FakeOperator.QueueProducerMTHandler producerMTHandler = new FakeOperator.QueueProducerMTHandler(queueProducer);
-        // queueConsumer = RabbitQueueConsumer.createQueueConsumer(
-        //         "rcvr.properties", producerMTHandler);
+//         queueConsumer = RabbitQueueConsumer.createQueueConsumer(
+//                 "rcvr.properties", producerMTHandler);
         // Other resources? Connections to database/distributed caches?
     }
 
@@ -69,6 +69,14 @@ public class Operator {
     boolean process(Session session, MOMessage moMessage) throws IOException {
         synchronized (session) {
             Script current = session.currentScript;
+            if (session.inputs.size() > current.expectedInputCount()) {
+                // user responded with more MOs than expected (usually only once is expected)
+                // create a new, special Script of ScriptType.PivotScript and chain the remaining Scripts to it...
+                // Problem with this is the previous member can't be patched. It requires recreating the entire remainder of the
+                // Script chain.
+                // Alternatively, we could simply emit a
+
+            }
             Script next = current.evaluate(session, moMessage);
             if (next != null) {
                 session.currentScript = next;
@@ -77,29 +85,41 @@ public class Operator {
         }
     }
 
+
+
     /*
      * Fetch/create Session for the given identifier.
      * Use StructuredConcurrency to fetch user and script.
      * Because we use a pool of Channels we may be processing 2+ messages from a user concurrently. So we
-     * synchronize the method to avoid out-of-order processing. This is not ideal but, hopefully, safe.
+     * synchronize the method to avoid out-of-order processing. This is not ideal for performance but, hopefully, safe.
      * Think about ways to limit the scope of the lock to just the session.
+     * We can't use the nice LoadingCache impl because the function is limited to the same param type as the cache key.
      */
     synchronized Session getUserSession(MOMessage message) throws InterruptedException, ExecutionException {
         // We need a Session
-        Session session = sessionsCache.get(message.from());
+        Session session = sessionCache.getIfPresent(message.from());
         if (session == null) {
-            LOG.info("No session for sender, {}.", message.from());
-            try (var scope = new StructuredTaskScope.ShutdownOnFailure()) {
-                Supplier<User> user = scope.fork(() -> findOrCreateUser(message.from(), message.to()));
-                Supplier<Script> script = scope.fork(() -> findStartingScript(message));
-                scope.join().throwIfFailed(); // TODO consider using joinUntil() to enforce a collective timeout.
-
-                // Create and persist the new Session
-                session = new Session(UUID.randomUUID(), script.get(), user.get(), getQueueProducer(message.platform()));
-                addToSessionsCache(session);
-            }
+            session = createSession(message);
+            sessionCache.put(message.from(), session);
+            // addToSessionsCache(session); // See https://github.com/ben-manes/caffeine/tree/master/examples/indexable
         }
+
+        // Add the MOMessage to the session here in a synchronized method to insure ordering.
+        session.addInput(message);
+
         return session;
+    }
+
+    Session createSession(MOMessage message) throws InterruptedException, ExecutionException {
+        LOG.info("No session for sender, {}.", message.from());
+        try (var scope = new StructuredTaskScope.ShutdownOnFailure()) {
+            Supplier<User> user = scope.fork(() -> findOrCreateUser(message.from(), message.to()));
+            Supplier<Script> script = scope.fork(() -> findStartingScript(message));
+            scope.join().throwIfFailed(); // TODO consider using joinUntil() to enforce a collective timeout.
+
+            // Create and persist the new Session
+            return new Session(UUID.randomUUID(), script.get(), user.get(), getQueueProducer(message.platform()));
+        }
     }
 
     QueueProducer getQueueProducer(Platform platform) {
@@ -116,13 +136,13 @@ public class Operator {
      */
     private Session addToSessionsCache(Session session) {
         session.user.platformIds().forEach((platform, id) -> {
-            sessionsCache.put(id, session);
+            sessionCache.put(id, session);
             LOG.info("Cached Session id: {}, platform: {}", id, platform);
         });
         return session;
     }
 
-    User findOrCreateUser(String from, String to) {
+    protected User findOrCreateUser(String from, String to) {
         User user = userCache.get(from);
         if (user == null) {
             LOG.info("Unknown user, {}", from);
@@ -136,6 +156,10 @@ public class Operator {
         return user;
     }
 
+    /*
+     * This is all hard coded for the moment. Obviously it needs to be replaced with something that loads
+     * a Script from a database based on the content of the MOMessage.
+     */
     Script findStartingScript(MOMessage message) {
         Script startingScript = scriptCache.get(message.to());
         if (startingScript == null) {

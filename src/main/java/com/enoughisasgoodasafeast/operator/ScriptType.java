@@ -9,5 +9,7 @@ public enum ScriptType {
     ReverseText,
     HelloGoodbye,
     PresentMulti,
-    ProcessMulti
+    ProcessMulti,
+    Pivot,
+    TopicSelection;
 }

@@ -3,11 +3,9 @@ package com.enoughisasgoodasafeast.integration;
 import com.enoughisasgoodasafeast.ConfigLoader;
 import com.enoughisasgoodasafeast.PlatformGateway;
 import com.enoughisasgoodasafeast.SharedConstants;
-import org.junit.jupiter.api.Test;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.testcontainers.containers.ComposeContainer;
-import org.testcontainers.junit.jupiter.Container;
 import org.testcontainers.junit.jupiter.Testcontainers;
 
 import java.io.File;
@@ -15,7 +13,7 @@ import java.io.IOException;
 import java.net.InetAddress;
 import java.util.List;
 
-import static com.enoughisasgoodasafeast.util.Functions.waitSeconds;
+import static com.enoughisasgoodasafeast.operator.Functions.waitSeconds;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 
 @Testcontainers

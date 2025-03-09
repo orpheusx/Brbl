@@ -5,10 +5,14 @@ import com.rabbitmq.client.AMQP;
 import com.rabbitmq.client.Channel;
 import com.rabbitmq.client.DefaultConsumer;
 import com.rabbitmq.client.Envelope;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 import java.io.IOException;
 
 public class OperatorConsumer extends DefaultConsumer {
+
+    private static final Logger LOG = LoggerFactory.getLogger(OperatorConsumer.class);
 
     private final Operator operator;
 
@@ -31,8 +35,16 @@ public class OperatorConsumer extends DefaultConsumer {
 
         // Should be able to deserialize directly assuming Rcvr enqueued an MOMessage
         try {
+            long deliveryTag = envelope.getDeliveryTag();
             final MOMessage moMessage = MOMessage.fromBytes(body);
-            operator.process(moMessage);
+            boolean ack = operator.process(moMessage);
+            LOG.info("Processed message: {}", moMessage);
+            if(ack) {
+                getChannel().basicAck(deliveryTag, false);
+            } else {
+                getChannel().basicReject(deliveryTag, true);
+            }
+
         } catch (ClassNotFoundException e) {
             throw new RuntimeException("", e);
         }

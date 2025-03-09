@@ -684,8 +684,7 @@ https://www.rabbitmq.com/docs/shovel is interesting for operational purposes. It
 https://www.rabbitmq.com/docs/publishers#concurrency drops a bomb on multiple threads writing to the same channel:
     "In general, publishing on a shared 'publishing context' (channel in AMQP 0-9-1, connection in STOMP, session in AMQP 1.0 and so on) should be avoided and considered unsafe."
     " Doing so can result in incorrect framing of data frames on the wire. That leads to connection closure."
-
-So channel per thread?
+NOTE: this applies to _publishing_ not consuming. Even so, it makes consider sticking with a single channel...
 
 Looking at https://www.rabbitmq.com/docs/publishers#connection-recovery it appears that the Java client supports automatic recovery of connections and topology (queues, exchanges, bindings, and consumers) so maybe the heartbeat setup isn't something we need to explicitly handle. Perhaps it is enough to handle the cases where we receive a message and the queue is incommunicado.
 
@@ -778,3 +777,8 @@ https://www.rabbitmq.com/client-libraries/java-api-guide#concurrency
 
 They recommend pooling channels. There's a Spring-based connection pool impl, but I'd rather not bring in all that stuff.
 
+There's a project that uses some of the Apache Commons' pooling framework: https://github.com/sytuacmdyh/amqp-client-pool
+
+===== 2025-03-09 =====
+
+The RabbitQueueConsumer needs to be refactored to remove the MTHandler. This is too hardwired to the FakeOperator and test setups we had before. MTConsumer, likewise, needs to be changed/removed.

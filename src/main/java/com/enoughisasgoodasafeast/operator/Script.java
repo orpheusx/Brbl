@@ -10,6 +10,8 @@ import java.util.ArrayList;
 import java.util.List;
 import java.util.UUID;
 
+import com.enoughisasgoodasafeast.operator.Pivot;
+
 /**
  * The instructions for processing a message.
  * (Trying this as a Record for now. The state will have to be tracked separately.)
@@ -99,7 +101,16 @@ public record Script(UUID id, String text, ScriptType type, List<ResponseLogic> 
 
             case ProcessMulti ->
                     Multi.Process.evaluate(session, moMessage);
+
+            case Pivot ->
+                    Pivot.evaluate(session);
+
+            case TopicSelection ->
+                    TopicSelection.evaluate(session, moMessage);
         };
     }
 
+    public int expectedInputCount() {
+        return 1;
+    }
 }

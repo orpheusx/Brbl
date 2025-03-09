@@ -33,7 +33,7 @@ public class SimpleTestScript {
             String mtText = String.format("%s: %s", session.currentScript.text(), moMessage.text());
             // Remember the from and to fields of the MT must be the reverse of the MO
             MTMessage mt = new MTMessage(moMessage.to(), moMessage.from(), mtText);
-            session.sendBuffered(mt);
+            session.addOutput(mt);
             StringBuilder builder = new StringBuilder("Evaluated MO text '")
                     .append(moMessage.text())
                     .append("' -> MT text '")
@@ -49,7 +49,7 @@ public class SimpleTestScript {
         public static Script evaluate(Session session, MOMessage moMessage) throws IOException {
             String mtText = new StringBuilder(moMessage.text()).reverse().toString();
             MTMessage mt = new MTMessage(moMessage.to(), moMessage.from(), mtText);
-            session.sendBuffered(mt);
+            session.addOutput(mt);
 
             StringBuilder builder = new StringBuilder("Evaluated MO text '")
                     .append(moMessage.text())
@@ -74,7 +74,7 @@ public class SimpleTestScript {
             } else {
                 mt = new MTMessage(moMessage.to(), moMessage.from(), "Unexpected input: " + moText);
             }
-            session.sendBuffered(mt);
+            session.addOutput(mt);
 
             StringBuilder builder = new StringBuilder("Evaluated MO text '")
                     .append(moMessage.text())

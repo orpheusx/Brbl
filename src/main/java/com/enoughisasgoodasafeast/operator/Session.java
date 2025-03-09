@@ -1,5 +1,6 @@
 package com.enoughisasgoodasafeast.operator;
 
+import com.enoughisasgoodasafeast.MOMessage;
 import com.enoughisasgoodasafeast.MTMessage;
 import com.enoughisasgoodasafeast.QueueProducer;
 import io.jenetics.util.NanoClock;
@@ -7,9 +8,7 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import java.io.IOException;
-import java.util.LinkedList;
-import java.util.Queue;
-import java.util.UUID;
+import java.util.*;
 
 /**
  * The Session tracks and persists state for a single User
@@ -23,8 +22,9 @@ public class Session {
     final User user;
     final long startTimeNanos;
     Script currentScript;
-    Queue<MTMessage> sendBuffer = new LinkedList<>();
+    Queue<MTMessage> outputBuffer = new LinkedList<>();
     Integer seqNum = 0;
+    SequencedSet<MOMessage> inputs = new LinkedHashSet<>();
 
     // processing resources
     QueueProducer producer; // different ones depending on the Platform
@@ -39,17 +39,17 @@ public class Session {
         LOG.info("Created Session {} for User {}", id, user.id());
     }
 
-    public void sendBuffered(MTMessage mtMessage) {
-        sendBuffer.add(mtMessage);
+    public void addOutput(MTMessage mtMessage) {
+        outputBuffer.add(mtMessage);
     }
 
-    public void flushBuffered() throws IOException {
-        int numInBuffer = sendBuffer.size();
+    public void flushOutput() throws IOException {
+        int numInBuffer = outputBuffer.size();
         for (int i = 0; i < numInBuffer; i++) {
-            MTMessage mtMessage = sendBuffer.poll();
+            MTMessage mtMessage = outputBuffer.poll();
             producer.enqueue(mtMessage);
         }
-        sendBuffer.clear();
+        outputBuffer.clear();
     }
 
     public User getUser() {
@@ -58,5 +58,9 @@ public class Session {
 
     public Script currentScript() {
         return currentScript;
+    }
+
+    public void addInput(MOMessage message) {
+        inputs.add(message);
     }
 }

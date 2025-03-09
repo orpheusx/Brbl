@@ -22,7 +22,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.stream.Stream;
 
-import static com.enoughisasgoodasafeast.util.Functions.waitSeconds;
+import static com.enoughisasgoodasafeast.operator.Functions.waitSeconds;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.fail;
 

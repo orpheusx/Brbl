@@ -45,7 +45,7 @@ public class RabbitQueueConsumer implements QueueConsumer {
             throw new IllegalArgumentException("RabbitQueueConsumer missing required configuration.");
         }
 
-        ConnectionFactory factory = new ConnectionFactory();
+        ConnectionFactory factory = new ConnectionFactory(); // automaticRecoveryEnabled is true by default.
         factory.setHost(queueHost);
         factory.setPort(queuePort);
         factory.setRequestedHeartbeat(requestedHeartbeatTimeout);
@@ -91,13 +91,14 @@ public class RabbitQueueConsumer implements QueueConsumer {
         //        LOG.info("DeliverCallback: {}", deliverCallback);
 
         CancelCallback cancelCallback = (consumerTag) -> {
-            LOG.info("ConsumerTag for cancelCallback: {}",consumerTag);
+            LOG.info("Consumer has been CANCELLED. ConsumerTag {}. THIS IS UNEXPECTED!!!", consumerTag);
         };
 
         LOG.info("CancelCallback: {}", cancelCallback);
 
         // TODO add support for the other Callback interfaces...
         Consumer consumer = new MTConsumer(channel, consumingHandler);
+//        OperatorConsumer operatorConsumer = new OperatorConsumer();
 
         // TODO/FIXME handle the ack in our message processing
         final String consumerTag = channel.basicConsume(queueName, false, consumer);
