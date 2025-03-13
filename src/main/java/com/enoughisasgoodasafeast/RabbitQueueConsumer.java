@@ -1,5 +1,6 @@
 package com.enoughisasgoodasafeast;
 
+import com.enoughisasgoodasafeast.operator.MessageProcessor;
 import com.rabbitmq.client.*;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -12,12 +13,12 @@ public class RabbitQueueConsumer implements QueueConsumer {
 
     private static final Logger LOG = LoggerFactory.getLogger(RabbitQueueConsumer.class);
 
-    public static QueueConsumer createQueueConsumer(String configFileName, MTHandler consumingHandler) throws IOException, TimeoutException {
+    public static QueueConsumer createQueueConsumer(String configFileName, MessageProcessor processor/*Consumer consumer*//*MTHandler consumingHandler*/) throws IOException, TimeoutException {
         Properties props = ConfigLoader.readConfig(configFileName);
-        return createQueueConsumer(props, consumingHandler);
+        return createQueueConsumer(props, processor);
     }
 
-    public static QueueConsumer createQueueConsumer(Properties props, MTHandler consumingHandler) throws IOException, TimeoutException {
+    public static QueueConsumer createQueueConsumer(Properties props, MessageProcessor processor/*MTHandler consumingHandler*/) throws IOException, TimeoutException {
         String queueHost = props.getProperty("queue.host");
         int queuePort = Integer.parseInt(props.getProperty("queue.port"));
         String queueName = props.getProperty("queue.name");
@@ -26,7 +27,7 @@ public class RabbitQueueConsumer implements QueueConsumer {
         int heartbeatTimeoutSeconds = SharedConstants.STANDARD_HEARTBEAT_TIMEOUT_SECONDS;
 
         return new RabbitQueueConsumer(queueHost, queuePort, queueName, queueRoutingKey, isQueueDurable,
-                consumingHandler, heartbeatTimeoutSeconds);
+                processor, heartbeatTimeoutSeconds);
     }
 
     private RabbitQueueConsumer(String queueHost,
@@ -34,14 +35,14 @@ public class RabbitQueueConsumer implements QueueConsumer {
                                 String queueName,
                                 String routingKey,
                                 boolean durable,
-                                MTHandler consumingHandler,
+                                MessageProcessor processor,
                                 int requestedHeartbeatTimeout)
             throws IOException, TimeoutException {
 
         LOG.info("Creating RabbitQueueConsumer: queueHost: '{}', queueName: '{}', routingKey: '{}'",
                 queueHost, queueName, routingKey);
 
-        if (queueHost == null || queueName == null || routingKey == null || consumingHandler == null) {
+        if (queueHost == null || queueName == null || routingKey == null || processor == null) {
             throw new IllegalArgumentException("RabbitQueueConsumer missing required configuration.");
         }
 
@@ -70,57 +71,27 @@ public class RabbitQueueConsumer implements QueueConsumer {
 
         channel.basicQos(3); // An important number where retrying/re-queueing is concerned.
 
-        // TODO move this into a separate class.
-        //        DeliverCallback deliverCallback = (consumerTag, delivery) -> {
-        //            String message = new String(delivery.getBody(), "UTF-8");
-        //            LOG.info("ConsumerTag for deliverCallback: {}", consumerTag);
-        //            LOG.info(" [x] Receiving on {}: '{}'", delivery.getEnvelope().getRoutingKey(), message);
-        //            boolean ok = this.consumingHandler.handle(message);
-        //            if (ok) {
-        //                LOG.info("Processed message: {}", message);
-        //            } else {
-        //                LOG.error("Delivery failed for message: {}", message);
-        //                // FIXME need to implement ack/no-ack with broker.
-        //            }
-        //            // Either way we want to be done with this message.
-        //            long deliveryTag = delivery.getEnvelope().getDeliveryTag();
-        //            channel.basicAck(deliveryTag, false);
-        //            LOG.info("Acked message with deliveryTag, {}", deliveryTag);
-        //        };
-        //
-        //        LOG.info("DeliverCallback: {}", deliverCallback);
-
-        CancelCallback cancelCallback = (consumerTag) -> {
-            LOG.info("Consumer has been CANCELLED. ConsumerTag {}. THIS IS UNEXPECTED!!!", consumerTag);
-        };
-
-        LOG.info("CancelCallback: {}", cancelCallback);
-
-        // TODO add support for the other Callback interfaces...
-        Consumer consumer = new MTConsumer(channel, consumingHandler);
-//        OperatorConsumer operatorConsumer = new OperatorConsumer();
-
-        // TODO/FIXME handle the ack in our message processing
-        final String consumerTag = channel.basicConsume(queueName, false, consumer);
+        final OperatorConsumer operatorConsumer = new OperatorConsumer(processor, channel); // pooling?
+        final String consumerTag = channel.basicConsume(queueName, false, operatorConsumer);
 
         LOG.info("Negotiated heartbeat: {} seconds", connection.getHeartbeat());
         LOG.info("ConsumerTag returned from basicConsume: {}", consumerTag);
     }
 
-    @Override
-    public Object dequeue() throws IOException { // FIXME remove from interface since we're not using it?
-        return null;
-    }
+//    @Override
+//    public Object dequeue() throws IOException { // FIXME remove from interface since we're not using it?
+//        return null;
+//    }
 
-    @Override
-    public long getPollIntervalMs() {
-        return 0;
-    } // FIXME this only makes sense for SQS
+//    @Override
+//    public long getPollIntervalMs() {
+//        return 0;
+//    } // FIXME this only makes sense for SQS
 
-    @Override
-    public QueueConsumer setPollIntervalMs(long pollIntervalMs) {
-        return null;
-    }
+//    @Override
+//    public QueueConsumer setPollIntervalMs(long pollIntervalMs) {
+//        return null;
+//    }
 
 
 //    public static void main(String[] argv) throws Exception {

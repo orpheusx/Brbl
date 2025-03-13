@@ -99,7 +99,7 @@ public class Rcvr extends WebService {
             super.handle(req, res);
             LOG.info("/enqueue requested");
             String rcvText = req.content().as(String.class);
-
+            // TODO produce an Message instead of just the String
             queueProducer.enqueue(rcvText); // TODO catch exceptions and persist the incoming message in a temp store?
 
             res.status(OK_200);
@@ -150,7 +150,7 @@ public class Rcvr extends WebService {
             String sndText = inputs[0] + " goodbye";
             queueProducer.enqueue(sndText);
 
-//            MOMessage newMO = new MOMessage(...);
+//            Message newMO = new Message(...);
 
             res.status(OK_200);
             res.send();

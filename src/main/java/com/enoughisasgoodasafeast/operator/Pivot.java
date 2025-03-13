@@ -1,7 +1,5 @@
 package com.enoughisasgoodasafeast.operator;
 
-import com.enoughisasgoodasafeast.MOMessage;
-import com.enoughisasgoodasafeast.MTMessage;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 

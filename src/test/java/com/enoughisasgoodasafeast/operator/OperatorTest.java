@@ -1,11 +1,12 @@
 package com.enoughisasgoodasafeast.operator;
 
 import com.enoughisasgoodasafeast.FileQueueProducer;
-import com.enoughisasgoodasafeast.MOMessage;
+import com.enoughisasgoodasafeast.Message;
 import org.junit.jupiter.api.Test;
 
 import java.nio.file.Paths;
 
+import static com.enoughisasgoodasafeast.Message.newMO;
 import static org.junit.jupiter.api.Assertions.*;
 
 public class OperatorTest {
@@ -18,19 +19,19 @@ public class OperatorTest {
     public static final String SHORT_CODE_3 = "3456";
     public static final String SHORT_CODE_4 = "4567";
     public static final String MO_TEXT = "Hello Brbl";
-    public static final MOMessage mo1 = new MOMessage(
+    public static final Message mo1 = newMO(
             MOBILE_US, SHORT_CODE_1, MO_TEXT
     );
-    public static final MOMessage mo2 = new MOMessage(
+    public static final Message mo2 = newMO(
             MOBILE_MX, SHORT_CODE_1, MO_TEXT
     );
-    public static final MOMessage mo3 = new MOMessage(
+    public static final Message mo3 = newMO(
             MOBILE_MX, SHORT_CODE_1, "Adiós Brbl"
     );
-    public static final MOMessage mo4 = new MOMessage(
+    public static final Message mo4 = newMO(
             MOBILE_MX, SHORT_CODE_4, "Color quiz"
     );
-    public static final MOMessage mo5 = new MOMessage(
+    public static final Message mo5 = newMO(
             MOBILE_MX, SHORT_CODE_4, "Flort"
     );
 
@@ -43,9 +44,9 @@ public class OperatorTest {
         assertDoesNotThrow(() -> {
             var operator = new Operator(new FileQueueProducer(Paths.get("./target")));
 
-            MOMessage message1 = new MOMessage(MOBILE_CA, SHORT_CODE_1, "Testing the process method.");
-            MOMessage message2 = new MOMessage(MOBILE_MX, SHORT_CODE_2, "Reverse this text");
-            MOMessage message3 = new MOMessage(MOBILE_US, SHORT_CODE_3, "42 hello");
+            Message message1 = newMO(MOBILE_CA, SHORT_CODE_1, "Testing the process method.");
+            Message message2 = newMO(MOBILE_MX, SHORT_CODE_2, "Reverse this text");
+            Message message3 = newMO(MOBILE_US, SHORT_CODE_3, "42 hello");
             assertDoesNotThrow(() -> {
                 operator.init();
                 assertTrue(operator.process(message1));
@@ -53,9 +54,9 @@ public class OperatorTest {
                 assertTrue(operator.process(message3));
             });
 
-            MOMessage message4 = new MOMessage(MOBILE_CA, SHORT_CODE_4, "one");
-            MOMessage message5 = new MOMessage(MOBILE_CA, SHORT_CODE_4, "two");
-            MOMessage message6 = new MOMessage(MOBILE_CA, SHORT_CODE_4, "23 hello");
+            Message message4 = newMO(MOBILE_CA, SHORT_CODE_4, "one");
+            Message message5 = newMO(MOBILE_CA, SHORT_CODE_4, "two");
+            Message message6 = newMO(MOBILE_CA, SHORT_CODE_4, "23 hello");
             assertDoesNotThrow(() -> {
                 assertTrue(operator.process(message4));
                 assertTrue(operator.process(message5));
@@ -105,7 +106,7 @@ public class OperatorTest {
             Script secondScript = firstScript.evaluate(session, mo4);
             System.out.println(secondScript);
             assertEquals(ScriptType.ProcessMulti, secondScript.type());
-            session.currentScript = secondScript; // Required! Normally occurs in Operator method, process(Session, MOMessage).
+            session.currentScript = secondScript; // Required! Normally occurs in Operator method, process(Session, Message).
 
             Script finalScript = secondScript.evaluate(session, mo5);
             System.out.println(finalScript);

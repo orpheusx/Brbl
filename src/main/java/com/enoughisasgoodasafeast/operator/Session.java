@@ -1,7 +1,6 @@
 package com.enoughisasgoodasafeast.operator;
 
-import com.enoughisasgoodasafeast.MOMessage;
-import com.enoughisasgoodasafeast.MTMessage;
+import com.enoughisasgoodasafeast.Message;
 import com.enoughisasgoodasafeast.QueueProducer;
 import io.jenetics.util.NanoClock;
 import org.slf4j.Logger;
@@ -22,9 +21,9 @@ public class Session {
     final User user;
     final long startTimeNanos;
     Script currentScript;
-    Queue<MTMessage> outputBuffer = new LinkedList<>();
+    Queue<Message> outputBuffer = new LinkedList<>();
     Integer seqNum = 0;
-    SequencedSet<MOMessage> inputs = new LinkedHashSet<>();
+    SequencedSet<Message> inputs = new LinkedHashSet<>();
 
     // processing resources
     QueueProducer producer; // different ones depending on the Platform
@@ -39,14 +38,14 @@ public class Session {
         LOG.info("Created Session {} for User {}", id, user.id());
     }
 
-    public void addOutput(MTMessage mtMessage) {
+    public void addOutput(Message mtMessage) {
         outputBuffer.add(mtMessage);
     }
 
     public void flushOutput() throws IOException {
         int numInBuffer = outputBuffer.size();
         for (int i = 0; i < numInBuffer; i++) {
-            MTMessage mtMessage = outputBuffer.poll();
+            Message mtMessage = outputBuffer.poll();
             producer.enqueue(mtMessage);
         }
         outputBuffer.clear();
@@ -60,7 +59,7 @@ public class Session {
         return currentScript;
     }
 
-    public void addInput(MOMessage message) {
+    public void addInput(Message message) {
         inputs.add(message);
     }
 }

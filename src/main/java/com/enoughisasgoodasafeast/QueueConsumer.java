@@ -13,11 +13,11 @@ public interface QueueConsumer {
      * FIXME Probably need to make the return type less vague.
      * @return the object taken from the queue
      */
-    public Object dequeue() throws IOException;
+//    public Object dequeue() throws IOException;
 
-    long getPollIntervalMs();
+//    long getPollIntervalMs();
 
-    QueueConsumer setPollIntervalMs(long pollIntervalMs);
+//    QueueConsumer setPollIntervalMs(long pollIntervalMs);
 
 
 

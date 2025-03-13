@@ -13,7 +13,7 @@ import java.util.function.Supplier;
 
 import static com.enoughisasgoodasafeast.operator.Telecom.deriveCountryCodeFromId;
 
-public class Operator {
+public class Operator implements MessageProcessor {
 
     private static final Logger LOG = LoggerFactory.getLogger(Operator.class);
 
@@ -38,8 +38,8 @@ public class Operator {
         LOG.info("Initializing Brbl Operator");
 //         queueProducer = RabbitQueueProducer.createQueueProducer("sndr.properties");
 //         FakeOperator.QueueProducerMTHandler producerMTHandler = new FakeOperator.QueueProducerMTHandler(queueProducer);
-//         queueConsumer = RabbitQueueConsumer.createQueueConsumer(
-//                 "rcvr.properties", producerMTHandler);
+         queueConsumer = RabbitQueueConsumer.createQueueConsumer(
+                 "rcvr.properties", this);
         // Other resources? Connections to database/distributed caches?
     }
 
@@ -48,7 +48,8 @@ public class Operator {
      * @param message the message being processed.
      * @return true if processing was complete, false if incomplete.
      */
-    public boolean process(MOMessage message) {
+    @Override
+    public boolean process(Message message) {
         Session session;
         try {
             session = getUserSession(message);
@@ -66,7 +67,7 @@ public class Operator {
 
     }
 
-    boolean process(Session session, MOMessage moMessage) throws IOException {
+    boolean process(Session session, Message moMessage) throws IOException {
         synchronized (session) {
             Script current = session.currentScript;
             if (session.inputs.size() > current.expectedInputCount()) {
@@ -75,7 +76,6 @@ public class Operator {
                 // Problem with this is the previous member can't be patched. It requires recreating the entire remainder of the
                 // Script chain.
                 // Alternatively, we could simply emit a
-
             }
             Script next = current.evaluate(session, moMessage);
             if (next != null) {
@@ -95,7 +95,7 @@ public class Operator {
      * Think about ways to limit the scope of the lock to just the session.
      * We can't use the nice LoadingCache impl because the function is limited to the same param type as the cache key.
      */
-    synchronized Session getUserSession(MOMessage message) throws InterruptedException, ExecutionException {
+    synchronized Session getUserSession(Message message) throws InterruptedException, ExecutionException {
         // We need a Session
         Session session = sessionCache.getIfPresent(message.from());
         if (session == null) {
@@ -104,15 +104,16 @@ public class Operator {
             // addToSessionsCache(session); // See https://github.com/ben-manes/caffeine/tree/master/examples/indexable
         }
 
-        // Add the MOMessage to the session here in a synchronized method to insure ordering.
+        // Add the Message to the session here in a synchronized method to insure ordering.
         session.addInput(message);
 
         return session;
     }
 
-    Session createSession(MOMessage message) throws InterruptedException, ExecutionException {
+    Session createSession(Message message) throws InterruptedException, ExecutionException {
         LOG.info("No session for sender, {}.", message.from());
         try (var scope = new StructuredTaskScope.ShutdownOnFailure()) {
+            // NB: To avoid synchronizing on getUserSession() might we use a synchronous cache for the User then lock on the User?
             Supplier<User> user = scope.fork(() -> findOrCreateUser(message.from(), message.to()));
             Supplier<Script> script = scope.fork(() -> findStartingScript(message));
             scope.join().throwIfFailed(); // TODO consider using joinUntil() to enforce a collective timeout.
@@ -158,9 +159,9 @@ public class Operator {
 
     /*
      * This is all hard coded for the moment. Obviously it needs to be replaced with something that loads
-     * a Script from a database based on the content of the MOMessage.
+     * a Script from a database based on the content of the Message.
      */
-    Script findStartingScript(MOMessage message) {
+    Script findStartingScript(Message message) {
         Script startingScript = scriptCache.get(message.to());
         if (startingScript == null) {
             // TODO Expand this to look for keyword in message, other logic.

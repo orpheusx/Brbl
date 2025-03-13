@@ -1,7 +1,6 @@
 package com.enoughisasgoodasafeast.operator;
 
-import com.enoughisasgoodasafeast.MOMessage;
-import com.enoughisasgoodasafeast.MTMessage;
+import com.enoughisasgoodasafeast.Message;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -11,10 +10,10 @@ public class SimpleEchoResponseScript {
 
     private static final Logger LOG = LoggerFactory.getLogger(SimpleEchoResponseScript.class);
 
-    public static void evaluate(Session session, MOMessage moMessage) throws IOException {
+    public static void evaluate(Session session, Message moMessage) throws IOException {
         String mtText = String.format("%s: %s", session.currentScript.text(), moMessage.text());
         // Remember the from and to fields of the MT must be the reverse of the MO
-        MTMessage mt = new MTMessage(moMessage.to(), moMessage.from(), mtText);
+        Message mt = Message.newMT(moMessage.to(), moMessage.from(), mtText);
         session.addOutput(mt);
         StringBuilder builder = new StringBuilder("Evaluated MO text '");
         builder

@@ -86,6 +86,15 @@ public final class NanoClock extends Clock implements Serializable {
         return System.nanoTime() + OFFSET_NANOS;
     }
 
+    /**
+     * Convenience method that returns instant() from the UTC instance.
+     * Makes it a little more readable.
+     * @return @return the nanosecond-based instant, measured from 1970-01-01T00:00Z (UTC)
+     */
+    public static Instant utcInstant() {
+        return NanoClock.systemUTC().instant();
+    }
+
     @Override
     public Instant instant() {
         final long now = nanos();

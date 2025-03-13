@@ -22,7 +22,7 @@ public class RcvrTest {
 //        System.out.println("ipAddress=" + ipAddress);
 //        long nanos = 1675080820000000000L; // Example nanoseconds since epoch
 //
-        final Instant instantUtc = NanoClock.systemUTC().instant();
+        final Instant instantUtc = NanoClock.utcInstant();
         final Instant instantEDT = NanoClock.system(ZoneId.of("America/New_York")).instant();
 //
         System.out.println(instantUtc);

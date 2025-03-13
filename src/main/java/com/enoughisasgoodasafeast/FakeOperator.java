@@ -1,5 +1,6 @@
 package com.enoughisasgoodasafeast;
 
+import com.enoughisasgoodasafeast.operator.MessageProcessor;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -14,25 +15,31 @@ import static com.enoughisasgoodasafeast.SharedConstants.*;
  * This class is "Fake" because it combines direct knowledge of RabbitMQ and the work needed to process
  * messages.
  */
-public class FakeOperator {
+public class FakeOperator implements MessageProcessor {
 
     private static final Logger LOG = LoggerFactory.getLogger(FakeOperator.class);
 
     private QueueConsumer queueConsumer;
     private QueueProducer queueProducer;
+    private QueueProducerMTHandler producerMTHandler;
 
     public void init() throws IOException, TimeoutException {
         LOG.info("Initializing FakeOperator");
         queueProducer = RabbitQueueProducer.createQueueProducer("sndr.properties");
-        QueueProducerMTHandler producerMTHandler = new QueueProducerMTHandler(queueProducer);
+        producerMTHandler = new QueueProducerMTHandler(queueProducer);
         queueConsumer = RabbitQueueConsumer.createQueueConsumer(
-                "rcvr.properties", producerMTHandler);
+                "rcvr.properties", this/*producerMTHandler*/);
         // FIXME add a startup messsage that signals readiness...
     }
 
     public static void main(String[] args) throws IOException, TimeoutException {
         FakeOperator fakeOperator = new FakeOperator();
         fakeOperator.init();
+    }
+
+    @Override
+    public boolean process(Message message) {
+        return producerMTHandler.handle(message.text());
     }
 
     public static class QueueProducerMTHandler implements MTHandler {

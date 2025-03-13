@@ -14,17 +14,17 @@ public class FileQueueConsumer implements QueueConsumer {
         this.reader = Files.newBufferedReader(queueFile);
     }
 
-    @Override
+//    @Override
     public Object dequeue() throws IOException {
         return reader.readLine();
     }
 
-    @Override
+//    @Override
     public long getPollIntervalMs() {
         return pollIntervalMs;
     }
 
-    @Override
+//    @Override
     public QueueConsumer setPollIntervalMs(long pollIntervalMs) {
         this.pollIntervalMs = pollIntervalMs;
         return this;

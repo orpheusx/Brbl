@@ -1,7 +1,5 @@
 package com.enoughisasgoodasafeast.operator;
 
-import com.enoughisasgoodasafeast.MOMessage;
-
 import java.util.List;
 import java.util.UUID;
 

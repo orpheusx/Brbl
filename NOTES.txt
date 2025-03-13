@@ -782,3 +782,12 @@ There's a project that uses some of the Apache Commons' pooling framework: https
 ===== 2025-03-09 =====
 
 The RabbitQueueConsumer needs to be refactored to remove the MTHandler. This is too hardwired to the FakeOperator and test setups we had before. MTConsumer, likewise, needs to be changed/removed.
+
+===== 2025-03-10 =====
+Completed the refactoring for RabbitQueueConsumer and its use by Operator.
+
+Sndr is next...
+
+===== 2025-03-11 =====
+
+As I started work on the Sndr, I realized there wasn't a compelling reason to make MOMessage and MTMessage different classes.

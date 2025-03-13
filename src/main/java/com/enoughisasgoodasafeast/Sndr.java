@@ -1,5 +1,6 @@
 package com.enoughisasgoodasafeast;
 
+import com.enoughisasgoodasafeast.operator.MessageProcessor;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -7,11 +8,12 @@ import java.io.IOException;
 import java.util.Properties;
 import java.util.concurrent.TimeoutException;
 
-public class Sndr {
+public class Sndr implements MessageProcessor {
 
     private static final Logger LOG = LoggerFactory.getLogger(Sndr.class);
 
     public QueueConsumer queueConsumer;
+    HttpMTHandler httpMtHandler;
 
     //    public void init() {
             // This is the JDK provided client
@@ -28,9 +30,9 @@ public class Sndr {
 
         try {
             final Properties properties = ConfigLoader.readConfig("sndr.properties");
-            HttpMTHandler httpMtHandler = (HttpMTHandler) HttpMTHandler.newHandler(properties);
+            httpMtHandler = (HttpMTHandler) HttpMTHandler.newHandler(properties);
             queueConsumer = RabbitQueueConsumer.createQueueConsumer(
-                    properties, httpMtHandler);
+                    properties, this);
         } catch (IOException | TimeoutException e) {
             throw new RuntimeException(e);
         }
@@ -39,6 +41,11 @@ public class Sndr {
         //                //.addService(WebClientTracing.create())
         //                .baseUri(uri)
         //                .build();
+    }
+
+    @Override
+    public boolean process(Message message) {
+        return httpMtHandler.handle(message.text());
     }
 
     public static void main(String[] args) {

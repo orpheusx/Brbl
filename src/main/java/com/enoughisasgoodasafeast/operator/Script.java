@@ -1,6 +1,6 @@
 package com.enoughisasgoodasafeast.operator;
 
-import com.enoughisasgoodasafeast.MOMessage;
+import com.enoughisasgoodasafeast.Message;
 
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -9,8 +9,6 @@ import java.io.IOException;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.UUID;
-
-import com.enoughisasgoodasafeast.operator.Pivot;
 
 /**
  * The instructions for processing a message.
@@ -82,7 +80,7 @@ public record Script(UUID id, String text, ScriptType type, List<ResponseLogic> 
      * @return the next Script in the conversation (or null if the conversation is complete?)
      * FIXME Maybe instead of null we return a symbolic Script that indicates the end of Script.
      */
-    public Script evaluate(Session session, MOMessage moMessage) throws IOException {
+    public Script evaluate(Session session, Message moMessage) throws IOException {
         return switch (session.currentScript().type) {
             case PrintWithPrefix ->
                 SimpleTestScript.SimpleEchoResponseScript.evaluate(session, moMessage);

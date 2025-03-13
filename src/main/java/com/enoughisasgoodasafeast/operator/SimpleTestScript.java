@@ -1,12 +1,13 @@
 package com.enoughisasgoodasafeast.operator;
 
-import com.enoughisasgoodasafeast.MOMessage;
-import com.enoughisasgoodasafeast.MTMessage;
+import com.enoughisasgoodasafeast.Message;
 import com.enoughisasgoodasafeast.SharedConstants;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import java.io.IOException;
+
+import static com.enoughisasgoodasafeast.Message.newMT;
 
 public class SimpleTestScript {
 
@@ -29,10 +30,10 @@ public class SimpleTestScript {
      * Sends
      */
     public static class SimpleEchoResponseScript {
-        public static Script evaluate(Session session, MOMessage moMessage) throws IOException {
+        public static Script evaluate(Session session, Message moMessage) throws IOException {
             String mtText = String.format("%s: %s", session.currentScript.text(), moMessage.text());
             // Remember the from and to fields of the MT must be the reverse of the MO
-            MTMessage mt = new MTMessage(moMessage.to(), moMessage.from(), mtText);
+            Message mt = newMT(moMessage.to(), moMessage.from(), mtText);
             session.addOutput(mt);
             StringBuilder builder = new StringBuilder("Evaluated MO text '")
                     .append(moMessage.text())
@@ -46,9 +47,9 @@ public class SimpleTestScript {
     }
 
     public static class ReverseTextResponseScript {
-        public static Script evaluate(Session session, MOMessage moMessage) throws IOException {
+        public static Script evaluate(Session session, Message moMessage) throws IOException {
             String mtText = new StringBuilder(moMessage.text()).reverse().toString();
-            MTMessage mt = new MTMessage(moMessage.to(), moMessage.from(), mtText);
+            Message mt = newMT(moMessage.to(), moMessage.from(), mtText);
             session.addOutput(mt);
 
             StringBuilder builder = new StringBuilder("Evaluated MO text '")
@@ -66,13 +67,13 @@ public class SimpleTestScript {
      * and will send a response: '<num> goodbye'
      */
     public static class HelloGoodbyeResponseScript {
-        public static Script evaluate(Session session, MOMessage moMessage) throws IOException {
+        public static Script evaluate(Session session, Message moMessage) throws IOException {
             String[] moText = moMessage.text().split(SharedConstants.TEST_SPACE_TOKEN, 2);
-            MTMessage mt = null;
+            Message mt = null;
             if (moText[1].equals("hello")) {
-                mt = new MTMessage(moMessage.to(), moMessage.from(), moText[0] + " " + "goodbye");
+                mt = newMT(moMessage.to(), moMessage.from(), moText[0] + " " + "goodbye");
             } else {
-                mt = new MTMessage(moMessage.to(), moMessage.from(), "Unexpected input: " + moText);
+                mt = newMT(moMessage.to(), moMessage.from(), "Unexpected input: " + moText);
             }
             session.addOutput(mt);
 
