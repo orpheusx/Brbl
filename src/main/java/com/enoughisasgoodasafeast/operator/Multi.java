@@ -5,6 +5,7 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import java.io.IOException;
+import java.util.List;
 
 import static com.enoughisasgoodasafeast.Message.newMTfromMO;
 
@@ -18,7 +19,7 @@ public class Multi {
             LOG.info("Multi.Present evaluating '{}'", moMessage.text());
             // Is this the right place to handle platform-dependent message text formatting?
             String mtText = Functions.renderForPlatform(moMessage.platform(), session.currentScript().text());
-            Message mt = newMTfromMO(moMessage, mtText);
+            Message mt = newMTfromMO(moMessage, mtText); // FIXME Move the renderForPlatform into Message's static methods?
             session.addOutput(mt);
             return advance(session);
         }
@@ -37,43 +38,66 @@ public class Multi {
 
     static class Process {
 
+        // FIXME in practice, this cannot be a constant. This could, however, serve as a default.
         final static String UNEXPECTED_INPUT_MESSAGE = """
                 Oops, that's not one of the options. Try again with one of the listed numbers
-                or 'change topic' to start talking about something else.
+                or say 'change topic' to start talking about something else.
                 """;
 
-        public static Script evaluate(Session session, Message moMessage) {
+        public static Script evaluate(Session session, Message moMessage) throws IOException {
             LOG.info("Multi.Process evaluating '{}'", moMessage.text());
             String noMatchText = session.currentScript.text();
+
+            final String userText = moMessage.text().trim().toLowerCase();
             for (ResponseLogic option : session.currentScript.next()) {
-                if (option.matchText().contains(moMessage.text().trim().toLowerCase())) { //TODO make the matching more robust/flexible.
+                if (option.matchText().contains(userText)) { //TODO make the matching more robust/flexible.
                     LOG.info("Input, {}, matched logic: {}", moMessage.text().trim(), option.matchText());
                     final Message mt = newMTfromMO(moMessage, option.text());
                     session.addOutput(mt);
                     LOG.info("Enqueued {}", mt);
-                    //FIXME Maybe session should collect MTs and send them all in order at the end of the process() call?
-                    // This would make it more transactional. Yes! Let's do this.
                     return option.script();
                 }
             }
 
             // Handle the "I want to talk about something else" case here...
-            if (moMessage.text().trim().toLowerCase().contains("change topic")) {
-                Message changeTopic = newMTfromMO(moMessage, "");
-                session.addOutput(changeTopic);
-//                Script topLevel = ... // find the current customer's "top of funnel" Script.
-                return null; // TODO return a non-null Script
+            if (userText.contains("change topic")) {
+                // Create a new Script graph
+                Message changeTopicConfirm = newMTfromMO(moMessage, "You want to talk about something else? OK...");
+                session.addOutput(changeTopicConfirm);
+                return Process.constructTopicScript(session, moMessage);
             }
 
 
             // TODO "go back to revisit a previous stage"?
 
-            // Still here? Provide a bad input message
+            // Still here? Provide a 'bad input' message.
+            // Would it make sense to re-print the previous Multi.Present? Seems like it would be clear what the
+            // actual options are since it's only a few lines above in the chat history, right?
             session.addOutput(newMTfromMO(moMessage, noMatchText==null ? UNEXPECTED_INPUT_MESSAGE : noMatchText));
             return session.currentScript; // we don't advance in this case.
         }
+
+        /*
+         * FIXME This should really be fetched from a database per shortcode and not handled by this
+         */
+        public static Script constructTopicScript(Session session, Message moMessage) throws IOException {
+            String text = """
+                Here are the topics I can talk about:
+                1) wolverines
+                2) international monetary policy
+                """;
+            Script topicPresentation = new Script(text, ScriptType.PresentMulti, null, "topic-selection");
+            Script endScript = new Script("End-of-Conversation", ScriptType.ProcessMulti, null, "e-o-c");
+            ResponseLogic topicOne = new ResponseLogic(List.of("1", "wolverine", "wolverines"), "They have pointy teeth and a nasty disposition", endScript);
+            ResponseLogic topicTwo = new ResponseLogic(List.of("1", "international", "monetary", "policy"), "It's kinda boring actually.", endScript);
+            endScript.next().add(topicOne);
+            endScript.next().add(topicTwo);
+            topicPresentation.next().add(new ResponseLogic(null, null, endScript));
+            session.currentScript = topicPresentation; // this part doesn't smell great...
+
+            return Present.evaluate(session, moMessage);
+        }
     }
 
-//
 }
 

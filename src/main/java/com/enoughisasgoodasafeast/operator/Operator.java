@@ -16,6 +16,7 @@ import static com.enoughisasgoodasafeast.operator.Telecom.deriveCountryCodeFromI
 public class Operator implements MessageProcessor {
 
     private static final Logger LOG = LoggerFactory.getLogger(Operator.class);
+    private static final int EXPECTED_INPUT_COUNT = 1;
 
     // Replaced ConcurrentHashMap with Caffeine cache
     Cache <String, Session> sessionCache = Caffeine.newBuilder()
@@ -30,16 +31,21 @@ public class Operator implements MessageProcessor {
     private QueueConsumer queueConsumer;
     private QueueProducer queueProducer;
 
-    public Operator(QueueProducer queueProducer) {
+    public Operator(QueueConsumer queueConsumer, QueueProducer queueProducer) {
+        this.queueConsumer = queueConsumer;
         this.queueProducer = queueProducer;
     }
 
     public void init() throws IOException, TimeoutException {
         LOG.info("Initializing Brbl Operator");
-//         queueProducer = RabbitQueueProducer.createQueueProducer("sndr.properties");
-//         FakeOperator.QueueProducerMTHandler producerMTHandler = new FakeOperator.QueueProducerMTHandler(queueProducer);
-         queueConsumer = RabbitQueueConsumer.createQueueConsumer(
-                 "rcvr.properties", this);
+        if (queueConsumer == null) {
+            queueConsumer = RabbitQueueConsumer.createQueueConsumer(
+                    "rcvr.properties", this);
+        }
+        if (queueProducer == null) {
+            queueProducer = RabbitQueueProducer.createQueueProducer("sndr.properties");
+        }
+
         // Other resources? Connections to database/distributed caches?
     }
 
@@ -64,13 +70,12 @@ public class Operator implements MessageProcessor {
             LOG.error("Processing error", e);
             return false;
         }
-
     }
 
     boolean process(Session session, Message moMessage) throws IOException {
         synchronized (session) {
             Script current = session.currentScript;
-            if (session.inputs.size() > current.expectedInputCount()) {
+            if (session.inputs.size() > EXPECTED_INPUT_COUNT) {
                 // user responded with more MOs than expected (usually only once is expected)
                 // create a new, special Script of ScriptType.PivotScript and chain the remaining Scripts to it...
                 // Problem with this is the previous member can't be patched. It requires recreating the entire remainder of the
@@ -84,8 +89,6 @@ public class Operator implements MessageProcessor {
             return true; // when would this be false?
         }
     }
-
-
 
     /*
      * Fetch/create Session for the given identifier.
@@ -113,7 +116,7 @@ public class Operator implements MessageProcessor {
     Session createSession(Message message) throws InterruptedException, ExecutionException {
         LOG.info("No session for sender, {}.", message.from());
         try (var scope = new StructuredTaskScope.ShutdownOnFailure()) {
-            // NB: To avoid synchronizing on getUserSession() might we use a synchronous cache for the User then lock on the User?
+            // TODO To avoid synchronizing on getUserSession() might we use a synchronous cache for the User that locks on the User?
             Supplier<User> user = scope.fork(() -> findOrCreateUser(message.from(), message.to()));
             Supplier<Script> script = scope.fork(() -> findStartingScript(message));
             scope.join().throwIfFailed(); // TODO consider using joinUntil() to enforce a collective timeout.
@@ -175,7 +178,8 @@ public class Operator implements MessageProcessor {
 
                 case "4567" -> { // chain Scripts together using the PresentMulti/ProcessMulti
                     Script one = new Script("What's you favorite color? 1) red 2) blue 3) flort", ScriptType.PresentMulti, null, "ColorQuiz");
-                    Script two = new Script("No text required", ScriptType.ProcessMulti, one, "EvaluateAnswer");
+                    Script two = new Script("Oops, that's not one of the options. Try again with one of the listed numbers or say 'change topic' to start talking about something else.",
+                            ScriptType.ProcessMulti, one, "EvaluateAnswer");
                     ResponseLogic linkOneToTwo = new ResponseLogic(null, null, two);
                     one.next().add(linkOneToTwo);
                     Script tre = new Script("End-of-Conversation", ScriptType.PrintWithPrefix, two, "EndOfConversation");

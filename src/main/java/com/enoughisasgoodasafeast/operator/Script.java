@@ -81,6 +81,7 @@ public record Script(UUID id, String text, ScriptType type, List<ResponseLogic> 
      * FIXME Maybe instead of null we return a symbolic Script that indicates the end of Script.
      */
     public Script evaluate(Session session, Message moMessage) throws IOException {
+        session.addEvaluated(this);
         return switch (session.currentScript().type) {
             case PrintWithPrefix ->
                 SimpleTestScript.SimpleEchoResponseScript.evaluate(session, moMessage);
@@ -108,7 +109,4 @@ public record Script(UUID id, String text, ScriptType type, List<ResponseLogic> 
         };
     }
 
-    public int expectedInputCount() {
-        return 1;
-    }
 }

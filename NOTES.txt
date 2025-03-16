@@ -790,4 +790,21 @@ Sndr is next...
 
 ===== 2025-03-11 =====
 
-As I started work on the Sndr, I realized there wasn't a compelling reason to make MOMessage and MTMessage different classes.
+As I started work on the Sndr, I realized there wasn't a compelling reason to make MOMessage and MTMessage different classes. These have been merged.
+
+Continue to explore how we want the script logic to work. Pivot and TopicSelection represent common cases we know from our previous experience.
+
+Do we need the 'previous' field in the Script class? We could instead track previously executed Scripts (and navigate back to them) via a list on the Session. Removing previous would make constructing graphs of Scripts easier and less brittle. Detours and deviations from the initial chain of Scripts (because the User wants to talk about something else or asks to go to the top of the conversational tree) could then also be handled dynamically. In any case, we'll want to keep a history of a User's actual path through a conversation (the nodes they visited vs the Script graph that was constructed.)
+
+< User input (short code)
+> Present ("welcome"...ask question)
+< User input (answer)
+> Process (match answer)
+> Present (acknowledge and ask another question)
+< User input ("change topic")
+> Process (no match, detect change topic)
+> Present (ask navigational question)
+> User input ("start new topic")
+> Process (match answer)
+> Present (display new topics and ask for selection)
+...

@@ -24,6 +24,8 @@ public class Session {
     Queue<Message> outputBuffer = new LinkedList<>();
     Integer seqNum = 0;
     SequencedSet<Message> inputs = new LinkedHashSet<>();
+    SequencedSet<Message> inputHistory = new LinkedHashSet<>();
+    List<Script> evaluatedScripts = new ArrayList<>();
 
     // processing resources
     QueueProducer producer; // different ones depending on the Platform
@@ -49,6 +51,8 @@ public class Session {
             producer.enqueue(mtMessage);
         }
         outputBuffer.clear();
+        inputHistory.addAll(inputs);
+        inputs.clear();
     }
 
     public User getUser() {
@@ -61,5 +65,9 @@ public class Session {
 
     public void addInput(Message message) {
         inputs.add(message);
+    }
+
+    public void addEvaluated(Script script) {
+        evaluatedScripts.addLast(script);
     }
 }
