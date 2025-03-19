@@ -29,12 +29,12 @@ public class RabbitQueueProducer implements QueueProducer {
     }
 
     public static QueueProducer createQueueProducer(Properties props) throws IOException, TimeoutException {
-        String queueHost = props.getProperty("queue.host");
-        int queuePort = Integer.parseInt(props.getProperty("queue.port", STANDARD_RABBITMQ_PORT));
-        String queueName = props.getProperty("queue.name");
-        String queueRoutingKey = props.getProperty("queue.routingKey");
+        String queueHost = props.getProperty("producer.queue.host");
+        int queuePort = Integer.parseInt(props.getProperty("producer.queue.port", STANDARD_RABBITMQ_PORT));
+        String queueName = props.getProperty("producer.queue.name");
+        String queueRoutingKey = props.getProperty("producer.queue.routingKey");
 
-        boolean queueIsDurable = Boolean.parseBoolean(props.getProperty("queue.durable"));
+        boolean queueIsDurable = Boolean.parseBoolean(props.getProperty("producer.queue.durable"));
         int heartbeatTimeoutSeconds = SharedConstants.STANDARD_HEARTBEAT_TIMEOUT_SECONDS;
 
 
@@ -83,10 +83,14 @@ public class RabbitQueueProducer implements QueueProducer {
 
     @Override
     public void enqueue(Object event) throws IOException {
-        String message = (String) event;
-        byte[] payload = message.getBytes(StandardCharsets.UTF_8);
-        channel.basicPublish(this.exchangeName, this.routingKey, MessageProperties.PERSISTENT_TEXT_PLAIN/*deliveryModeProps*/, payload);
-        LOG.info(" [x] Enqueued msg '{}'", message);
+        byte[] payload = null;
+        switch(event) {
+            case String s -> payload = s.getBytes(StandardCharsets.UTF_8);
+            case Message m -> payload = m.toBytes();
+            default -> throw new IllegalArgumentException("Unsupported message type: " + event.getClass());
+        }
+        channel.basicPublish(this.exchangeName, this.routingKey, /*deliveryModeProps*/null, payload);
+        LOG.info(" [x] Enqueued msg '{}'", event);
     }
 
     // Test only

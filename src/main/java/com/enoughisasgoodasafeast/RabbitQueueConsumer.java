@@ -19,11 +19,11 @@ public class RabbitQueueConsumer implements QueueConsumer {
     }
 
     public static QueueConsumer createQueueConsumer(Properties props, MessageProcessor processor/*MTHandler consumingHandler*/) throws IOException, TimeoutException {
-        String queueHost = props.getProperty("queue.host");
-        int queuePort = Integer.parseInt(props.getProperty("queue.port"));
-        String queueName = props.getProperty("queue.name");
-        String queueRoutingKey = props.getProperty("queue.routingKey");
-        boolean isQueueDurable = Boolean.parseBoolean(props.getProperty("queue.durable"));
+        String queueHost = props.getProperty("consumer.queue.host");
+        int queuePort = Integer.parseInt(props.getProperty("consumer.queue.port"));
+        String queueName = props.getProperty("consumer.queue.name");
+        String queueRoutingKey = props.getProperty("consumer.queue.routingKey");
+        boolean isQueueDurable = Boolean.parseBoolean(props.getProperty("consumer.queue.durable"));
         int heartbeatTimeoutSeconds = SharedConstants.STANDARD_HEARTBEAT_TIMEOUT_SECONDS;
 
         return new RabbitQueueConsumer(queueHost, queuePort, queueName, queueRoutingKey, isQueueDurable,

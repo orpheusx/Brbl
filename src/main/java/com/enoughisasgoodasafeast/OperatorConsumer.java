@@ -8,7 +8,7 @@ import org.slf4j.LoggerFactory;
 import java.io.IOException;
 
 /**
- * An implementation of the Rabbit Consumer interface that handles MOMessages.
+ * An implementation of the Rabbit Consumer interface that handles Messages.
  */
 public class OperatorConsumer extends DefaultConsumer {
 
@@ -44,13 +44,13 @@ public class OperatorConsumer extends DefaultConsumer {
         // Should be able to deserialize directly assuming Rcvr enqueued a Message
         try {
             long deliveryTag = envelope.getDeliveryTag();
-            final Message moMessage = Message.fromBytes(body);
-            boolean ack = processor.process(moMessage);
-            LOG.info("Processed message: {}", moMessage);
+            final Message message = Message.fromBytes(body);
+            boolean ack = processor.process(message);
+            LOG.info("Processed message: {}", message);
             if(ack) {
                 getChannel().basicAck(deliveryTag, false);
             } else {
-                LOG.warn("Rejecting {}", moMessage);
+                LOG.warn("Rejecting {}", message);
                 getChannel().basicReject(deliveryTag, true);
             }
 

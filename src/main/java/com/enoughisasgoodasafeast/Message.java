@@ -54,7 +54,7 @@ public record Message(UUID id, Instant received, MessageType type, Platform plat
     }
 
     public static Message newMTfromMO(Message mo, String text) {
-        return Message.newMO(mo.to, mo.from, text);
+        return Message.newMT(mo.to, mo.from, text);
     }
 
 }

@@ -31,6 +31,8 @@ public class Operator implements MessageProcessor {
     private QueueConsumer queueConsumer;
     private QueueProducer queueProducer;
 
+    public Operator() {}
+
     public Operator(QueueConsumer queueConsumer, QueueProducer queueProducer) {
         this.queueConsumer = queueConsumer;
         this.queueProducer = queueProducer;
@@ -44,6 +46,18 @@ public class Operator implements MessageProcessor {
         }
         if (queueProducer == null) {
             queueProducer = RabbitQueueProducer.createQueueProducer("sndr.properties");
+        }
+        // Other resources? Connections to database/distributed caches?
+    }
+
+    public void init(Properties props) throws IOException, TimeoutException {
+        LOG.info("Initializing Brbl Operator with provided Properties object");
+        if (queueConsumer == null) {
+            queueConsumer = RabbitQueueConsumer.createQueueConsumer(
+                    props, this);
+        }
+        if (queueProducer == null) {
+            queueProducer = RabbitQueueProducer.createQueueProducer(props);
         }
 
         // Other resources? Connections to database/distributed caches?
@@ -86,6 +100,7 @@ public class Operator implements MessageProcessor {
             if (next != null) {
                 session.currentScript = next;
             }
+            session.flushOutput();
             return true; // when would this be false?
         }
     }

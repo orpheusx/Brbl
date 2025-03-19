@@ -7,7 +7,6 @@ import java.io.IOException;
  */
 public interface QueueProducer {
 
-    // FIXME define a general message type class to use here
     public void enqueue(Object event) throws IOException;
 
 }
