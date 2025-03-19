@@ -2,10 +2,12 @@ package com.enoughisasgoodasafeast.operator;
 
 import com.enoughisasgoodasafeast.FakeQueueConsumer;
 import com.enoughisasgoodasafeast.FileQueueProducer;
+import com.enoughisasgoodasafeast.InMemoryQueueProducer;
 import com.enoughisasgoodasafeast.Message;
 import org.junit.jupiter.api.Test;
 
 import java.nio.file.Paths;
+import java.util.List;
 
 import static com.enoughisasgoodasafeast.Message.newMO;
 import static java.util.Objects.requireNonNull;
@@ -126,12 +128,13 @@ public class OperatorTest {
     @Test
     void findStartingScriptAndStepThroughScriptWithBadInput() {
         assertDoesNotThrow(() -> {
-            var operator = new Operator(new FakeQueueConsumer(), new FileQueueProducer(Paths.get("./target")));
+            var operator = new Operator(new FakeQueueConsumer(), new InMemoryQueueProducer());
             operator.init();
 
             var session = operator.getUserSession(mo4);
 
             Script firstScript = operator.findStartingScript(mo4);
+
             assertNotNull(firstScript, "Failed to return first Script.");
             assertEquals(ScriptType.PresentMulti, firstScript.type());
             assertEquals("ColorQuiz", firstScript.label());
@@ -202,16 +205,18 @@ public class OperatorTest {
     @Test
     void stepThroughPresentProcessMulti() {
         assertDoesNotThrow(() -> {
-            var operator = new Operator(new FakeQueueConsumer(), new FileQueueProducer(Paths.get("./target")));
+            var producer = new InMemoryQueueProducer();
+            var operator = new Operator(new FakeQueueConsumer(), producer);
             operator.init();
 
             assertTrue(operator.process(mo4));
             var session = operator.getUserSession(mo4);
-            assertTrue(requireNonNull(session.outputBuffer.poll()).text().contains("favorite color"));
+            final List<Message> queuedMessages = producer.getQueuedMessages();
+            assertTrue(requireNonNull(queuedMessages.getFirst()).text().contains("favorite color"));
             assertEquals(ScriptType.ProcessMulti, session.currentScript().type());
 
             assertTrue(operator.process(mo5));
-            assertTrue(requireNonNull(session.outputBuffer.poll()).text().contains("cool kids"));
+            assertTrue(requireNonNull(queuedMessages.get(1)).text().contains("cool kids"));
             assertEquals(ScriptType.PrintWithPrefix, session.currentScript().type());
 
         });
@@ -220,39 +225,44 @@ public class OperatorTest {
     @Test
     void stepThroughWithUnexpectedInputAndChangeTopic() {
         assertDoesNotThrow(() -> {
-            var operator = new Operator(new FakeQueueConsumer(), new FileQueueProducer(Paths.get("./target")));
+            var producer = new InMemoryQueueProducer();
+            var operator = new Operator(new FakeQueueConsumer(), producer);
+            var queuedMessages = producer.getQueuedMessages();
             operator.init();
 
             assertTrue(operator.process(mo4));
 
             var session = operator.getUserSession(mo4);
-            assertTrue(requireNonNull(session.outputBuffer.poll()).text().contains("favorite color"));
+            assertTrue(requireNonNull(queuedMessages.getFirst()).text().contains("favorite color"));
+            queuedMessages.clear();
 
             Script faveColorScript = session.currentScript();
             assertEquals(ScriptType.ProcessMulti, faveColorScript.type());
 
             assertTrue(operator.process(unexpected));
             // An error message should have been produced...
-            assertTrue(requireNonNull(session.outputBuffer.poll()).text().contains("Oops"));
+            assertTrue(requireNonNull(queuedMessages.getFirst()).text().contains("Oops"));
+            queuedMessages.clear();
+
             Script stillFaveColorScript = session.currentScript();
             assertEquals(ScriptType.ProcessMulti, faveColorScript.type());
             assertEquals(faveColorScript, stillFaveColorScript);
 
             assertEquals(0, session.outputBuffer.size());
 
-            assertTrue(operator.process(changeTopic));
-            assertEquals(2, session.outputBuffer.size());
+            assertTrue(operator.process(changeTopic)); // will emit a notice message and the topic display message
+            assertEquals(2, queuedMessages.size());
             Script changeTopicScript = session.currentScript();
             assertEquals(ScriptType.ProcessMulti, changeTopicScript.type());
 
-            assertTrue(requireNonNull(session.outputBuffer.poll()).text().contains("something else"));
-            assertTrue(requireNonNull(session.outputBuffer.poll()).text().contains("monetary"));
-
-            assertEquals(0, session.outputBuffer.size());
+            assertTrue(requireNonNull(queuedMessages.getFirst()).text().contains("something else"));
+            assertTrue(requireNonNull(queuedMessages.get(1)).text().contains("monetary"));
+            queuedMessages.clear();
 
             assertTrue(operator.process(wolverine));
             assertEquals(ScriptType.ProcessMulti, session.currentScript().type());
-            assertTrue(requireNonNull(session.outputBuffer.poll()).text().contains("pointy teeth"));
+            assertEquals(1, queuedMessages.size());
+            assertTrue(requireNonNull(queuedMessages.getFirst()).text().contains("pointy teeth"));
         });
     }
 
