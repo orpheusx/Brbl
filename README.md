@@ -4,6 +4,6 @@ I decided to make it public against my (ego's) better judgement. You will see al
 
 See NOTES.txt for my moment-to-moment thoughts on the design principles but, in a nutshell, I'm trying to take a functional/data driven approach to make the core messaging as robust, predictable, and efficient as possible.
 
-NOTE: I haven't decided on a license yet. Consider this closed source and proprietary for now though you are free to read the code. Likely I will pick something OSI [https://opensource.org/] approved.
+NOTE: I haven't decided on a license yet. Consider this closed source and proprietary for now though you are free to read the code. Likely I will pick something OSI [https://opensource.org/] approved. The file, NanoClock, is copyright Franz Wilhelmstötter (franz.wilhelmstoetter@gmail.com) and licensed under the Apache License, Version 2.0.
 
 --Mark W. Stewart
