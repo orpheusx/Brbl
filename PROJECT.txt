@@ -5,12 +5,46 @@
 1) core message processing (ordered, robust error handling for common cases like multiple responses)
 2) persistence for scripts, sessions, users.
 3) caching
+3.1) profiling memory and performance
+3.2) metrics with Prometheus (or something lighter weight)
 4) script authoring (domain models > records)
 5) initial gateway support (SMS via Twilio or similar)
 6) basic sentiment analysis
-7) deployment & operations including backups
+7) deployment & operations including backups (we need actual hardware at this stage)
 8) management CLI for common operations.
 9) setup issue tracker
 10) alpha?
 
-web client and server (implemented in Elixir using Phoenix?)
+Post-alpha:
+0) web client and server (implemented in Elixir using Phoenix?)
+1) ...profit?
+
+
+
+
++-----------+
+|   Rcvr    |-------------------------------+
++-----------+                               |
+     |                                      |
+     V                                      |
++-----------+                               |
+| Brkr (MO) |-------------------------------+
++-----------+                               |
+     |                                      |
+     V                                      V
++-----------+                         +------------+
+| Operator  |----------------------> | Monitoring  |
++-----------+                         +------------+
+     |    |      +-----------+              ^
+     |    +----> | Database  |              |
+     |           +-----------+              |
+     V                                      |
++-----------+                               |
+| Brkr (MT) |-------------------------------+
++-----------+                               |
+     |                                      |
+     V                                      |
++-----------+                               |
+|   Sndr    |-------------------------------+
++-----------+
+
