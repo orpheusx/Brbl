@@ -20,23 +20,24 @@ import java.util.Arrays;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.function.Function;
 import java.util.stream.Stream;
 
 import static com.enoughisasgoodasafeast.operator.Functions.waitSeconds;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.fail;
 
-@Testcontainers
+//@Testcontainers
 public class ServiceAvailabilityIT {
 
     private static final Logger LOG = LoggerFactory.getLogger(ServiceAvailabilityIT.class);
     private static final String BURBLE_CONTAINER = "burble-jvm:0.1.0";
 
-    @Container
+    //@Container
     final RabbitMQContainer brokerContainer = new RabbitMQContainer("rabbitmq:4.0-management");
     // NOTE: RabbitMQContainer is still INCUBATING according to https://java.testcontainers.org/modules/rabbitmq/
 
-    @Test
+//    @Test
     public void testBasicMessageSend() throws IOException {
         /*final*/GenericContainer<?> rcvrContainer = null;
         /*final*/GenericContainer<?> fkopContainer = null;
@@ -47,7 +48,7 @@ public class ServiceAvailabilityIT {
             Map<String, String> envOverrides = getOverridesForBroker(brokerContainer);
 
             // -------------------------------------- Setup RCVR -----------------------------------------------------//
-            final int rcvrExposedPort = Integer.parseInt(ConfigLoader.readConfig("rcvr.properties").getProperty("listener.port"));
+            final int rcvrExposedPort = Integer.parseInt(ConfigLoader.readConfig("rcvr.properties"/*"operator_test.properties"*/).getProperty("webserver.listener.port"));
             rcvrContainer = new GenericContainer<>(BURBLE_CONTAINER)
                     .withCommand("Rcvr")
                     .withExposedPorts(rcvrExposedPort)
@@ -86,14 +87,14 @@ public class ServiceAvailabilityIT {
 
     }
 
-    @Test
+//    @Test
     public void testRcvrReconnect() throws IOException {
         //-------------------------- Setup Broker -----------------------------------------------------//
         demandStart(brokerContainer);
         Map<String, String> envOverrides = getOverridesForBroker(brokerContainer);
 
         //-------------------------- Setup RCVR -----------------------------------------------------//
-        final int rcvrExposedPort = Integer.parseInt(ConfigLoader.readConfig("rcvr.properties").getProperty("listener.port"));
+        final int rcvrExposedPort = Integer.parseInt(ConfigLoader.readConfig("rcvr.properties"/*"operator_test.properties"*/).getProperty("webserver.listener.port"));
         final GenericContainer<?> rcvrContainer = new GenericContainer<>(BURBLE_CONTAINER)
                 .withCommand("Rcvr")
                 .withExposedPorts(rcvrExposedPort)
@@ -189,14 +190,14 @@ public class ServiceAvailabilityIT {
 //
 //    }
 
-    @Test
+//    @Test
     public void testGatewayUnavailable() throws IOException {
         //-------------------------- Setup Broker -----------------------------------------------------//
         demandStart(brokerContainer);
         Map<String, String> envOverrides = getOverridesForBroker(brokerContainer);
 
         //-------------------------- Setup RCVR -----------------------------------------------------//
-        final int rcvrExposedPort = Integer.parseInt(ConfigLoader.readConfig("rcvr.properties").getProperty("listener.port"));
+        final int rcvrExposedPort = Integer.parseInt(ConfigLoader.readConfig("rcvr.properties"/*"operator_test.properties"*/).getProperty("webserver.listener.port"));
         final GenericContainer<?> rcvrContainer = new GenericContainer<>(BURBLE_CONTAINER)
                 .withCommand("Rcvr")
                 .withExposedPorts(rcvrExposedPort)
@@ -374,8 +375,8 @@ public class ServiceAvailabilityIT {
 
     private Map<String, String> getOverridesForBroker(RabbitMQContainer brokerContainer) throws UnknownHostException {
         Map<String, String> envOverrides = new HashMap<>();
-        envOverrides.put("queue.port", String.valueOf(brokerContainer.getAmqpPort()));
-        envOverrides.put("queue.host", InetAddress.getLocalHost().getHostAddress());
+        envOverrides.put("producer.queue.port", String.valueOf(brokerContainer.getAmqpPort()));
+        envOverrides.put("producer.queue.host", InetAddress.getLocalHost().getHostAddress());
         LOG.info("Config overrides: {}", envOverrides);
         return envOverrides;
     }

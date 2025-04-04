@@ -9,6 +9,7 @@ import java.nio.charset.StandardCharsets;
 import java.util.Properties;
 import java.util.concurrent.TimeoutException;
 
+import static com.enoughisasgoodasafeast.RabbitQueueFunctions.exchangeForQueueName;
 import static com.enoughisasgoodasafeast.SharedConstants.STANDARD_RABBITMQ_PORT;
 import static com.rabbitmq.client.BuiltinExchangeType.TOPIC;
 
@@ -18,9 +19,10 @@ public class RabbitQueueProducer implements QueueProducer {
 
     private final String queueHost;
     private final int queuePort;
-    private final String exchangeName;
+    private final String queueName;
     private final String routingKey;
 
+    private final Connection moConnection;
     private final Channel channel;
 
     public static QueueProducer createQueueProducer(String configFileName) throws IOException, TimeoutException {
@@ -41,19 +43,19 @@ public class RabbitQueueProducer implements QueueProducer {
         return new RabbitQueueProducer(queueHost, queuePort, queueName, queueRoutingKey, queueIsDurable, heartbeatTimeoutSeconds);
     }
 
-    private RabbitQueueProducer(String queueHost, int queuePort, String exchangeName, String routingKey,
+    private RabbitQueueProducer(String queueHost, int queuePort, String queueName, String routingKey,
                                 boolean isDurable, int requestedHeartbeatTimeout)
             throws IOException, TimeoutException {
 
         LOG.info("Creating RabbitQueueProducer: queueHost: '{}', queuePort: '{}', exchangeName: '{}', routingKey: '{}', isDurable: {}",
-                queueHost, queuePort, exchangeName, routingKey, isDurable);
+                queueHost, queuePort, queueName, routingKey, isDurable);
 
         this.queueHost = queueHost;
         this.queuePort = queuePort;
-        this.exchangeName = exchangeName;
+        this.queueName = queueName;
         this.routingKey = routingKey;
 
-        if (queueHost == null || exchangeName == null || routingKey == null) {
+        if (queueHost == null || queueName == null || routingKey == null) {
             throw new IllegalArgumentException("RabbitQueueProducer missing required configuration.");
         }
 
@@ -62,13 +64,16 @@ public class RabbitQueueProducer implements QueueProducer {
         factory.setPort(this.queuePort);
         factory.setRequestedHeartbeat(requestedHeartbeatTimeout);
 
-        Connection moConnection = factory.newConnection();
+        /*Connection*/ moConnection = factory.newConnection();
         channel = moConnection.createChannel();
         /*AMQP.Exchange.DeclareOk declareOk = */
-        channel.exchangeDeclare(this.exchangeName, TOPIC, isDurable);
+        final String matchingExchangeName = exchangeForQueueName(queueName);
+        final AMQP.Exchange.DeclareOk exchangeDeclare = channel.exchangeDeclare(matchingExchangeName, TOPIC, isDurable);
+        LOG.info("Declared exchange, {}: {}", matchingExchangeName, exchangeDeclare);
 
-        channel.queueDeclare(this.exchangeName, true, false, false, null);
-        channel.queueBind(exchangeName, this.exchangeName, routingKey);
+        channel.queueDeclare(this.queueName, true, false, false, null);
+        channel.queueBind(queueName, matchingExchangeName, routingKey);
+        LOG.info("Bound exchange, {}, to queue, {}.", matchingExchangeName, queueName);
 
         // Heartbeat frames will be sent approx moConnection.getHeartbeat() / 2 seconds
         // After two missed heartbeats, the peer is considered to be unreachable.
@@ -89,8 +94,13 @@ public class RabbitQueueProducer implements QueueProducer {
             case Message m -> payload = m.toBytes();
             default -> throw new IllegalArgumentException("Unsupported message type: " + event.getClass());
         }
-        channel.basicPublish(this.exchangeName, this.routingKey, /*deliveryModeProps*/null, payload);
+        channel.basicPublish(this.queueName, this.routingKey, /*deliveryModeProps*/null, payload);
         LOG.info(" [x] Enqueued msg '{}'", event);
+    }
+
+    public void shutdown() throws IOException, TimeoutException {
+        this.channel.close();
+        moConnection.close();
     }
 
     // Test only

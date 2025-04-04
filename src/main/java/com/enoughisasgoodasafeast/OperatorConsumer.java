@@ -94,10 +94,10 @@ public class OperatorConsumer extends DefaultConsumer {
     /**
      * Called when either the channel or the underlying connection has been shut down.
      * @param consumerTag the <i>consumer tag</i> associated with the consumer
-     * @param sig a {@link ShutdownSignalException} indicating the reason for the shut down
+     * @param sig a {@link ShutdownSignalException} indicating the reason for the shutdown
      */
     public void handleShutdownSignal(String consumerTag, ShutdownSignalException sig) {
-        LOG.warn("handleShutdownSignal called with consumerTag {} and exception: {}", consumerTag, sig);
+        LOG.warn("handleShutdownSignal called with consumerTag {} and exception: {}", consumerTag, sig.toString());
     }
 
     /**

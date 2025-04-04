@@ -53,4 +53,9 @@ public class FileQueueConsumer implements QueueConsumer {
         System.out.println(FileQueueConsumer.testSwitchCase(-5));
         System.out.println(FileQueueConsumer.testSwitchCase(null));
     }
+
+    @Override
+    public void shutdown() {
+        // no op
+    }
 }

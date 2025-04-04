@@ -9,6 +9,7 @@ import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.Paths;
+import java.util.concurrent.TimeoutException;
 
 public class FileQueueProducer implements QueueProducer {
 
@@ -39,5 +40,11 @@ public class FileQueueProducer implements QueueProducer {
             throw new RuntimeException(e);
         }
 
+    }
+
+    @Override
+    public void shutdown() throws IOException, TimeoutException {
+        // no op
+        LOG.info("Shutdown called.");
     }
 }

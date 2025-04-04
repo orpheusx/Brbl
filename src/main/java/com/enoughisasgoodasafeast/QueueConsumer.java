@@ -1,6 +1,7 @@
 package com.enoughisasgoodasafeast;
 
 import java.io.IOException;
+import java.util.concurrent.TimeoutException;
 
 /**
  * An interface for components that process messages from a queue.
@@ -11,6 +12,7 @@ import java.io.IOException;
 public interface QueueConsumer {
     /**
      * FIXME Probably need to make the return type less vague.
+     *
      * @return the object taken from the queue
      */
 //    public Object dequeue() throws IOException;
@@ -18,7 +20,6 @@ public interface QueueConsumer {
 //    long getPollIntervalMs();
 
 //    QueueConsumer setPollIntervalMs(long pollIntervalMs);
-
-
+    public void shutdown() throws IOException, TimeoutException;
 
 }

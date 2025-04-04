@@ -6,6 +6,7 @@ import org.slf4j.LoggerFactory;
 import java.io.IOException;
 import java.util.List;
 import java.util.ArrayList;
+import java.util.concurrent.TimeoutException;
 
 /**
  * A QueueProducer that actually just adds Messages to an internal list
@@ -25,6 +26,13 @@ public class InMemoryQueueProducer implements QueueProducer {
     public void enqueue(Object event) throws IOException {
         LOG.info("Enqueuing message: {}", event);
         queuedMessages.add((Message) event);
+        LOG.info("number messages in queue: {}", queuedMessages.size());
+    }
+
+    @Override
+    public void shutdown() throws IOException, TimeoutException {
+        // no op
+        LOG.info("Shutdown called.");
     }
 
     public List<Message> getQueuedMessages() {
