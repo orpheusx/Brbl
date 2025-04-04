@@ -16,7 +16,7 @@
 10) alpha?
 
 Post-alpha:
-0) web client and server (implemented in Elixir using Phoenix?)
+0) web client and server (implemented in Elixir using Phoenix?) providing an alternative "gateway"
 1) ...profit?
 
 

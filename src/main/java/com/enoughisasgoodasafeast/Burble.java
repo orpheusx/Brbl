@@ -1,5 +1,6 @@
 package com.enoughisasgoodasafeast;
 
+import com.enoughisasgoodasafeast.operator.Operator;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -21,20 +22,17 @@ public class Burble {
 
         LOG.info("Executing {} with arguments: {}", program, pargs);
         switch (program.toLowerCase()) {
-            case "rcvr" ->
-                Rcvr.main(args);
 
-            case "sndr" ->
-                Sndr.main(args);
+            case "rcvr" -> Rcvr.main(args);
 
-            case "fakeoperator" ->
-                FakeOperator.main(args);
+            case "sndr" -> Sndr.main(args);
 
-            // case "platformgatewaymt" ->
-            //    PlatformGateway.main(args);
+            case "operator" -> Operator.main(args);
 
-            default ->
-                LOG.error("Unrecognized program: {}", program);
+            case "fakeoperator" -> FakeOperator.main(args);
+
+            default -> LOG.error("Unrecognized program: {}", program);
+
         }
     }
 

@@ -231,7 +231,7 @@ Notable output from native-image:
 
 "HEAP: Set max heap for improved and more predictable memory usage."
 
-Would be nice if they mentioned the switch/param/flag that controls this. Is the normal JVM flag? Where does it get set?
+Would be nice if they mentioned the switch/param/flag that controls this. Is it the normal JVM flag? Where does it get set?
 
  "CPU:  Enable more CPU features with '-march=native' for improved performance."
 
@@ -817,4 +817,126 @@ https://www.rabbitmq.com/client-libraries/java-api-guide#concurrency:
 
 ===== 2025-03-17 =====
 Tachometer is an interesting plugin for Docker. It shows cpu and memory usage of containers in real-time.
+Also, https://docs.fluentd.org/container-deployment/docker-logging-driver looks like it might be useful.
 
+Actually..."NOTE: Currently, the Fluentd logging driver doesn't support sub-second precision." Oof! That might be a problem...
+
+===== 2025-03-21 =====
+TODO
+_ Update OperatorMessageFlowIT to use testcontainers instead of assuming a running instance of RabbitMQ.
+X Figure out how to structure the replacement for the generation of the top level topic script chain.
+    --> just static functions in a class namespace?
+X Update the docker files to point at jar's on the host filesystem.
+_ Add build section to our docker-compose.
+
+
+docker exec -it e016a29bccd69dde8e6a28d3c1dd35d84db8ae2ef7e1e0eeb79d6a114169b19c /bin/bash
+wget --post-data=<message text> http://<host>:<port>/<pathInfo>
+
+
+===== 2025-03-25 =====
+
+With no additional networking config, I can use wget to reach the host machine from inside a bash shell running in the sndr container with either host.docker.internal or 192.168.1.155.
+I cannot use localhost, however. Nor the 0.0.0.0 pseudo address used for listeners to attach to all interfaces.
+
+Added a "reachability" test send in Sndr's main. This removes all the noise from the stack trace. Here we find that we're able to reach host.docker.internal but are receiving a 404 for some reason.
+
+This led me to testing via the HttpMTHandler directly. Doing so confirmed where the problem was actually happening.
+Looks like we were effectively specifying the pathInfo **twice** when making the POST...
+
+Yes, confirmed. Annoyingly the HttpMTHandler code is littered with comments about its shitty state but it didn't occur to me that it was the problem. Argh....
+
+The running thread is listed in the "Processed message:" log written by sndr-1's OperatorConsumer. We were wondering how many threads the Rabbit driver would use to deliver messages. Here's the munged log listing of counts and distinct thread ids:
+
+   5 [pool-1-thread-10]
+   1 [pool-1-thread-3]
+   1 [pool-1-thread-4]
+   2 [pool-1-thread-5]
+   2 [pool-1-thread-6]
+   1 [pool-1-thread-7]
+   2 [pool-1-thread-8]
+   2 [pool-1-thread-9]
+
+NOTE: 1 of the occurrences is for the "handleConsumeOk called with consumerTag" log. The actual total here is 15 because we sent the batch of 5 three times. This is only anecdotal obviously but also informative. Note: the Macbook we're using has 8 cores.
+ Also anecdotal, the log indicate the messages were processed in order.
+
+
+===== 2025-03-26 =====
+
+Noticed that the list_queues command for rabbitmqctl shows four entries. Two are expected (test.mo and test.mt) but for the other pair are, according to my google research, the names used are random strings prefixed by "amq.gen-".
+
+The total system makes four Connections (1 each for Sndr and Rcvr and 2 for Operator.) These are all managed by the two classes, RabbitQueueProducer and RabbitQueueConsumer which always (I think) pass in names for the queue. So where are these extras coming from?
+
+Also, the message counts list_queues displays suggest that the messages sent to each of intended queues--test.mo and test.mt--are also sent to the anonymous queues, as if they were paired with the former.
+
+Hmm, in the logs I'm noticing this:
+brkr-1      | 2025-03-25 14:51:36.300810+00:00 [info] <0.652.0> connection 172.18.0.1:63666 -> 172.18.0.2:5672: user 'guest' authenticated and granted access to vhost '/'
+operator-1  | 2025-03-25 10:51:36,319 INFO  [] [main] c.e.RabbitQueueConsumer - AMQP.Queue.DeclareOk: queue=amq.gen-7cnH4S2ocnwNzTSHZb1wvw consumerCount=0 messageCount=0
+operator-1  | 2025-03-25 10:51:36,321 INFO  [] [main] c.e.RabbitQueueConsumer - AMQP.Queue.BindOk: protocolClassId=50 protocolMethodId=21 protocolMethodName=queue.bind-ok
+operator-1  | 2025-03-25 10:51:36,324 WARN  [] [pool-1-thread-3] c.e.OperatorConsumer - handleConsumeOk called with consumerTag amq.ctag-RU77QLZAZiDGLk1UYHB3dQ
+
+Resolved the problem. We weren't using the queueName to create the queue. Doh.
+
+
+===== 2025-03-28 =====
+
+https://medium.com/@skillcate/sentiment-analysis-using-nltk-vader-98f67f2e6130 talks about using VADER.
+https://www.youtube.com/watch?v=szczpgOEdXs includes link to code using BERT and PyTorch for sentiment analysis. Includes params for using Nvidia CUDA support. The model used includes support for Spanish though I suspect it's European Spanish. English support, too, of course.
+
+Note, the downloads of the pretrained models require 600-700mb. This is a lot less than the Llama models (measured in hundreds of gigabytes.)
+
+
+To handle multiple responses to the same question (think Holy Grail's "blue..no green!")
+in the response evaluation logic handle add an error check that considers whether the user input matches one of the responses in the previously presented question. If it does it may be that they're trying to change their answer. In those cases, ask for confirmation. If confirmed, rewind to that question prefixed by a "Did you want to change your answer?". When we get to the stage of turning message history into statistics we'll need to be able to address these response changes.
+
+TODO
+_ Update OperatorMessageFlowIT to use testcontainers instead of assuming a running instance of RabbitMQ.
+X Add build section to our docker-compose? I *think* this is something for later actually...
+
+My updated test isn't receiving the input message in the named queue. The caller doesn't complain at all but the Rabbit broker log shows:
+
+
+2025-03-30 11:32:52 2025-03-30 15:32:52.232928+00:00 [error] <0.1665.0> Channel error on connection <0.1656.0> (172.17.0.1:55644 -> 172.17.0.2:5672, vhost: '/', user: 'guest'), channel 1:
+2025-03-30 11:32:52 2025-03-30 15:32:52.232928+00:00 [error] <0.1665.0> operation basic.publish caused a channel exception not_found: no exchange 'test.mo' in vhost '/'
+
+Ah, okay. So we broke this when we addressed the machine generated queue name issue. See RabbitQueueFunctions.exchangeForQueueName().
+Reviewing their documentation, I realized that the argument passed to channel.basicPublish() is the **exchangeName**, not the queueName. This didn't matter before because these names were the same.
+
+Side note: while working on this, the power to the house was shut off. During that period, running one of the tests, threw "java.net.SocketException: Network is unreachable." My interpretation is that using IP addresses required a functioning router even though they were all effectively local.
+
+Still some troubles here...running each of the test in OperatorMessageFlowIT individually via IDEA works fine but running the test class(also via IDEA) does not. Three of the four tests fail waiting for output to arrive in the InMemoryQueueProducer.
+
+Executing mvn verify (the goal that runs integration tests) fails for three of the tests as well but this time because of a java.lang.UnsupportedClassVersionError.
+Adding the same configuration.argLine we use for the surefire plugin to the failsafe config in pom.xml solves this:
+
+    <configuration>
+        <argLine>--enable-preview</argLine>
+    </configuration>
+
+Now we see the same issue when using IDEA to run all the tests in the class:
+    org.awaitility.core.ConditionTimeoutException: Condition with Lambda expression in com.enoughisasgoodasafeast.integration.OperatorMessageFlowIT was not fulfilled within 5 seconds.
+
+Running the OperatorMessageFlowIT class with just a single test (commenting out the @Test annotation for the others) works via IDEA and mvn verify. Something to do with state?
+
+===== 2025-04-01 =====
+
+Debugging...
+
+with two connection setups in the same test method, the first succeeds and the second fails.
+
+Paused the latter after the message was sent to thw queue, the output from rabbitmqctl list_queues shows zero entries in test.mo.
+So is the problem in the producer rather than the consumer?
+
+It appears that the problem stemmed from the first Rabbit producer and consumer clients still being connected to the broker.
+So, at least for the purposes of unit/integration tests, I've added shutdown() methods to the QueueProducer and QueueConsumer interfaces and the Operator class. These call close() on the Channel and Connection instances. Unlike some supported Rabbit types (topics, streams, etc) a queue doesn't deliver messages to multiple consumers. By contrast, having multiple producers is fine.
+
+===== 2025-04-03 =====
+Revisited EndToEndMessagingIT and managed to get it working. One caveat, running it repeatedly often fails with this:
+    "org.testcontainers.containers.ContainerLaunchException: Local Docker Compose exited abnormally with code 1 whilst running command: compose up -d"
+The failure appears to happen after it's created the network and all four containers while it's starting the RabbitMQ container (brkr).
+The start operation appears to have succeeded, however. I can shell into it and run rabbitmqctl commands. The failure triggers the teardown of the other containers but the brkr container continues to run. So really not ideal from a test automation/continuous integration perspective.
+
+The Testcontainers team seems to reluctantly support the use of docker compose. So maybe this is the best I can expect. :-{
+
+
+}

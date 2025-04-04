@@ -11,7 +11,7 @@ import java.util.Properties;
 import static io.helidon.http.Status.Family.SUCCESSFUL;
 
 /**
- * This is a very thin wrapper that, currently, doesn't handle any of the issues (throttling, transient outages, etc.)
+ * This is a very thin wrapper around WebClient that, currently, doesn't handle any of the issues (throttling, transient outages, etc.)
  * with sending to a 3rd party messaging API (e.g. Slack, WhatsApp, etc.)
  * We should not consider it ready for anything but light, integration/unit testing.
  * A real implementation should use the application.yaml configuration support (for TLS setup, metrics, tracking)
@@ -40,20 +40,26 @@ public class HttpMTHandler implements MTHandler {
         String protocol = properties.getProperty("platform.mt.protocol"); // TODO HTTP/2, also make constants
         String host = properties.getProperty("platform.mt.host");
         int port = Integer.parseInt(properties.getProperty("platform.mt.port"));
-        String pathInfo = properties.getProperty("platform.mt.pathInfo"); //FIXME check for leading slash
-        String endpoint = String.format("%s://%s:%d/%s", protocol, host, port, pathInfo);
-        return new HttpMTHandler(endpoint);
+        String pathInfo = properties.getProperty("platform.mt.pathInfo");
+        // Check for leading slash in the provided pathInfo
+        if (pathInfo.endsWith("/")) {
+            return new HttpMTHandler(String.format("%s://%s:%d%s", protocol, host, port, pathInfo));
+        } else {
+            return new HttpMTHandler(String.format("%s://%s:%d/%s", protocol, host, port, pathInfo));
+        }
+    }
+
+    // TODO implement a head check here
+    public boolean ping() {
+        LOG.info("");
+        return true;
     }
 
     public boolean handle(String payload) {
-        return handle("/mtReceive", payload); // FIXME for fuck's sake use the fucking config, you fucking fuck
-    }
-
-    public boolean handle(String pathInfo, String payload) {
         LOG.info("Sending message, '{}'", payload);
 
         // FIXME need more robust error handling here...including retry logic.
-        ClientResponseTyped<String> res = client.post().path(pathInfo).submit(payload, String.class);
+        ClientResponseTyped<String> res = client.post().submit(payload, String.class);
         LOG.info("Send response {}: {}", res.status(), res.entity());
         Status status = res.status();
         if (status.family() != SUCCESSFUL) {
@@ -61,11 +67,15 @@ public class HttpMTHandler implements MTHandler {
             return false;
         }
         else {
+            LOG.info("Post to {} OK: {}", endpoint, status);
             return true;
         }
     }
 
     public static void main(String[] args) {
-        new HttpMTHandler("http://localhost:4242");
+        final HttpMTHandler handler = new HttpMTHandler("http://localhost:2424/mtReceive");
+        final boolean ok = handler.handle("fromhost");
+        LOG.info("send ok?: {}", ok);
+
     }
 }

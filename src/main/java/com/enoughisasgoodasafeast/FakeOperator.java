@@ -25,10 +25,10 @@ public class FakeOperator implements MessageProcessor {
 
     public void init() throws IOException, TimeoutException {
         LOG.info("Initializing FakeOperator");
-        queueProducer = RabbitQueueProducer.createQueueProducer("sndr.properties");
+        queueProducer = RabbitQueueProducer.createQueueProducer("fo-mt-sink.properties");
         producerMTHandler = new QueueProducerMTHandler(queueProducer);
         queueConsumer = RabbitQueueConsumer.createQueueConsumer(
-                "rcvr.properties", this/*producerMTHandler*/);
+                "fo-mo-source.properties", this/*producerMTHandler*/);
         // FIXME add a startup messsage that signals readiness...
     }
 

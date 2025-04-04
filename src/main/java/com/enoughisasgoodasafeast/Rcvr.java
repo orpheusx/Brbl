@@ -1,5 +1,6 @@
 package com.enoughisasgoodasafeast;
 
+import com.enoughisasgoodasafeast.operator.Platform;
 import io.helidon.http.*;
 import io.helidon.webserver.WebServer;
 import io.helidon.webserver.http.Handler;
@@ -8,6 +9,7 @@ import io.helidon.webserver.http.ServerResponse;
 import org.slf4j.LoggerFactory;
 
 import java.io.IOException;
+
 import org.slf4j.Logger;
 
 import static com.enoughisasgoodasafeast.SharedConstants.*;
@@ -32,7 +34,7 @@ public class Rcvr extends WebService {
         try {
             final Properties properties = ConfigLoader.readConfig("rcvr.properties");
             queueProducer = RabbitQueueProducer.createQueueProducer(properties);
-            webServerPort = Integer.parseInt(properties.getProperty("listener.port"));
+            webServerPort = Integer.parseInt(properties.getProperty("webserver.listener.port"));
         } catch (IOException | TimeoutException e) {
             throw new RuntimeException(e);
         }
@@ -45,13 +47,14 @@ public class Rcvr extends WebService {
                         }
                 )
                 .routing(router -> {
-                        // Supported endpoints:
-                        router.get(HEALTH_ENDPOINT, new HealthCheckHandler());
-                        router.post(ENQUEUE_ENDPOINT, new EnqueueMessageHandler(queueProducer));
-                        // Some test only endpoints:
-                        router.get("/foo", new HowdyTestResponseHandler());
-                        router.post("/hello", new GoodbyeTestResponseHandler(queueProducer));
-                    }
+                            // Supported endpoints:
+                            router.get(HEALTH_ENDPOINT, new HealthCheckHandler());
+                            router.post(ENQUEUE_ENDPOINT, new EnqueueMessageHandler(queueProducer));
+                            router.post(BRBL_ENQUEUE_ENDPOINT, new BrblMessageHandler(queueProducer));
+                            // Some test only endpoints:
+                            router.get("/foo", new HowdyTestResponseHandler());
+                            router.post("/hello", new GoodbyeTestResponseHandler(queueProducer));
+                        }
                 )
                 .build()
                 .start();
@@ -97,7 +100,7 @@ public class Rcvr extends WebService {
 
         public void handle(ServerRequest req, ServerResponse res) throws Exception {
             super.handle(req, res);
-            LOG.info("/enqueue requested");
+//            LOG.info("/enqueue requested");
             String rcvText = req.content().as(String.class);
             // TODO produce an Message instead of just the String
             queueProducer.enqueue(rcvText); // TODO catch exceptions and persist the incoming message in a temp store?
@@ -107,6 +110,35 @@ public class Rcvr extends WebService {
             LOG.info("/enqueue: request content: {}", rcvText);
         }
     }
+
+    private static class BrblMessageHandler extends BaseHandler {
+
+        QueueProducer queueProducer;
+
+        public BrblMessageHandler(QueueProducer queueProducer) {
+            LOG.info("Setup BrblMessageHandler");
+            this.queueProducer = queueProducer;
+        }
+
+        public void handle(ServerRequest req, ServerResponse res) throws Exception {
+            super.handle(req, res);
+            LOG.info("{} requested", BRBL_ENQUEUE_ENDPOINT);
+            String rcvPayload = req.content().as(String.class); // write this to a log?
+
+            Message moMessage = marshall(rcvPayload);
+            queueProducer.enqueue(moMessage);
+
+            res.status(OK_200);
+            res.send("OK"); // Is this bit needed?
+            LOG.info("{} request content: {}", BRBL_ENQUEUE_ENDPOINT, moMessage);
+        }
+
+        public Message marshall(String payload) {
+            String[] parsed = payload.split(":", 3);
+            return new Message(MessageType.MO, Platform.BRBL, parsed[0], parsed[1], parsed[2]);
+        }
+    }
+
 
     private static class HowdyTestResponseHandler extends BaseHandler {
         static final String contentStr = "howdy\n";

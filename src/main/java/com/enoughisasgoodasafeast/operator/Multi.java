@@ -62,8 +62,9 @@ public class Multi {
             // Handle the "I want to talk about something else" case here...
             if (userText.contains("change topic")) {
                 // Create a new Script graph
-                Message changeTopicConfirm = newMTfromMO(moMessage, "You want to talk about something else? OK...");
-                session.addOutput(changeTopicConfirm);
+                // TODO this should all be handled in the called methods.
+                Message changeTopicNotification = newMTfromMO(moMessage, "You want to talk about something else? OK...");
+                session.addOutput(changeTopicNotification);
                 return Process.constructTopicScript(session, moMessage);
             }
 
@@ -81,19 +82,8 @@ public class Multi {
          * FIXME This should really be fetched from a database per shortcode and not handled by this
          */
         public static Script constructTopicScript(Session session, Message moMessage) throws IOException {
-            String text = """
-                Here are the topics I can talk about:
-                1) wolverines
-                2) international monetary policy
-                """;
-            Script topicPresentation = new Script(text, ScriptType.PresentMulti, null, "topic-selection");
-            Script endScript = new Script("End-of-Conversation", ScriptType.ProcessMulti, null, "e-o-c");
-            ResponseLogic topicOne = new ResponseLogic(List.of("1", "wolverine", "wolverines"), "They have pointy teeth and a nasty disposition", endScript);
-            ResponseLogic topicTwo = new ResponseLogic(List.of("1", "international", "monetary", "policy"), "It's kinda boring actually.", endScript);
-            endScript.next().add(topicOne);
-            endScript.next().add(topicTwo);
-            topicPresentation.next().add(new ResponseLogic(null, null, endScript));
-            session.currentScript = topicPresentation; // this part doesn't smell great...
+
+            session.currentScript = Functions.findTopicScript(session, moMessage);
 
             return Present.evaluate(session, moMessage);
         }

@@ -63,6 +63,11 @@ public class Operator implements MessageProcessor {
         // Other resources? Connections to database/distributed caches?
     }
 
+    public static void main(String[] args) throws IOException, TimeoutException {
+        Operator operator = new Operator();
+        operator.init(ConfigLoader.readConfig("operator.properties"));
+    }
+
     /**
      * Find/setup session and process message, tracking state changes in the session.
      * @param message the message being processed.
@@ -178,6 +183,8 @@ public class Operator implements MessageProcessor {
     /*
      * This is all hard coded for the moment. Obviously it needs to be replaced with something that loads
      * a Script from a database based on the content of the Message.
+     * When we replace this be sure to convert the scriptCache to be a Caffeine cache with a synchronous callback
+     * doing the work of returning the values.
      */
     Script findStartingScript(Message message) {
         Script startingScript = scriptCache.get(message.to());
@@ -229,5 +236,13 @@ public class Operator implements MessageProcessor {
         // the associated shortcode/longcode should probably have expected language code(s)
         // we could also use the 'from' to guess. E.g. if the number is Mexican we could assume 'es'
         return List.of("en");
+    }
+
+    public void shutdown() throws IOException, TimeoutException {
+        LOG.info("Shutting down Operator");
+        queueConsumer.shutdown();
+        LOG.info("Shutdown queueConsumer.");
+        queueProducer.shutdown(); // FIXME call getQueueProducer() and iterate through all the queueProducers
+        LOG.info("Shutdown queueProducer.");
     }
 }

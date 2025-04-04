@@ -2,6 +2,8 @@ package com.enoughisasgoodasafeast.integration;
 
 import com.enoughisasgoodasafeast.*;
 import com.enoughisasgoodasafeast.operator.Operator;
+import com.enoughisasgoodasafeast.operator.TestingMessageProcessor;
+import org.awaitility.core.ConditionTimeoutException;
 import org.junit.jupiter.api.Test;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -41,17 +43,18 @@ public class OperatorMessageFlowIT {
             MOBILE_MX, SHORT_CODE, "wolverines"
     );
 
+
     @Test
     public void testSimpleMessageFlow() {
         assertDoesNotThrow(() -> {
-            var simulatedUser = RabbitQueueProducer.createQueueProducer("test_producer.properties");
+            QueueProducer simulatedMOSource = RabbitQueueProducer.createQueueProducer("test_producer.properties");
 
-            var operatorProducer = new InMemoryQueueProducer();
-            var operator = new Operator(null, operatorProducer);
+            InMemoryQueueProducer operatorProducer = new InMemoryQueueProducer(); // sink for Operator output
+            Operator operator = new Operator(null, operatorProducer);
 
             operator.init(ConfigLoader.readConfig("operator_test.properties"));
 
-            simulatedUser.enqueue(keywordMO);
+            simulatedMOSource.enqueue(keywordMO);
             await().atMost(5, SECONDS).until(mtResponsesDelivered(operatorProducer));
 
             List<Message> queuedMessages = operatorProducer.getQueuedMessages();
@@ -64,7 +67,7 @@ public class OperatorMessageFlowIT {
 
             queuedMessages.clear();
 
-            simulatedUser.enqueue(flortMO);
+            simulatedMOSource.enqueue(flortMO);
             await().atMost(5, SECONDS).until(mtResponsesDelivered(operatorProducer));
 
             Message flortConfirmation = operatorProducer.getQueuedMessages().getFirst();
@@ -74,8 +77,9 @@ public class OperatorMessageFlowIT {
             assertTrue(flortConfirmation.text().contains("for the cool kids"));
 
             queuedMessages.clear();
-            assertEquals(0, queuedMessages.size()); // make sure there are no other messages in queue
 
+            simulatedMOSource.shutdown();
+            operator.shutdown();
             // "rabbitmqctl purge_queue test.mo" can be used to clear things until we get test working
         });
     }
@@ -83,14 +87,14 @@ public class OperatorMessageFlowIT {
     @Test
     public void testMessageFlowWithUnexpectedInput() {
         assertDoesNotThrow(() -> {
-            var simulatedUser = RabbitQueueProducer.createQueueProducer("test_producer.properties");
+            var simulatedMOSource = RabbitQueueProducer.createQueueProducer("test_producer.properties");
 
             var operatorProducer = new InMemoryQueueProducer();
             var operator = new Operator(null, operatorProducer);
 
             operator.init(ConfigLoader.readConfig("operator_test.properties"));
 
-            simulatedUser.enqueue(keywordMO);
+            simulatedMOSource.enqueue(keywordMO);
             await().atMost(5, SECONDS).until(mtResponsesDelivered(operatorProducer));
 
             List<Message> queuedMessages = operatorProducer.getQueuedMessages();
@@ -103,7 +107,7 @@ public class OperatorMessageFlowIT {
 
             queuedMessages.clear();
 
-            simulatedUser.enqueue(unexpectedMO);
+            simulatedMOSource.enqueue(unexpectedMO);
             await().atMost(5, SECONDS).until(mtResponsesDelivered(operatorProducer));
 
             Message errorMessage = operatorProducer.getQueuedMessages().getFirst();
@@ -113,8 +117,9 @@ public class OperatorMessageFlowIT {
             assertTrue(errorMessage.text().contains("Try again"));
 
             queuedMessages.clear();
-            assertEquals(0, queuedMessages.size()); // make sure there are no other messages in queue
 
+            simulatedMOSource.shutdown();
+            operator.shutdown();
             // "rabbitmqctl purge_queue test.mo" can be used to clear things until we get test working
         });
     }
@@ -122,15 +127,16 @@ public class OperatorMessageFlowIT {
     @Test
     public void testMessageFlowWithUnexpectedInputAndChangeTopicRequested() {
         assertDoesNotThrow(() -> {
-            var simulatedUser = RabbitQueueProducer.createQueueProducer("test_producer.properties");
+            var simulatedMOSource = (RabbitQueueProducer) RabbitQueueProducer.createQueueProducer("test_producer.properties");
 
             var operatorProducer = new InMemoryQueueProducer();
             var operator = new Operator(null, operatorProducer);
 
             operator.init(ConfigLoader.readConfig("operator_test.properties"));
 
-            simulatedUser.enqueue(keywordMO);
-            await().atMost(5, SECONDS).until(mtResponsesDelivered(operatorProducer));
+            simulatedMOSource.enqueue(keywordMO);
+//            await().atMost(3, SECONDS).until(mtResponsesDelivered(operatorProducer));
+            Thread.sleep(3000);
 
             List<Message> queuedMessages = operatorProducer.getQueuedMessages();
 
@@ -142,7 +148,7 @@ public class OperatorMessageFlowIT {
 
             queuedMessages.clear();
 
-            simulatedUser.enqueue(unexpectedMO);
+            simulatedMOSource.enqueue(unexpectedMO);
             await().atMost(5, SECONDS).until(mtResponsesDelivered(operatorProducer));
 
             Message errorMessage = operatorProducer.getQueuedMessages().getFirst();
@@ -152,9 +158,8 @@ public class OperatorMessageFlowIT {
             assertTrue(errorMessage.text().contains("Try again"));
 
             queuedMessages.clear();
-            assertEquals(0, queuedMessages.size()); // make sure there are no other messages in queue
 
-            simulatedUser.enqueue(changeTopicMO);
+            simulatedMOSource.enqueue(changeTopicMO);
             await().atMost(5, SECONDS).until(mtResponsesDelivered(operatorProducer));
 
             Message acknowledgeTopicChange = queuedMessages.getFirst();
@@ -175,7 +180,7 @@ public class OperatorMessageFlowIT {
             assertTrue(topicText.contains("wolverines"));
             assertTrue(topicText.contains("international monetary policy"));
 
-            simulatedUser.enqueue(selectWolverinesMO);
+            simulatedMOSource.enqueue(selectWolverinesMO);
             await().atMost(5, SECONDS).until(mtResponsesDelivered(operatorProducer));
 
             Message confirmWolverineMO = queuedMessages.getFirst();
@@ -184,12 +189,18 @@ public class OperatorMessageFlowIT {
             assertEquals(keywordMO.to(), confirmWolverineMO.from());
             assertTrue(confirmWolverineMO.text().contains("pointy teeth"));
 
+            simulatedMOSource.shutdown();
+            operator.shutdown();
             // "rabbitmqctl purge_queue test.mo" can be used to clear things until we get test working
         });
     }
 
     private Callable<Boolean> mtResponsesDelivered(InMemoryQueueProducer operatorProducer) {
-        return () -> !operatorProducer.getQueuedMessages().isEmpty();
+        return () -> {
+            LOG.info("...");
+            return !operatorProducer.getQueuedMessages().isEmpty();
+        };
+
     }
 
 }

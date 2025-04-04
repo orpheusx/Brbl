@@ -7,12 +7,12 @@ import io.helidon.webserver.http.ServerResponse;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
+import java.io.IOException;
 import java.time.Duration;
 import java.util.ArrayList;
 import java.util.List;
 
-import static com.enoughisasgoodasafeast.SharedConstants.CONNECTION_TIMEOUT_SECONDS;
-import static com.enoughisasgoodasafeast.SharedConstants.ENQUEUE_ENDPOINT;
+import static com.enoughisasgoodasafeast.SharedConstants.*;
 import static io.helidon.http.Status.OK_200;
 import static io.helidon.http.Status.TOO_MANY_REQUESTS_429;
 import static java.time.temporal.ChronoUnit.*;
@@ -188,11 +188,31 @@ public class PlatformGateway extends WebService {
     }
 
     public void sendMoTraffic(String message) {
-        this.client.handle(ENQUEUE_ENDPOINT, message); // FIXME consider using a shared constant for the pathInfo here and in Rcvr
+        this.client.handle(/*BRBL_ENQUEUE_ENDPOINT, */message); // FIXME consider using a shared constant for the pathInfo here and in Rcvr
     }
 
-    // public static void main(String[] args) throws IOException {
-    //     PlatformGateway platformGateway = new PlatformGateway(/*"http://192.168.1.155:14242"*/);
-    //     platformGateway.init();
-    // }
+     public static void main(String[] args) throws IOException, InterruptedException {
+         PlatformGateway platformGateway = new PlatformGateway("http://192.168.1.155:4242" + BRBL_ENQUEUE_ENDPOINT);
+         platformGateway.init();
+         Thread.sleep(3000); // probably unneeded but just to make sure the listener is actually up and running
+         LOG.info("");
+
+         String[] moTraffic = {
+                 "17817299468:1234:1 hello",
+                 "17817299469:1234:2 hi",
+                 "17817299470:1234:3 heya",
+                 "17817299471:1234:4 hey there",
+                 "17817299472:1234:5 greetings"
+         };
+
+         for (String mo : moTraffic) {
+             platformGateway.sendMoTraffic(mo);
+         }
+
+         LOG.info("All MOs sent.");
+
+         Thread.sleep(3000);
+
+         LOG.info("Response MTs received: {}", platformGateway.recordingHandler.retrieve().size());
+     }
 }

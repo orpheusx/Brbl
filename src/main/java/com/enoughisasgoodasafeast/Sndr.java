@@ -45,12 +45,15 @@ public class Sndr implements MessageProcessor {
 
     @Override
     public boolean process(Message message) {
-        return httpMtHandler.handle(message.text());
+        return httpMtHandler.handle(message.toString()); // TODO using record method temporarily. Gateways will expect their own format.
     }
 
     public static void main(String[] args) {
         Sndr sndr = new Sndr();
         sndr.init();
+
+        // Test send to verify we can reach the platform
+//        sndr.process(new Message(MessageType.MT, "00000", "17816629773"/* FIXME */, "Reachability Test"));
 
         //        HttpClientRequest fooReq = sndr.client.post().path("/mtReceive");//.peek(System.out::println).await();
         //        ClientResponseTyped<String> fooRes = fooReq.request(String.class);

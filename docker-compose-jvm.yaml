@@ -28,6 +28,8 @@ services:
   rcvr:
 #    container_name: rcvr
     image: burble-jvm:0.1.0
+    volumes:
+      - /Users/mark/Development/sndrRcvr/target:/opt/app
     ports:
       - "4242:4242"
     command: Rcvr
@@ -35,16 +37,29 @@ services:
       brkr:
         condition: service_healthy
 
-  fakeOperator:
-#    container_name: operator
+#  fakeOperator:
+##    container_name: operator
+#    image: burble-jvm:0.1.0
+#    volumes:
+#      - /Users/mark/Development/sndrRcvr/target:/opt/app
+#    command: FakeOperator
+#    depends_on:
+#      - rcvr
+
+  operator:
+    #    container_name: operator
     image: burble-jvm:0.1.0
-    command: FakeOperator
+    volumes:
+      - /Users/mark/Development/sndrRcvr/target:/opt/app
+    command: Operator
     depends_on:
       - rcvr
 
   sndr:
 #    container_name: sndr
     image: burble-jvm:0.1.0
+    volumes:
+      - /Users/mark/Development/sndrRcvr/target:/opt/app
     command: Sndr
     depends_on:
-      - fakeOperator
+      - operator
