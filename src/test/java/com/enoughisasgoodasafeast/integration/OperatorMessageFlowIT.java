@@ -2,17 +2,16 @@ package com.enoughisasgoodasafeast.integration;
 
 import com.enoughisasgoodasafeast.*;
 import com.enoughisasgoodasafeast.operator.Operator;
-import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.*;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.testcontainers.containers.RabbitMQContainer;
-import org.testcontainers.junit.jupiter.Container;
-import org.testcontainers.junit.jupiter.Testcontainers;
 
 import java.io.IOException;
 import java.util.List;
 import java.util.Properties;
 import java.util.concurrent.Callable;
+import java.util.concurrent.TimeoutException;
 
 import static com.enoughisasgoodasafeast.Message.newMO;
 import static java.util.concurrent.TimeUnit.SECONDS;
@@ -20,9 +19,11 @@ import static org.awaitility.Awaitility.await;
 import static org.junit.jupiter.api.Assertions.*;
 
 /**
- * Expects a running RabbitMQ in a container.
+ * Use the RabbitMQ container image to provide a message broker for message flow testing.
+ * We start it once at the beginning of the class, get its running configuration, and reuse it for each test.
+ * By contrast, the Operator and its components are created for each test.
  */
-@Testcontainers
+//@Testcontainers
 public class OperatorMessageFlowIT {
 
     private static final Logger LOG = LoggerFactory.getLogger(OperatorMessageFlowIT.class);
@@ -46,21 +47,42 @@ public class OperatorMessageFlowIT {
             MOBILE_MX, SHORT_CODE, "wolverines"
     );
 
-    @Container
-    RabbitMQContainer brokerContainer = new RabbitMQContainer("rabbitmq:4.0-management");
+    private static final RabbitMQContainer brokerContainer = new RabbitMQContainer(
+            "rabbitmq:4.0-management");
+    private static Properties testProps;
+
+    private QueueProducer simulatedMOSource;
+    private InMemoryQueueProducer operatorProducer;
+    private Operator operator;
+
+    @BeforeAll
+    static void startContainerForAllTests() throws IOException {
+        brokerContainer.start();
+        testProps = loadPropertiesWithContainerOverrides("operator_message_flow_it.properties");
+    }
+
+    @AfterAll
+    static void stopContainer() {
+        brokerContainer.stop();
+    }
+
+    @BeforeEach
+    void setUp() throws IOException, TimeoutException {
+        simulatedMOSource = RabbitQueueProducer.createQueueProducer(testProps);
+        operatorProducer = new InMemoryQueueProducer(); // sink for Operator output
+        operator = new Operator(null, operatorProducer);
+        operator.init(testProps);
+    }
+
+    @AfterEach
+    void tearDown() throws IOException, TimeoutException {
+        simulatedMOSource.shutdown();
+        operator.shutdown();
+    }
 
     @Test
     public void testSimpleMessageFlow() {
         assertDoesNotThrow(() -> {
-            Properties testProps = loadPropertiesWithContainerOverrides("operator_message_flow_it.properties");
-
-            QueueProducer simulatedMOSource = RabbitQueueProducer.createQueueProducer(testProps);
-
-            InMemoryQueueProducer operatorProducer = new InMemoryQueueProducer(); // sink for Operator output
-            Operator operator = new Operator(null, operatorProducer);
-
-            operator.init(testProps/*ConfigLoader.readConfig("operator_test.properties")*/);
-
             simulatedMOSource.enqueue(keywordMO);
             await().atMost(5, SECONDS).until(mtResponsesDelivered(operatorProducer));
 
@@ -85,24 +107,12 @@ public class OperatorMessageFlowIT {
 
             queuedMessages.clear();
 
-            simulatedMOSource.shutdown();
-            operator.shutdown();
-            // "rabbitmqctl purge_queue test.mo" can be used to clear things until we get test working
         });
     }
 
     @Test
     public void testMessageFlowWithUnexpectedInput() {
         assertDoesNotThrow(() -> {
-
-            Properties testProps = loadPropertiesWithContainerOverrides("operator_message_flow_it.properties");
-
-            var simulatedMOSource = RabbitQueueProducer.createQueueProducer(testProps);
-
-            var operatorProducer = new InMemoryQueueProducer();
-            var operator = new Operator(null, operatorProducer);
-            operator.init(testProps);
-
             simulatedMOSource.enqueue(keywordMO);
             await().atMost(5, SECONDS).until(mtResponsesDelivered(operatorProducer));
 
@@ -127,22 +137,12 @@ public class OperatorMessageFlowIT {
 
             queuedMessages.clear();
 
-            simulatedMOSource.shutdown();
-            operator.shutdown();
         });
     }
 
     @Test
     public void testMessageFlowWithUnexpectedInputAndChangeTopicRequested() {
         assertDoesNotThrow(() -> {
-            Properties testProps = loadPropertiesWithContainerOverrides("operator_message_flow_it.properties");
-            var simulatedMOSource = (RabbitQueueProducer) RabbitQueueProducer.createQueueProducer(testProps);
-
-            var operatorProducer = new InMemoryQueueProducer();
-            var operator = new Operator(null, operatorProducer);
-
-            operator.init(testProps);
-
             simulatedMOSource.enqueue(keywordMO);
             await().atMost(5, SECONDS).until(mtResponsesDelivered(operatorProducer));
 
@@ -197,12 +197,10 @@ public class OperatorMessageFlowIT {
             assertEquals(keywordMO.to(), confirmWolverineMO.from());
             assertTrue(confirmWolverineMO.text().contains("pointy teeth"));
 
-            simulatedMOSource.shutdown();
-            operator.shutdown();
         });
     }
 
-    private Properties loadPropertiesWithContainerOverrides(String path) throws IOException {
+    private static Properties loadPropertiesWithContainerOverrides(String path) throws IOException {
         final String brokerHost = brokerContainer.getHost();
         final Integer amqpPort = brokerContainer.getAmqpPort();
 

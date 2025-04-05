@@ -924,7 +924,7 @@ Debugging...
 
 with two connection setups in the same test method, the first succeeds and the second fails.
 
-Paused the latter after the message was sent to thw queue, the output from rabbitmqctl list_queues shows zero entries in test.mo.
+Paused the latter after the message was sent to the queue, the output from rabbitmqctl list_queues shows zero entries in test.mo.
 So is the problem in the producer rather than the consumer?
 
 It appears that the problem stemmed from the first Rabbit producer and consumer clients still being connected to the broker.
@@ -938,5 +938,5 @@ The start operation appears to have succeeded, however. I can shell into it and 
 
 The Testcontainers team seems to reluctantly support the use of docker compose. So maybe this is the best I can expect. :-{
 
+===== 2025-04-05 =====
 
-}
