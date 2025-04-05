@@ -1,15 +1,14 @@
 package com.enoughisasgoodasafeast.integration;
 
-import com.enoughisasgoodasafeast.ConfigLoader;
 import com.enoughisasgoodasafeast.PlatformGateway;
+import org.junit.jupiter.api.AfterAll;
+import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.Test;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.testcontainers.containers.ComposeContainer;
 import org.testcontainers.containers.ContainerState;
 import org.testcontainers.containers.output.Slf4jLogConsumer;
-import org.testcontainers.junit.jupiter.Container;
-import org.testcontainers.junit.jupiter.Testcontainers;
 
 import java.io.File;
 import java.io.IOException;
@@ -22,7 +21,6 @@ import static java.util.concurrent.TimeUnit.SECONDS;
 import static org.awaitility.Awaitility.await;
 import static org.junit.jupiter.api.Assertions.*;
 
-@Testcontainers
 public class EndToEndMessagingIT {
 
     private static final Logger LOG = LoggerFactory.getLogger(EndToEndMessagingIT.class);
@@ -32,19 +30,25 @@ public class EndToEndMessagingIT {
     // Per https://java.testcontainers.org/test_framework_integration/junit_5/
     // Obviously, parallel execution is not supported.
 
-    @Container
     private static final ComposeContainer brblContainers = new ComposeContainer(
             new File(COMPOSE_FILE_UNDER_TEST))
-            .withLocalCompose(true)
-            // NOTE: LocalCompose mode is faster apparently but requires docker compose to be installed on any machine running the test
+            .withLocalCompose(true) // faster apparently but requires docker compose to be installed on any machine running the test
             .withLogConsumer("rcvr", new Slf4jLogConsumer(LOG))
             .withLogConsumer("operator", new Slf4jLogConsumer(LOG))
             .withLogConsumer("sndr", new Slf4jLogConsumer(LOG));
 
-//    static {
-        //LOG.info("Starting the Burble containers from {}", COMPOSE_FILE_UNDER_TEST);
-        //brblContainers.start(); // the @Container annotation isn't starting the container so we have to call start() manually
-//    }
+    @BeforeAll
+    static void startContainers() throws IOException {
+        LOG.info("Starting the RabbitMQ and Burble containers from {}", COMPOSE_FILE_UNDER_TEST);
+        brblContainers.start();
+    }
+
+    @AfterAll
+    static void stopContainer() {
+        LOG.info("Shutting down the RabbitMQ and Burble containers from {}", COMPOSE_FILE_UNDER_TEST);
+        brblContainers.stop();
+    }
+
 
     @Test
     public void testSendAndVerifyResponse() throws IOException {
@@ -56,7 +60,7 @@ public class EndToEndMessagingIT {
             ContainerState rcvrContainerState = rcvrByServiceName.get();
             String host = rcvrContainerState.getHost();
             int port = rcvrContainerState.getBoundPortNumbers().getFirst();
-            // ContainerState also features getPortBindings(). For Rcvr this returns a string: 4242:4242/tcp
+            // ContainerState also features getPortBindings(). For Rcvr this returns a string: e.g. "4242:4242/tcp"
             // ContainerState.getServicePort("rcvr", 4242), howeve, throws complaining "Could not get a port for 'rcvr'. \
             //      Testcontainers does not have an exposed port configured for 'rcvr'."
 
@@ -126,7 +130,6 @@ public class EndToEndMessagingIT {
             LOG.info("Waiting for {} messages...current count={}", expectedCount, recordedMessages.size());
             return !recordedMessages.isEmpty() && recordedMessages.size() >= expectedCount;
         };
-
     }
 
 }

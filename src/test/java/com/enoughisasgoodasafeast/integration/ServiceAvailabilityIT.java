@@ -4,6 +4,7 @@ import com.enoughisasgoodasafeast.ConfigLoader;
 import com.enoughisasgoodasafeast.GatewaySimStrategy;
 import com.enoughisasgoodasafeast.PlatformGateway;
 import com.enoughisasgoodasafeast.SharedConstants;
+import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.Test;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -20,23 +21,36 @@ import java.util.Arrays;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
-import java.util.function.Function;
 import java.util.stream.Stream;
 
 import static com.enoughisasgoodasafeast.operator.Functions.waitSeconds;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.fail;
 
-//@Testcontainers
+@Testcontainers
 public class ServiceAvailabilityIT {
 
     private static final Logger LOG = LoggerFactory.getLogger(ServiceAvailabilityIT.class);
     private static final String BURBLE_CONTAINER = "burble-jvm:0.1.0";
 
-    //@Container
-    final RabbitMQContainer brokerContainer = new RabbitMQContainer("rabbitmq:4.0-management");
+    @Container
+    final static RabbitMQContainer brokerContainer = new RabbitMQContainer("rabbitmq:4.0-management");
     // NOTE: RabbitMQContainer is still INCUBATING according to https://java.testcontainers.org/modules/rabbitmq/
 
+//    final GenericContainer<SELF> rcvrContainer = new GenericContainer<>(BURBLE_CONTAINER);
+
+//    @BeforeAll
+//    static void startContainers() {
+//
+//    }
+
+    @Test
+    public void testContainerStarts() {
+        LOG.info("Broker running on {}:{}",
+                brokerContainer.getHost(),
+                brokerContainer.getAmqpPort());
+        assertEquals("localhost", brokerContainer.getHost());
+    }
 //    @Test
     public void testBasicMessageSend() throws IOException {
         /*final*/GenericContainer<?> rcvrContainer = null;
