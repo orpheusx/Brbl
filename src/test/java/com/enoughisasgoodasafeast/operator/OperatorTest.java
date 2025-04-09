@@ -83,10 +83,10 @@ public class OperatorTest {
             operator.init();
 
             assertDoesNotThrow(() -> {
-                Session s1 = operator.getUserSession(mo1); // from a US number
+                Session s1 = operator.sessionCache.get(SessionKey.newSessionKey(mo1)); // from a US number
 
-                Session s2 = operator.getUserSession(mo2); // from a MX number
-                Session s3 = operator.getUserSession(mo3); // from same MX number
+                Session s2 = operator.sessionCache.get(SessionKey.newSessionKey(mo2)); // from a MX number
+                Session s3 = operator.sessionCache.get(SessionKey.newSessionKey(mo3)); // from same MX number
 
                 // Sessions for two different Users are separate
                 assertNotEquals(s1.id, s2.id);
@@ -106,9 +106,10 @@ public class OperatorTest {
             var operator = new Operator(new FakeQueueConsumer(), new FileQueueProducer(Paths.get("./target")));
             operator.init();
 
-            var session = operator.getUserSession(mo4);
+            var mo4SessionKey = SessionKey.newSessionKey(mo4);
+            var session = operator.sessionCache.get(mo4SessionKey);
 
-            Script firstScript = operator.findStartingScript(mo4);
+            Script firstScript = operator.findStartingScript(mo4SessionKey);
             assertNotNull(firstScript, "Failed to return first Script.");
             assertEquals(ScriptType.PresentMulti, firstScript.type());
             assertEquals("ColorQuiz", firstScript.label());
@@ -131,9 +132,10 @@ public class OperatorTest {
             var operator = new Operator(new FakeQueueConsumer(), new InMemoryQueueProducer());
             operator.init();
 
-            var session = operator.getUserSession(mo4);
+            var session = operator.sessionCache.get(SessionKey.newSessionKey(mo4));
 
-            Script firstScript = operator.findStartingScript(mo4);
+            SessionKey mo4SessionKey = SessionKey.newSessionKey(mo4);
+            Script firstScript = operator.findStartingScript(mo4SessionKey);
 
             assertNotNull(firstScript, "Failed to return first Script.");
             assertEquals(ScriptType.PresentMulti, firstScript.type());
@@ -160,9 +162,10 @@ public class OperatorTest {
             var operator = new Operator(new FakeQueueConsumer(), new FileQueueProducer(Paths.get("./target")));
             operator.init();
 
-            var session = operator.getUserSession(mo4);
+            SessionKey mo4SessionKey = SessionKey.newSessionKey(mo4);
+            var session = operator.sessionCache.get(mo4SessionKey);
 
-            Script firstScript = operator.findStartingScript(mo4);
+            Script firstScript = operator.findStartingScript(mo4SessionKey);
             assertNotNull(firstScript, "Failed to return first Script.");
             assertEquals(ScriptType.PresentMulti, firstScript.type());
             assertEquals("ColorQuiz", firstScript.label());
@@ -210,7 +213,7 @@ public class OperatorTest {
             operator.init();
 
             assertTrue(operator.process(mo4));
-            var session = operator.getUserSession(mo4);
+            var session = operator.sessionCache.get(SessionKey.newSessionKey(mo4));
             final List<Message> queuedMessages = producer.getQueuedMessages();
             assertTrue(requireNonNull(queuedMessages.getFirst()).text().contains("favorite color"));
             assertEquals(ScriptType.ProcessMulti, session.currentScript().type());
@@ -232,7 +235,7 @@ public class OperatorTest {
 
             assertTrue(operator.process(mo4));
 
-            var session = operator.getUserSession(mo4);
+            var session = operator.sessionCache.get(SessionKey.newSessionKey(mo4));
             assertTrue(requireNonNull(queuedMessages.getFirst()).text().contains("favorite color"));
             queuedMessages.clear();
 

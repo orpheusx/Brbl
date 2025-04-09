@@ -12,4 +12,12 @@ public interface SharedConstants {
     String NO_COMPANY = "NONE";
     // Make configurable if necessary:
     int STANDARD_HEARTBEAT_TIMEOUT_SECONDS = 20; // 60 might be fine...
+    String PRODUCER_QUEUE_HOST = "producer.queue.host";
+    String PRODUCER_QUEUE_PORT = "producer.queue.port";
+    String PRODUCER_QUEUE_ROUTING_KEY = "producer.queue.routingKey";
+    String PRODUCER_QUEUE_DURABLE = "producer.queue.durable";
+    String CONSUMER_QUEUE_HOST = "consumer.queue.host";
+    String CONSUMER_QUEUE_PORT = "consumer.queue.port";
+    String CONSUMER_QUEUE_ROUTING_KEY = "consumer.queue.routingKey";
+    String CONSUMER_QUEUE_DURABLE = "consumer.queue.durable";
 }

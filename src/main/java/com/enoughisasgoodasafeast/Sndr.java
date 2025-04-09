@@ -25,30 +25,31 @@ public class Sndr implements MessageProcessor {
             //}
     //    }
 
-    public void init() {
+    public void init() throws IOException, TimeoutException {
         LOG.info("Initializing SNDR");
-
-        try {
-            final Properties properties = ConfigLoader.readConfig("sndr.properties");
-            httpMtHandler = (HttpMTHandler) HttpMTHandler.newHandler(properties);
-            queueConsumer = RabbitQueueConsumer.createQueueConsumer(
-                    properties, this);
-        } catch (IOException | TimeoutException e) {
-            throw new RuntimeException(e);
-        }
-
+        final Properties properties = ConfigLoader.readConfig("sndr.properties");
+        this.init(properties);
         //        client = WebClient.builder()
         //                //.addService(WebClientTracing.create())
         //                .baseUri(uri)
         //                .build();
     }
 
-    @Override
-    public boolean process(Message message) {
-        return httpMtHandler.handle(message.toString()); // TODO using record method temporarily. Gateways will expect their own format.
+    public void init(Properties properties) throws IOException, TimeoutException {
+        httpMtHandler = (HttpMTHandler) HttpMTHandler.newHandler(properties);
+        queueConsumer = RabbitQueueConsumer.createQueueConsumer(
+                properties, this);
     }
 
-    public static void main(String[] args) {
+    @Override
+    public boolean process(Message message) {
+        LOG.info("Received outbound message: {}", message);
+        boolean delivered = httpMtHandler.handle(message.toString()); // TODO using record method temporarily. Gateways will expect their own format.
+        LOG.info("Delivered message? {}: {}", delivered, message);
+        return delivered;
+    }
+
+    public static void main(String[] args) throws IOException, TimeoutException {
         Sndr sndr = new Sndr();
         sndr.init();
 

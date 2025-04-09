@@ -938,5 +938,24 @@ The start operation appears to have succeeded, however. I can shell into it and 
 
 The Testcontainers team seems to reluctantly support the use of docker compose. So maybe this is the best I can expect. :-{
 
-===== 2025-04-05 =====
+===== 2025-04-07 =====
+
+While debugging ServiceAvailabilityIT I was trying to examine the burble-jvm image to see why it could find the jar file.
+
+Finally figured out how to run the image without having it immediately exit. Here's how:
+
+    docker run -it --rm --name rcvr --entrypoint "sh" burble-jvm:0.1.0
+
+The jar file *does* exist per the COPY command in Dockerfile.jvm.
+
+    /opt/app # ls -la /opt/app/sndrRcvr-1.0-SNAPSHOT-jar-with-dependencies.jar
+    -rw-r--r-- 1 root root 4668198 Apr  5 20:59 /opt/app/sndrRcvr-1.0-SNAPSHOT-jar-with-dependencies.jar
+
+Is it a permission problem? Doesn't seem like it. I can run the entrypoint and cmd from the shell without issue. Provided there's a RabbitMQ container running, all the producers and consumers are able to connect.
+
+Running it manually, the container works as expected, connecting to the broker without complaint.
+
+Ah. The problem was that our dev version of the Dockerfile (Dockerfile.dev.jvm) doesn't copy the jar file into the image. It expects the docker run command will include a volume mapping of /Users/mark/Development/sndrRcvr on the host to /opt/app on the container.
+
+
 

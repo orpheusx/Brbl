@@ -35,6 +35,7 @@ public class Rcvr extends WebService {
             final Properties properties = ConfigLoader.readConfig("rcvr.properties");
             queueProducer = RabbitQueueProducer.createQueueProducer(properties);
             webServerPort = Integer.parseInt(properties.getProperty("webserver.listener.port"));
+            LOG.info("Listening on port {}", webServerPort);
         } catch (IOException | TimeoutException e) {
             throw new RuntimeException(e);
         }

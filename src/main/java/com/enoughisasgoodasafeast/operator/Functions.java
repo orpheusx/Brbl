@@ -41,7 +41,7 @@ public class Functions {
                 ResponseLogic topicTwo = new ResponseLogic(List.of("1", "international", "monetary", "policy"), "It's kinda boring actually.", endScript);
                 endScript.next().add(topicOne);
                 endScript.next().add(topicTwo);
-                topicPresentation.next().add(new ResponseLogic(null, null, endScript));
+                topicPresentation.next().add(new ResponseLogic(null, null, endScript));//define a constant that means "unset" instead of overloading null.
                 yield topicPresentation;
             } // more to come before we fully implement using a database?
             default -> null;

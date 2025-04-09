@@ -3,6 +3,7 @@ package com.enoughisasgoodasafeast.operator;
 import com.enoughisasgoodasafeast.*;
 import com.github.benmanes.caffeine.cache.Cache;
 import com.github.benmanes.caffeine.cache.Caffeine;
+import com.github.benmanes.caffeine.cache.LoadingCache;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -19,11 +20,14 @@ public class Operator implements MessageProcessor {
     private static final int EXPECTED_INPUT_COUNT = 1;
 
     // Replaced ConcurrentHashMap with Caffeine cache
-    Cache <String, Session> sessionCache = Caffeine.newBuilder()
+    LoadingCache<SessionKey, Session> sessionCache = Caffeine.newBuilder()
             .expireAfterAccess(20, TimeUnit.MINUTES)
-            .build();
+            .build(key -> createSession(key));
 
+    // Replace with another LoadingCache
     private final ConcurrentHashMap<String, User> userCache = new ConcurrentHashMap<>();
+
+    // Consider async loading cache for this, assuming we preload all scripts
     private final ConcurrentHashMap<String, Script> scriptCache = new ConcurrentHashMap<>();
 
     private final Platform defaultPlatform = Platform.BRBL;
@@ -63,11 +67,6 @@ public class Operator implements MessageProcessor {
         // Other resources? Connections to database/distributed caches?
     }
 
-    public static void main(String[] args) throws IOException, TimeoutException {
-        Operator operator = new Operator();
-        operator.init(ConfigLoader.readConfig("operator.properties"));
-    }
-
     /**
      * Find/setup session and process message, tracking state changes in the session.
      * @param message the message being processed.
@@ -75,14 +74,8 @@ public class Operator implements MessageProcessor {
      */
     @Override
     public boolean process(Message message) {
-        Session session;
-        try {
-            session = getUserSession(message);
-        } catch (InterruptedException | ExecutionException e) {
-            LOG.error("Failed to retrieve/construct Session", e);
-            return false;
-        }
-
+        LOG.info("process message: {}", message);
+        Session session = sessionCache.get(SessionKey.newSessionKey(message));
         try {
             return process(session, message);
         } catch (IOException e) {
@@ -91,17 +84,22 @@ public class Operator implements MessageProcessor {
         }
     }
 
-    boolean process(Session session, Message moMessage) throws IOException {
+    boolean process(Session session, Message message) throws IOException {
         synchronized (session) {
-            Script current = session.currentScript;
-            if (session.inputs.size() > EXPECTED_INPUT_COUNT) {
-                // user responded with more MOs than expected (usually only once is expected)
-                // create a new, special Script of ScriptType.PivotScript and chain the remaining Scripts to it...
-                // Problem with this is the previous member can't be patched. It requires recreating the entire remainder of the
-                // Script chain.
-                // Alternatively, we could simply emit a
+            session.addInput(message);
+            int size = session.inputs.size();
+            if ( size > EXPECTED_INPUT_COUNT) {
+                LOG.warn("Uh oh, there are more inputs ({}) in session ({})", size, session);
+                // Corner case: user sent multiple responses that arrived closely together (probably due to delays in
+                // the telco's SMSc.)
+                // Likely this creates an unexpected situation. To handle it we should create a new Script of
+                // ScriptType.PivotScript and chain the remaining Scripts to it.
+                // These scripts will explain the problem and ask what the user what they want to do.
+                // We'll do the same in other cases as well.
+                // TODO...fetch the PivotScript for the given shortcode
             }
-            Script next = current.evaluate(session, moMessage);
+
+            Script next = session.currentScript.evaluate(session, message);
             if (next != null) {
                 session.currentScript = next;
             }
@@ -110,60 +108,27 @@ public class Operator implements MessageProcessor {
         }
     }
 
-    /*
-     * Fetch/create Session for the given identifier.
-     * Use StructuredConcurrency to fetch user and script.
-     * Because we use a pool of Channels we may be processing 2+ messages from a user concurrently. So we
-     * synchronize the method to avoid out-of-order processing. This is not ideal for performance but, hopefully, safe.
-     * Think about ways to limit the scope of the lock to just the session.
-     * We can't use the nice LoadingCache impl because the function is limited to the same param type as the cache key.
+    /**
+     * Builder method used with the LoadingCache.
+     * @param sessionKey the key associated with the new Session
+     * @return the newly constructed Session added to the sessionCache
+     * @throws InterruptedException
+     * @throws ExecutionException
      */
-    synchronized Session getUserSession(Message message) throws InterruptedException, ExecutionException {
-        // We need a Session
-        Session session = sessionCache.getIfPresent(message.from());
-        if (session == null) {
-            session = createSession(message);
-            sessionCache.put(message.from(), session);
-            // addToSessionsCache(session); // See https://github.com/ben-manes/caffeine/tree/master/examples/indexable
-        }
-
-        // Add the Message to the session here in a synchronized method to insure ordering.
-        session.addInput(message);
-
-        return session;
-    }
-
-    Session createSession(Message message) throws InterruptedException, ExecutionException {
-        LOG.info("No session for sender, {}.", message.from());
+    Session createSession(SessionKey sessionKey) throws InterruptedException, ExecutionException {
         try (var scope = new StructuredTaskScope.ShutdownOnFailure()) {
-            // TODO To avoid synchronizing on getUserSession() might we use a synchronous cache for the User that locks on the User?
-            Supplier<User> user = scope.fork(() -> findOrCreateUser(message.from(), message.to()));
-            Supplier<Script> script = scope.fork(() -> findStartingScript(message));
+
+            Supplier<User> user = scope.fork(() -> findOrCreateUser(sessionKey.from(), sessionKey.to()));
+            Supplier<Script> script = scope.fork(() -> findStartingScript(sessionKey));
             scope.join().throwIfFailed(); // TODO consider using joinUntil() to enforce a collective timeout.
 
-            // Create and persist the new Session
-            return new Session(UUID.randomUUID(), script.get(), user.get(), getQueueProducer(message.platform()));
+            return new Session(UUID.randomUUID(), script.get(), user.get(), getQueueProducer(sessionKey.platform()));
         }
     }
 
     QueueProducer getQueueProducer(Platform platform) {
         // We may need to add different handling for each Platform.
         return queueProducer;
-    }
-
-    /*
-     * Do we want to share sessions across different platforms?
-     * Pros: Knowing that a User is currently active on one Platform and could be reached on a different platform could
-     * be useful. e.g. if SMS comes in, we could return a link that connects them to our web platform or push a message
-     * to them (if there's a web socket open.)
-     * Cons: Having multiple entries in the same cache could result in slightly different expiration behavior...
-     */
-    private Session addToSessionsCache(Session session) {
-        session.user.platformIds().forEach((platform, id) -> {
-            sessionCache.put(id, session);
-            LOG.info("Cached Session id: {}, platform: {}", id, platform);
-        });
-        return session;
     }
 
     protected User findOrCreateUser(String from, String to) {
@@ -186,14 +151,14 @@ public class Operator implements MessageProcessor {
      * When we replace this be sure to convert the scriptCache to be a Caffeine cache with a synchronous callback
      * doing the work of returning the values.
      */
-    Script findStartingScript(Message message) {
-        Script startingScript = scriptCache.get(message.to());
+    Script findStartingScript(SessionKey sessionKey) {
+        Script startingScript = scriptCache.get(sessionKey.to());
         if (startingScript == null) {
             // TODO Expand this to look for keyword in message, other logic.
             // TODO fetch from Redis/Postgres/file system...
-            LOG.info("No script found in cache for {}. Using default for platform, {}.", message.to(), message.platform());
+            LOG.info("No script found in cache for {}. Using default for platform, {}.", sessionKey.to(), sessionKey.platform());
 
-            startingScript = switch (message.to()) {
+            startingScript = switch (sessionKey.to()) {
                 case "1234" -> new Script("PrintWithPrefix", ScriptType.PrintWithPrefix, null, "1234");
                 case "2345" -> new Script("ReverseText", ScriptType.ReverseText, null, "2345");
                 case "3456" -> new Script("HelloGoodbye", ScriptType.HelloGoodbye, null, "3456");
@@ -201,7 +166,7 @@ public class Operator implements MessageProcessor {
                 case "4567" -> { // chain Scripts together using the PresentMulti/ProcessMulti
                     Script one = new Script("What's you favorite color? 1) red 2) blue 3) flort", ScriptType.PresentMulti, null, "ColorQuiz");
                     Script two = new Script("Oops, that's not one of the options. Try again with one of the listed numbers or say 'change topic' to start talking about something else.",
-                            ScriptType.ProcessMulti, one, "EvaluateAnswer");
+                            ScriptType.ProcessMulti, one, "EvaluateColorAnswer");
                     ResponseLogic linkOneToTwo = new ResponseLogic(null, null, two);
                     one.next().add(linkOneToTwo);
                     Script tre = new Script("End-of-Conversation", ScriptType.PrintWithPrefix, two, "EndOfConversation");
@@ -214,10 +179,10 @@ public class Operator implements MessageProcessor {
 
                     yield one;
                 }
-                default -> defaultScript(message.platform(), message.to());
+                default -> defaultScript(sessionKey.platform(), sessionKey.to());
             };
 
-            scriptCache.put(message.to(), startingScript);
+//            scriptCache.put(message.to(), startingScript);
         }
         return startingScript;
     }
@@ -236,6 +201,11 @@ public class Operator implements MessageProcessor {
         // the associated shortcode/longcode should probably have expected language code(s)
         // we could also use the 'from' to guess. E.g. if the number is Mexican we could assume 'es'
         return List.of("en");
+    }
+
+    public static void main(String[] args) throws IOException, TimeoutException {
+        Operator operator = new Operator();
+        operator.init(ConfigLoader.readConfig("operator.properties"));
     }
 
     public void shutdown() throws IOException, TimeoutException {

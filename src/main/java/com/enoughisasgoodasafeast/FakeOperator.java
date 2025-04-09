@@ -24,13 +24,21 @@ public class FakeOperator implements MessageProcessor {
     private QueueProducerMTHandler producerMTHandler;
 
     public void init() throws IOException, TimeoutException {
-        LOG.info("Initializing FakeOperator");
         queueProducer = RabbitQueueProducer.createQueueProducer("fo-mt-sink.properties");
         producerMTHandler = new QueueProducerMTHandler(queueProducer);
         queueConsumer = RabbitQueueConsumer.createQueueConsumer(
-                "fo-mo-source.properties", this/*producerMTHandler*/);
-        // FIXME add a startup messsage that signals readiness...
+                "fo-mo-source.properties", this);
     }
+
+    public void init(Properties properties) throws IOException, TimeoutException {
+        LOG.info("Initializing FakeOperator");
+        queueProducer = RabbitQueueProducer.createQueueProducer(properties);
+        producerMTHandler = new QueueProducerMTHandler(queueProducer);
+        queueConsumer = RabbitQueueConsumer.createQueueConsumer(
+                properties, this);
+        LOG.info("Ready");
+    }
+
 
     public static void main(String[] args) throws IOException, TimeoutException {
         FakeOperator fakeOperator = new FakeOperator();
@@ -39,6 +47,7 @@ public class FakeOperator implements MessageProcessor {
 
     @Override
     public boolean process(Message message) {
+        LOG.info("Received message: {}", message);
         return producerMTHandler.handle(message.text());
     }
 

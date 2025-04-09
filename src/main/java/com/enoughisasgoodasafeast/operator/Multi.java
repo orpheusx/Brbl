@@ -15,6 +15,14 @@ public class Multi {
 
     static class Present {
 
+        /**
+         * Create an MT that containing the currentScripts text field, queues it for sending, then advances to the
+         * next element in the Script chain.
+         * @param session
+         * @param moMessage
+         * @return
+         * @throws IOException
+         */
         public static Script evaluate(Session session, Message moMessage) throws IOException {
             LOG.info("Multi.Present evaluating '{}'", moMessage.text());
             // Is this the right place to handle platform-dependent message text formatting?
@@ -24,13 +32,14 @@ public class Multi {
             return advance(session);
         }
 
+        // TODO move this into a ScriptManager type of class that other Script impls can use.
         static Script advance(Session session) {
             if (session.currentScript.next().isEmpty()) {
                 LOG.info("End of script, '{}', reached.", session.currentScript.label());
                 return null;
             } else {
-                final Script nextScript = session.currentScript.next().getFirst().script();
-                LOG.info("Multi.Present dispatching to {}", nextScript);
+                final Script nextScript = session.currentScript.next().getFirst().script(); // only one ResponseLogic available
+                LOG.info("Multi.Present {} dispatching to {}", session.currentScript.label(), nextScript);
                 return nextScript;
             }
         }
@@ -46,12 +55,12 @@ public class Multi {
 
         public static Script evaluate(Session session, Message moMessage) throws IOException {
             LOG.info("Multi.Process evaluating '{}'", moMessage.text());
-            String noMatchText = session.currentScript.text();
+            String noMatchText = session.currentScript.text(); //overloading the use of the text field feels bad. Add an errorText field to Script?
 
             final String userText = moMessage.text().trim().toLowerCase();
             for (ResponseLogic option : session.currentScript.next()) {
                 if (option.matchText().contains(userText)) { //TODO make the matching more robust/flexible.
-                    LOG.info("Input, {}, matched logic: {}", moMessage.text().trim(), option.matchText());
+                    LOG.info("Input, {}, matched logic: {}", userText, option.matchText());
                     final Message mt = newMTfromMO(moMessage, option.text());
                     session.addOutput(mt);
                     LOG.info("Enqueued {}", mt);

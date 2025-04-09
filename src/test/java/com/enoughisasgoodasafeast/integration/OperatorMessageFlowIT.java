@@ -14,6 +14,7 @@ import java.util.concurrent.Callable;
 import java.util.concurrent.TimeoutException;
 
 import static com.enoughisasgoodasafeast.Message.newMO;
+import static com.enoughisasgoodasafeast.integration.IntegrationTestFunctions.loadPropertiesWithContainerOverrides;
 import static java.util.concurrent.TimeUnit.SECONDS;
 import static org.awaitility.Awaitility.await;
 import static org.junit.jupiter.api.Assertions.*;
@@ -56,9 +57,9 @@ public class OperatorMessageFlowIT {
     private Operator operator;
 
     @BeforeAll
-    static void startContainerForAllTests() throws IOException {
+    static void startBrokerForAllTests() throws IOException {
         brokerContainer.start();
-        testProps = loadPropertiesWithContainerOverrides("operator_message_flow_it.properties");
+        testProps = loadPropertiesWithContainerOverrides(brokerContainer, "operator_message_flow_it.properties");
     }
 
     @AfterAll
@@ -199,21 +200,6 @@ public class OperatorMessageFlowIT {
 
         });
     }
-
-    private static Properties loadPropertiesWithContainerOverrides(String path) throws IOException {
-        final String brokerHost = brokerContainer.getHost();
-        final Integer amqpPort = brokerContainer.getAmqpPort();
-
-        final Properties properties = ConfigLoader.readConfig(path);
-        properties.setProperty("producer.queue.host", brokerHost);
-        properties.setProperty("producer.queue.port", amqpPort.toString());
-        properties.setProperty("consumer.queue.host", brokerHost);
-        properties.setProperty("consumer.queue.port", amqpPort.toString());
-
-        LOG.info("Overriding host and port for producer and consumer: {}:{}", brokerHost, amqpPort);
-        return properties;
-    }
-
 
     private Callable<Boolean> mtResponsesDelivered(InMemoryQueueProducer operatorProducer) {
         return () -> {

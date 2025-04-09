@@ -188,14 +188,18 @@ public class PlatformGateway extends WebService {
     }
 
     public void sendMoTraffic(String message) {
-        this.client.handle(/*BRBL_ENQUEUE_ENDPOINT, */message); // FIXME consider using a shared constant for the pathInfo here and in Rcvr
+        this.client.handle(message);
+    }
+
+    public static void sendFiveAndQuit() {
+        // move some of the stuff from main to here
+        // then add some switches on args to support
+        // different modes.
     }
 
      public static void main(String[] args) throws IOException, InterruptedException {
          PlatformGateway platformGateway = new PlatformGateway("http://192.168.1.155:4242" + BRBL_ENQUEUE_ENDPOINT);
          platformGateway.init();
-         Thread.sleep(3000); // probably unneeded but just to make sure the listener is actually up and running
-         LOG.info("");
 
          String[] moTraffic = {
                  "17817299468:1234:1 hello",
