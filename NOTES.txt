@@ -958,4 +958,29 @@ Running it manually, the container works as expected, connecting to the broker w
 Ah. The problem was that our dev version of the Dockerfile (Dockerfile.dev.jvm) doesn't copy the jar file into the image. It expects the docker run command will include a volume mapping of /Users/mark/Development/sndrRcvr on the host to /opt/app on the container.
 
 
+===== 2025-04-10 =====
 
+Time to create some tools for interacting with a running system.
+
+Picocli and jline3 look to be useful and lightweight building blocks for an interactive CLI.
+Use an extended version of PlatformGateway.
+
+
+
+1) create persona
+    > input telephone number
+    > input shortcode
+    < display newly created persona
+2) list personas
+    < display all available personas with id number (write these to a serialized file that can be loaded at start up)
+3) send message (initially just a send but being able to queue messages and send as a batch will be useful.)
+    > display "Which persona will send the message?" then list available personas by id
+    > input selected id
+    < display selected persona then prompt "Enter the text of the message:"
+    > input message text
+    < display confirmation dialog "Send message? y/n"
+    > input choice (if yes, send message)
+    > wait for response (5 seconds) and display it. Otherwise "No response received."
+4) exit
+
+Take a param (-l) to signal desire to load any serialized files found in a special directory.

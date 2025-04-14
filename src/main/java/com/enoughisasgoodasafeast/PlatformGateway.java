@@ -23,7 +23,8 @@ import static java.time.temporal.ChronoUnit.*;
  */
 public class PlatformGateway extends WebService {
 
-    private static final Logger LOG = LoggerFactory.getLogger(PlatformGateway.class);
+    public static final Logger LOG = LoggerFactory.getLogger(PlatformGateway.class);
+
     // private static final String MO_PATH = "/moReceive";
     private static final String MT_PATH = "/mtReceive";
     private final GatewaySimStrategy strategy;
@@ -39,16 +40,6 @@ public class PlatformGateway extends WebService {
         MO, // Mobile Originated
         MT  // Mobile Terminated
     }
-
-    // public PlatformGateway() throws IOException {
-    //     Properties props = ConfigLoader.readConfig("gateway.properties");
-    //     rcvrHost = InetAddress.getLocalHost().getHostAddress(); // rcvrUri = props.getProperty("rcvr.host");
-    //     rcvrPort = Integer.parseInt(props.getProperty("rcvr.port"));
-    //     direction = MessageDirection.MT; // Add to config?
-    //     String destinationUrl = String.format("http://%s:%d", rcvrHost, rcvrPort);
-    //     client = /*(HttpMTHandler) HttpMTHandler.newHandler(props); */ new HttpMTHandler(destinationUrl);
-    //     recordingHandler = new RecordingHandler();
-    // }
 
     public PlatformGateway(String destinationUrl) {
         this.destinationUrl = destinationUrl;
@@ -121,7 +112,7 @@ public class PlatformGateway extends WebService {
         private final ArrayList<String> recorder = new ArrayList<>();
         private final GatewaySimStrategy strategy;
         boolean isAcceptingAllTraffic = true;
-        private boolean filterByStrategy;
+        private boolean isFilterByStrategy;
 
         public RecordingHandler() {
             strategy = null;
@@ -134,7 +125,7 @@ public class PlatformGateway extends WebService {
         @Override
         public void handle(ServerRequest req, ServerResponse res) {
             String rcvText = req.content().as(String.class);
-            if (filterByStrategy && strategy!=null && !strategy.canAccept(rcvText)) {
+            if (isFilterByStrategy && strategy!=null && !strategy.canAccept(rcvText)) {
                 LOG.info("GatewaySimStrategy rejecting message: {}", rcvText);
 
                 res.status(TOO_MANY_REQUESTS_429);
@@ -183,7 +174,7 @@ public class PlatformGateway extends WebService {
         }
 
         public void useStrategy(boolean filter) {
-            this.filterByStrategy = filter;
+            this.isFilterByStrategy = filter;
         }
     }
 

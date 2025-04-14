@@ -106,6 +106,31 @@
             <version>3.2.0</version>
         </dependency>
 
+        <dependency>
+            <groupId>info.picocli</groupId>
+            <artifactId>picocli</artifactId>
+            <version>4.7.6</version>
+        </dependency>
+
+        <dependency>
+            <groupId>info.picocli</groupId>
+            <artifactId>picocli-shell-jline3</artifactId>
+            <version>4.7.6</version>
+        </dependency>
+
+        <dependency>
+            <groupId>org.jline</groupId>
+            <artifactId>jline</artifactId>
+            <version>3.28.0</version>
+        </dependency>
+
+        <!-- https://mvnrepository.com/artifact/org.fusesource.jansi/jansi -->
+        <dependency>
+            <groupId>org.fusesource.jansi</groupId>
+            <artifactId>jansi</artifactId>
+            <version>2.4.1</version>
+        </dependency>
+
         <!-- Testing libraries -->
         <dependency>
             <groupId>org.junit.jupiter</groupId>
@@ -176,7 +201,17 @@
                 <configuration>
                     <source>23</source>
                     <target>23</target>
-                    <compilerArgs>--enable-preview</compilerArgs>
+                    <annotationProcessorPaths>
+                        <path>
+                            <groupId>info.picocli</groupId>
+                            <artifactId>picocli-codegen</artifactId>
+                            <version>4.7.6</version>
+                        </path>
+                    </annotationProcessorPaths>
+                    <compilerArgs>
+                        <arg>--enable-preview</arg>
+                        <arg>-Aproject=${project.groupId}/${project.artifactId}</arg>
+                    </compilerArgs>
                 </configuration>
             </plugin>
 

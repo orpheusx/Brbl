@@ -3,10 +3,15 @@ package com.enoughisasgoodasafeast;
 import com.rabbitmq.client.*;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import org.slf4j.helpers.AbstractLogger;
 
 import java.io.IOException;
 import java.nio.charset.StandardCharsets;
 import java.util.Properties;
+import java.util.Queue;
+import java.util.concurrent.ArrayBlockingQueue;
+import java.util.concurrent.BlockingQueue;
+import java.util.concurrent.LinkedBlockingQueue;
 import java.util.concurrent.TimeoutException;
 
 import static com.enoughisasgoodasafeast.RabbitQueueFunctions.exchangeForQueueName;
@@ -24,6 +29,10 @@ public class RabbitQueueProducer implements QueueProducer {
 
     private final Connection moConnection;
     private final Channel channel;
+
+    private final ArrayBlockingQueue<Object> internalMessageBuffer // TODO <Object> --> <Message>
+            = new ArrayBlockingQueue<>(100); // Parameterize the size here
+
 
     public static QueueProducer createQueueProducer(String configFileName) throws IOException, TimeoutException {
         Properties properties = ConfigLoader.readConfig(configFileName);
@@ -64,7 +73,7 @@ public class RabbitQueueProducer implements QueueProducer {
         factory.setPort(this.queuePort);
         factory.setRequestedHeartbeat(requestedHeartbeatTimeout);
 
-        /*Connection*/ moConnection = factory.newConnection();
+        moConnection = factory.newConnection();
         channel = moConnection.createChannel();
         /*AMQP.Exchange.DeclareOk declareOk = */
         final String matchingExchangeName = exchangeForQueueName(queueName);
@@ -83,20 +92,63 @@ public class RabbitQueueProducer implements QueueProducer {
         // that each message is received.
         // See https://www.rabbitmq.com/tutorials/tutorial-seven-java
         //      channel.confirmSelect();
-        // We won't use this initially
+        // We won't use this initially...
+
+        // RabbitMQ's channel impl really isn't thread safe so write to it only via this thread.
+        Thread brokerPublisherThread = new Thread(new BrokerPublisher(channel, internalMessageBuffer));
+        brokerPublisherThread.start();
+        LOG.info("Broker publisher thread running.");
+        LOG.info("Start up complete.");
+
     }
 
     @Override
-    public void enqueue(Object event) throws IOException {
+    public void enqueue(Object event) throws IOException { //TODO let's please make this only take a Message
+        boolean ok = internalMessageBuffer.offer(event);
+        if (!ok) {
+            LOG.error("Unable to add message to internalMessageBuffer: {}", event);
+            // TODO write to disk? Do any telcos support retries? Probably not...
+        }
+    }
+
+    /*
+     * Removes entries from the internalMessageBuffer and writes them to the broker.
+     */
+    private class BrokerPublisher implements Runnable {
+        Channel channel;
+        BlockingQueue<Object> queue;
+
+        public BrokerPublisher(Channel channel, BlockingQueue<Object> queue) {
+            this.channel = channel;
+            this.queue = queue;
+        }
+
+        @Override
+        public void run() {
+            while (true) {
+                try {
+                    enqueueToBroker(channel, queue.take());
+                } catch (InterruptedException e) {
+                    Thread.currentThread().interrupt();
+                } catch (IOException e) {
+                    LOG.error("Error converting Message to byte array");
+                }
+            }
+        }
+    }
+
+    private void enqueueToBroker(Channel channel, Object event) throws IOException {
         byte[] payload = null;
         switch(event) {
-            case String s -> payload = s.getBytes(StandardCharsets.UTF_8);
+            case String s -> payload = s.getBytes(StandardCharsets.UTF_8); // remove this
             case Message m -> payload = m.toBytes();
             default -> throw new IllegalArgumentException("Unsupported message type: " + event.getClass());
         }
         channel.basicPublish(this.queueName, this.routingKey, /*deliveryModeProps*/null, payload);
         LOG.info(" [x] Enqueued msg '{}'", event);
     }
+
+
 
     public void shutdown() throws IOException, TimeoutException {
         this.channel.close();

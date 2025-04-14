@@ -15,24 +15,10 @@ public class Sndr implements MessageProcessor {
     public QueueConsumer queueConsumer;
     HttpMTHandler httpMtHandler;
 
-    //    public void init() {
-            // This is the JDK provided client
-            //try (HttpClient client = HttpClient.newBuilder()
-            //        .version(HttpClient.Version.HTTP_2)
-            //        .connectTimeout(Duration.ofSeconds(1))
-            //        .build()) {
-            //    this.client = client;
-            //}
-    //    }
-
     public void init() throws IOException, TimeoutException {
         LOG.info("Initializing SNDR");
         final Properties properties = ConfigLoader.readConfig("sndr.properties");
         this.init(properties);
-        //        client = WebClient.builder()
-        //                //.addService(WebClientTracing.create())
-        //                .baseUri(uri)
-        //                .build();
     }
 
     public void init(Properties properties) throws IOException, TimeoutException {
@@ -54,22 +40,6 @@ public class Sndr implements MessageProcessor {
         sndr.init();
 
         // Test send to verify we can reach the platform
-//        sndr.process(new Message(MessageType.MT, "00000", "17816629773"/* FIXME */, "Reachability Test"));
-
-        //        HttpClientRequest fooReq = sndr.client.post().path("/mtReceive");//.peek(System.out::println).await();
-        //        ClientResponseTyped<String> fooRes = fooReq.request(String.class);
-        //        LOG.info("/foo response status: {}", fooRes.status());
-        //        LOG.info("/foo response content: {}", fooRes.entity());
-        //
-        //        HttpClientRequest enqueueReq = sndr.client.post(ENQUEUE_ENDPOINT);
-        //        HttpClientResponse enqueueRes = enqueueReq.
-        //                submit("{\"id\": \"123\",\"msg\": \"this is message 0\"}");
-        //        LOG.info("/enqueue response status: {}",enqueueRes.status());
-        //        LOG.info("/enqueue response content: {}", enqueueRes.entity().as(String.class));
-        //
-        //        HttpClientRequest healthReq = sndr.client.get().path(HEALTH_ENDPOINT);
-        //        ClientResponseTyped<String> healthRes = healthReq.request(String.class);
-        //        LOG.info("/health response status: {}", healthRes.status());
-        //        LOG.info("No response content expected.");
+        // sndr.process(new Message(MessageType.MT, "00000", "17816629773"/* FIXME */, "Reachability Test"));
     }
 }
