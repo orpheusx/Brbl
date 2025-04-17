@@ -1,5 +1,6 @@
 package com.enoughisasgoodasafeast;
 
+import ch.qos.logback.classic.Level;
 import io.helidon.http.Status;
 import io.helidon.webclient.api.ClientResponseTyped;
 import io.helidon.webclient.api.WebClient;
@@ -22,6 +23,9 @@ import static io.helidon.http.Status.Family.SUCCESSFUL;
 public class HttpMTHandler implements MTHandler {
 
     private static final Logger LOG = LoggerFactory.getLogger(HttpMTHandler.class);
+    static {
+        ((ch.qos.logback.classic.Logger) LOG).setLevel(Level.ERROR);
+    }
 
     private final String endpoint;
     private final WebClient client;

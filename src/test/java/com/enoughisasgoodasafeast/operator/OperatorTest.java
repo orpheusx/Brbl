@@ -21,7 +21,7 @@ public class OperatorTest {
     public static final String SHORT_CODE_1 = "1234";
     public static final String SHORT_CODE_2 = "2345";
     public static final String SHORT_CODE_3 = "3456";
-    public static final String SHORT_CODE_4 = "4567";
+    public static final String SHORT_CODE_4 = "45678";
     public static final String MO_TEXT = "Hello Brbl";
 
     public static final Message mo1 = newMO(
@@ -121,7 +121,7 @@ public class OperatorTest {
 
             Script finalScript = secondScript.evaluate(session, mo5);
             System.out.println(finalScript);
-            assertEquals(ScriptType.PrintWithPrefix, finalScript.type());
+            assertEquals(ScriptType.EchoWithPrefix, finalScript.type());
             session.currentScript = finalScript;
         });
     }
@@ -220,7 +220,7 @@ public class OperatorTest {
 
             assertTrue(operator.process(mo5));
             assertTrue(requireNonNull(queuedMessages.get(1)).text().contains("cool kids"));
-            assertEquals(ScriptType.PrintWithPrefix, session.currentScript().type());
+            assertEquals(ScriptType.EchoWithPrefix, session.currentScript().type());
 
         });
     }

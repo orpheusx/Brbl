@@ -29,7 +29,7 @@ public class Functions {
     // Also, for now, this is just hard-coded for a limited number of cases to make tests work.
     public static Script findTopicScript(Session session, Message message) {
         return switch (message) {
-            case Message m when m.to().equals("4567") -> {
+            case Message m when m.to().equals("45678") -> {
                 String text = """
                     Here are the topics I can talk about:
                     1) wolverines

@@ -83,7 +83,7 @@ public record Script(UUID id, String text, ScriptType type, List<ResponseLogic> 
     public Script evaluate(Session session, Message moMessage) throws IOException {
         session.addEvaluated(this);
         return switch (session.currentScript().type) {
-            case PrintWithPrefix ->
+            case EchoWithPrefix ->
                 SimpleTestScript.SimpleEchoResponseScript.evaluate(session, moMessage);
 
             case ReverseText ->

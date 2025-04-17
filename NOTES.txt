@@ -984,3 +984,27 @@ Use an extended version of PlatformGateway.
 4) exit
 
 Take a param (-l) to signal desire to load any serialized files found in a special directory.
+
+
+
+===== 2025-04-16 =====
+
+brblcli is working w/r/t to sending messages and triggering script chains. The hardcoded script for short code "45678" will correctly
+track the state for the user.
+
+Lots of work yet to make the CLI easy to use but a good start.
+
+Made some additional changes to the Session:
+    - Changed the inputHistory implementation in Session to be fixed size.
+    - Added requirement that constructor params be non null and started a unit test for the class.
+
+
+===== 2025-04-17 =====
+
+Starting on the persistence layer...
+
+Simplest task is to record receipt of MOs and transmission of MTs.
+Ideally we could use the basic records but we'd like to relate them to the Script state.
+
+User  <--fk-- Profile
+

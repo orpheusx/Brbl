@@ -11,17 +11,17 @@ import java.util.UUID;
  * A message received by the platform.
  * We include the "to" id to support routing of multiple services
  * @param id a Brbl assigned unique identifier
- * @param received the Instant the message was constructed. Hopefully close to then time it is received/sent
+ * @param receivedAt the Instant the message was constructed. Hopefully close to then time it is received/sent
  * @param type the MessageType, either MO or MT indicating the message's direction
  * @param platform the 3rd party platform
  * @param from the senders ID (e.g. phone number for SMS)
  * @param to the ID this message was sent to (e.g. a 10DLC, shortcode, Slack channel name or the like.)
  * @param text the actual message text from/to the user
  */
-public record Message(UUID id, Instant received, MessageType type, Platform platform, String from, String to, String text) implements Serializable {
+public record Message(UUID id, Instant receivedAt, MessageType type, Platform platform, String from, String to, String text) implements Serializable {
 
     public Message {
-        if (id == null || received == null || platform == null || from == null || to == null || text == null) { // check for empty string, too?
+        if (id == null || receivedAt == null || platform == null || from == null || to == null || text == null) { // check for empty string, too?
             throw new IllegalArgumentException("All fields are required");
         }
     }

@@ -5,7 +5,7 @@ package com.enoughisasgoodasafeast.operator;
  * TODO Add an ordinal for use with database reporting.
  */
 public enum ScriptType {
-    PrintWithPrefix,
+    EchoWithPrefix,
     ReverseText,
     HelloGoodbye,
     PresentMulti,

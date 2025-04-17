@@ -16,27 +16,38 @@ import java.util.*;
  */
 public class Session {
     private static final Logger LOG = LoggerFactory.getLogger(Session.class);
+    public static final int MAX_INPUT_HISTORY = 10;
 
+    final long startTimeNanos;
     final UUID id;
     final User user;
-    final long startTimeNanos;
+    final QueueProducer producer;
+
     Script currentScript;
-    Queue<Message> outputBuffer = new LinkedList<>();
-    Integer seqNum = 0;
-    SequencedSet<Message> inputs = new LinkedHashSet<>();
-    SequencedSet<Message> inputHistory = new LinkedHashSet<>();
+
+    final Queue<Message> outputBuffer = new LinkedList<>();
+    final SequencedSet<Message> inputs = new LinkedHashSet<>();
+    final SequencedSet<Message> inputHistory = new LinkedHashSet<Message>(MAX_INPUT_HISTORY) {
+        @Override
+        public void addLast(Message message) {
+            if (1 + this.size() > MAX_INPUT_HISTORY) {
+                removeFirst();
+            }
+            super.addLast(message);
+        }
+    };
+
     List<Script> evaluatedScripts = new ArrayList<>();
 
-    // processing resources
-    QueueProducer producer; // different ones depending on the Platform
     // Db manager goes here...
+    // ...
 
     public Session(UUID id, Script currentScript, User user, QueueProducer producer) {
         startTimeNanos = NanoClock.systemUTC().nanos();
-        this.id = id;
-        this.currentScript = currentScript;
-        this.user = user;
-        this.producer = producer;
+        this.id = Objects.requireNonNull(id);
+        this.currentScript = Objects.requireNonNull(currentScript);
+        this.user = Objects.requireNonNull(user);
+        this.producer = Objects.requireNonNull(producer);
         LOG.info("Created Session {} for User {}", id, user.id());
     }
 
@@ -51,7 +62,9 @@ public class Session {
             producer.enqueue(mtMessage);
         }
         outputBuffer.clear();
-        inputHistory.addAll(inputs);
+
+        inputs.forEach(inputHistory::addLast);
+
         inputs.clear();
     }
 

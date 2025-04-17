@@ -12,6 +12,7 @@ import java.time.Duration;
 import java.util.ArrayList;
 import java.util.List;
 
+import static ch.qos.logback.classic.Level.*;
 import static com.enoughisasgoodasafeast.SharedConstants.*;
 import static io.helidon.http.Status.OK_200;
 import static io.helidon.http.Status.TOO_MANY_REQUESTS_429;
@@ -24,6 +25,15 @@ import static java.time.temporal.ChronoUnit.*;
 public class PlatformGateway extends WebService {
 
     public static final Logger LOG = LoggerFactory.getLogger(PlatformGateway.class);
+    static {
+        // mute the loggers for use with CLI
+        ((ch.qos.logback.classic.Logger) LOG).setLevel(ERROR);
+        ((ch.qos.logback.classic.Logger)LoggerFactory.getLogger("io.helidon.common.features.HelidonFeatures")).setLevel(ERROR);
+        ((ch.qos.logback.classic.Logger)LoggerFactory.getLogger("io.helidon.webserver.ServerListener")).setLevel(ERROR);
+        ((ch.qos.logback.classic.Logger)LoggerFactory.getLogger("io.helidon.logging.slf4j.Slf4jProvider")).setLevel(ERROR);
+        ((ch.qos.logback.classic.Logger)LoggerFactory.getLogger("io.helidon.webserver.LoomServer")).setLevel(ERROR);
+        ((ch.qos.logback.classic.Logger)LoggerFactory.getLogger("io.helidon.Main")).setLevel(ERROR);
+    }
 
     // private static final String MO_PATH = "/moReceive";
     private static final String MT_PATH = "/mtReceive";
@@ -113,6 +123,7 @@ public class PlatformGateway extends WebService {
         private final GatewaySimStrategy strategy;
         boolean isAcceptingAllTraffic = true;
         private boolean isFilterByStrategy;
+        private RecordingHandlerListener listener;
 
         public RecordingHandler() {
             strategy = null;
@@ -151,6 +162,13 @@ public class PlatformGateway extends WebService {
 
         public void record(String message) {
             recorder.add(message);
+            if (listener != null) {
+                listener.notify(message);
+            }
+        }
+
+        public void addListener(RecordingHandlerListener listener) {
+            this.listener = listener;
         }
 
         public List<String> retrieve() {

@@ -1,13 +1,13 @@
 package com.enoughisasgoodasafeast.operator;
 
 import com.enoughisasgoodasafeast.*;
-import com.github.benmanes.caffeine.cache.Cache;
 import com.github.benmanes.caffeine.cache.Caffeine;
 import com.github.benmanes.caffeine.cache.LoadingCache;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import java.io.IOException;
+import java.time.Instant;
 import java.util.*;
 import java.util.concurrent.*;
 import java.util.function.Supplier;
@@ -21,7 +21,7 @@ public class Operator implements MessageProcessor {
 
     // Replaced ConcurrentHashMap with Caffeine cache
     LoadingCache<SessionKey, Session> sessionCache = Caffeine.newBuilder()
-            .expireAfterAccess(20, TimeUnit.MINUTES)
+            .expireAfterAccess(20, TimeUnit.MINUTES) // TODO make duration part of the configuration
             .build(key -> createSession(key));
 
     // Replace with another LoadingCache
@@ -74,37 +74,54 @@ public class Operator implements MessageProcessor {
      */
     @Override
     public boolean process(Message message) {
-        LOG.info("process message: {}", message);
-        Session session = sessionCache.get(SessionKey.newSessionKey(message));
-        try {
-            return process(session, message);
-        } catch (IOException e) {
-            LOG.error("Processing error", e);
+        LOG.info("Process message: {}", message);
+        final SessionKey sessionKey = SessionKey.newSessionKey(message);
+        Session session = sessionCache.get(sessionKey);
+        if (null==session) {
+            LOG.error("Cache fetch failed for {}", sessionKey);
             return false;
         }
+        // FIXME the gap between the creation/retrieval of the Session and it being locked for
+        //  processing is worrisome but possibly unavoidable...
+        return process(session, message);
     }
 
-    boolean process(Session session, Message message) throws IOException {
+    boolean process(Session session, Message message) {
         synchronized (session) {
-            session.addInput(message);
-            int size = session.inputs.size();
-            if ( size > EXPECTED_INPUT_COUNT) {
-                LOG.warn("Uh oh, there are more inputs ({}) in session ({})", size, session);
-                // Corner case: user sent multiple responses that arrived closely together (probably due to delays in
-                // the telco's SMSc.)
-                // Likely this creates an unexpected situation. To handle it we should create a new Script of
-                // ScriptType.PivotScript and chain the remaining Scripts to it.
-                // These scripts will explain the problem and ask what the user what they want to do.
-                // We'll do the same in other cases as well.
-                // TODO...fetch the PivotScript for the given shortcode
-            }
+            try {
+                session.addInput(message);
+                int size = session.inputs.size();
+                if ( size > EXPECTED_INPUT_COUNT) {
+                    LOG.error("Uh oh, there are more inputs ({}) than expected in session ({})", size, session);
+                    // Corner case: user sent multiple responses that arrived closely together (probably due to delays/buffering in
+                    // the telco's SMSc) and, due to an unfortunate thread context switch, we've processed each in the same
+                    // Likely this creates an unexpected situation. To handle it we should create a new Script of
+                    // ScriptType.PivotScript and chain the remaining Scripts to it.
+                    // These scripts will explain the problem and ask what the user what they want to do.
+                    // We'll do the same in other cases as well.
+                    // TODO...fetch the PivotScript for the given shortcode
+                }
 
-            Script next = session.currentScript.evaluate(session, message);
-            if (next != null) {
-                session.currentScript = next;
+                // Also check if the current Message was created prior to the previous Message in the session's history.
+                // This would signal out-of-order processing which Is Bad™
+                Message previousInputMessage = session.inputHistory.isEmpty() ? null : session.inputHistory.getLast();
+                if(previousInputMessage != null) {
+                    if (previousInputMessage.receivedAt().isAfter(message.receivedAt())) {
+                        LOG.error("Oh shit, we processed an MO received later than this one: {} > {}",
+                                previousInputMessage.receivedAt(), message.receivedAt());
+                    }
+                }
+
+                Script next = session.currentScript.evaluate(session, message);
+                if (next != null) {
+                    session.currentScript = next;
+                }
+                session.flushOutput();
+                return true; // when would this be false?
+            } catch (IOException e) {
+                LOG.error("Processing error", e);
+                return false;
             }
-            session.flushOutput();
-            return true; // when would this be false?
         }
     }
 
@@ -159,17 +176,17 @@ public class Operator implements MessageProcessor {
             LOG.info("No script found in cache for {}. Using default for platform, {}.", sessionKey.to(), sessionKey.platform());
 
             startingScript = switch (sessionKey.to()) {
-                case "1234" -> new Script("PrintWithPrefix", ScriptType.PrintWithPrefix, null, "1234");
+                case "1234" -> new Script("PrintWithPrefix", ScriptType.EchoWithPrefix, null, "1234");
                 case "2345" -> new Script("ReverseText", ScriptType.ReverseText, null, "2345");
                 case "3456" -> new Script("HelloGoodbye", ScriptType.HelloGoodbye, null, "3456");
 
-                case "4567" -> { // chain Scripts together using the PresentMulti/ProcessMulti
+                case "45678" -> { // chain Scripts together using the PresentMulti/ProcessMulti
                     Script one = new Script("What's you favorite color? 1) red 2) blue 3) flort", ScriptType.PresentMulti, null, "ColorQuiz");
                     Script two = new Script("Oops, that's not one of the options. Try again with one of the listed numbers or say 'change topic' to start talking about something else.",
                             ScriptType.ProcessMulti, one, "EvaluateColorAnswer");
                     ResponseLogic linkOneToTwo = new ResponseLogic(null, null, two);
                     one.next().add(linkOneToTwo);
-                    Script tre = new Script("End-of-Conversation", ScriptType.PrintWithPrefix, two, "EndOfConversation");
+                    Script tre = new Script("End-of-Conversation", ScriptType.EchoWithPrefix, two, "EndOfConversation");
                     ResponseLogic twoOption1 = new ResponseLogic(List.of("1", "red"), "Red is the color of life.", tre);
                     ResponseLogic twoOption2 = new ResponseLogic(List.of("2", "blue"), "Blue is my fave, as well.", tre);
                     ResponseLogic twoOption3 = new ResponseLogic(List.of("1", "flort"), "Flort is for the cool kids.", tre);
@@ -189,7 +206,7 @@ public class Operator implements MessageProcessor {
 
     Script defaultScript(Platform platform, String shortCodeOrKeywordOrChannelName) {
         // TODO use params to determine the correct initial script.
-        return new Script("TEST SCRIPT RESPONSE PREFIX", ScriptType.PrintWithPrefix, null, "DefaultScript");
+        return new Script("TEST SCRIPT RESPONSE PREFIX", ScriptType.EchoWithPrefix, null, "DefaultScript");
     }
 
     Map<Platform, String> defaultPlatformMap(String from) {

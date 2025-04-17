@@ -136,7 +136,7 @@ public class Rcvr extends WebService {
 
         public Message marshall(String payload) {
             String[] parsed = payload.split(":", 3);
-            return new Message(MessageType.MO, Platform.BRBL, parsed[0], parsed[1], parsed[2]);
+            return new Message(MessageType.MO, Platform.BRBL, /*from*/parsed[0], /*to*/parsed[1], /*text*/parsed[2]);
         }
     }
 

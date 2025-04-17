@@ -30,7 +30,7 @@ public class OperatorMessageFlowIT {
     private static final Logger LOG = LoggerFactory.getLogger(OperatorMessageFlowIT.class);
 
     public static final String MOBILE_MX = "522005551234"; // Mexico City, MX
-    public static final String SHORT_CODE = "4567";
+    public static final String SHORT_CODE = "45678";
 
     public static final Message keywordMO = newMO(
             MOBILE_MX, SHORT_CODE, "Color quiz"

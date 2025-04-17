@@ -1,9 +1,8 @@
 package com.enoughisasgoodasafeast.cli;
 
 
-import ch.qos.logback.classic.Level;
-import ch.qos.logback.classic.Logger;
 import com.enoughisasgoodasafeast.PlatformGateway;
+import com.enoughisasgoodasafeast.RecordingHandlerListener;
 import org.fusesource.jansi.AnsiConsole;
 import org.jline.builtins.ConfigurationPath;
 import org.jline.console.SystemRegistry;
@@ -56,16 +55,17 @@ public class BrblCli {
     static List<String> sentMessages = new ArrayList<>();
     static List<String> receivedMessages = new ArrayList<>();
 
-    static Persona currentUserPerson;
+    static Persona currentUserPersona;
     static String currentMessage;
 
     static PlatformGateway platformGateway;
 
     // FIXME this is temporary, until we have persona load/save working
     static {
-        userPersonas.add(new Persona(1, "17811234", "User1"));
-        userPersonas.add(new Persona(2, "17811235", "User2"));
-        userPersonas.add(new Persona(3, "17811236", "User3"));
+        userPersonas.add(new Persona(1, "17811234343", "21249"));
+        userPersonas.add(new Persona(2, "17811238659", "98712"));
+        userPersonas.add(new Persona(3, "17811235964", "45678"));
+        nextPersonaId.set(userPersonas.size());
     }
 
     @Command(name = "brblcli",
@@ -129,7 +129,7 @@ public class BrblCli {
             Persona newPersona = new Persona(nextPersonaId(), phoneNum, shortCode);
             parent.out.println(newPersona);
             userPersonas.add(newPersona);
-            currentUserPerson = newPersona;
+            currentUserPersona = newPersona;
         }
     }
     @Command(name = "LoadPersonas", mixinStandardHelpOptions = true, version = "0.1",
@@ -158,24 +158,23 @@ public class BrblCli {
             userPersonas.forEach(s -> parent.out.println(s));
             parent.out.print("Select Persona by id: ");
             int personaId = Integer.parseInt(parent.getReader().readLine());
-            Persona foundPersona = null;
+
             for (Persona userPersona : userPersonas) {
                 if (userPersona.id == personaId) {
-                    currentUserPerson = userPersona;
+                    currentUserPersona = userPersona;
                 }
             }
-            if (null == foundPersona) {
-                parent.out.println("No persona with id " + personaId);
-            }
-            if (null == currentUserPerson) {
+            if (null == currentUserPersona) {
                 parent.out.println("You must select a Persona to send messages.");
                 return;
             }
-            parent.out.println("Current " + currentUserPerson);
+            parent.out.println("Current " + currentUserPersona);
             parent.out.print("Enter message text:");
             String msg = parent.getReader().readLine();
 
-            platformGateway.sendMoTraffic(msg);
+            String structuredMsg = String.format("%s:%s:%s",
+                    currentUserPersona.phoneNumber, currentUserPersona.shortCode, msg);
+            platformGateway.sendMoTraffic(structuredMsg);
 
             //... actually send the message as long it's not empty.
             parent.out.println("Message sent: " + msg);
@@ -216,15 +215,21 @@ public class BrblCli {
                 factory.setTerminal(terminal);
                 // start the shell and process input until the user quits with Ctrl-D
                 String prompt = "brblcli> ";
-                String rightPrompt = "thisistherightprompt"; // What's a rightPrompt?
+                String rightPrompt = ""; // What's a rightPrompt?
                 String line;
 
                 platformGateway = new PlatformGateway("http://192.168.1.155:4242" + BRBL_ENQUEUE_ENDPOINT);
-                // Don't mix logging output with terminal output
-                Logger logbackLogger = (ch.qos.logback.classic.Logger) PlatformGateway.LOG;
-                logbackLogger.setLevel(Level.WARN);
-
                 platformGateway.init();
+
+                // Add callback to print the MT arriving
+                platformGateway.recordingHandler.addListener(new RecordingHandlerListener() {
+                    @Override
+                    public void notify(String message) {
+                        reader.getTerminal().writer().println("MT received: " + message);
+                        reader.getTerminal().writer().flush();
+                        reader.getTerminal().writer().println("");
+                    }
+                });
 
                 while (true) {
                     try {
