@@ -59,7 +59,7 @@ public class HttpMTHandler implements MTHandler {
         return true;
     }
 
-    public boolean handle(String payload) {
+    public boolean handle(Message payload) {
         LOG.info("Sending message, '{}'", payload);
 
         // FIXME need more robust error handling here...including retry logic.
@@ -78,8 +78,7 @@ public class HttpMTHandler implements MTHandler {
 
     public static void main(String[] args) {
         final HttpMTHandler handler = new HttpMTHandler("http://localhost:2424/mtReceive");
-        final boolean ok = handler.handle("fromhost");
+        final boolean ok = handler.handle(Message.newMO("1234567890", "01234", "fromhost"));
         LOG.info("send ok?: {}", ok);
-
     }
 }

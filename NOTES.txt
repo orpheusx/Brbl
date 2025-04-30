@@ -1002,9 +1002,293 @@ Made some additional changes to the Session:
 ===== 2025-04-17 =====
 
 Starting on the persistence layer...
+Considered SQLite but decided to go with Postgres.
 
 Simplest task is to record receipt of MOs and transmission of MTs.
 Ideally we could use the basic records but we'd like to relate them to the Script state.
 
-User  <--fk-- Profile
+User  <---:fk:--- Profile
+
+UUID id                           --> String or UUID
+Map<Platform, String> platformIds --> punt on this for now?
+String countryCode                --> CREATE TYPE country_code AS ENUM ('us', 'ca', 'mx');
+List<String> languages)           --> CREATE TYPE language_code AS ENUM ('en', 'es', 'fr', ...);
+
+Installing Postgres...
+
+Used the postgres.app version which is quite permissive with its default pg_hba.conf settings but seems pretty simple.
+
+Learned about server-side prepared statements:
+    https://jdbc.postgresql.org/documentation/server-prepare/#server-prepared-statements
+Probably a good idea, if we use them, to also set on the connection:
+    autosave=conservative
+This to avoid having to bounce the server if/when the query plan is changed. There is, however, a warning about the performance impact on long transactions with (auto)save points.
+
+Let's comment it out and wait till we have the code worked out before trying it out.
+
+Created a properly named database:
+    brbl_dev
+
+===== 2025-04-17 =====
+
+psql -U mark -d brbl_dev -a -f <ddl-or-dml>.sql
+
+See dev.ddl in src/main/resources/sql.
+
+Note "timestamp with time zone" is, perhaps surprisingly, the right data type for a Java Instant value:
+    See https://wiki.postgresql.org/wiki/Don't_Do_This#Don.27t_use_timestamp_.28without_time_zone.29_to_store_UTC_times
+
+Using psql to show all tables
+ \dt *.*
+
+Using psql to show all users
+ \du
+
+java.time.Instance supports nanos --> java.sql.Timestamp --> Postgres
+
+Gemini suggests using the timestamp9 extension instead of separate fields for the
+CREATE EXTENSION timestamp9;
+
+mark@yakko sndrRcvr % brew info postgresql@17
+==> postgresql@17: stable 17.2 (bottled) [keg-only]
+Object-relational database system
+https://www.postgresql.org/
+Not installed
+From: https://github.com/Homebrew/homebrew-core/blob/HEAD/Formula/p/postgresql@17.rb
+License: PostgreSQL
+==> Dependencies
+Build: docbook ✘, docbook-xsl ✘, gettext ✘, pkgconf ✘
+Required: icu4c@76 ✘, krb5 ✘, lz4 ✔, openssl@3 ✔, readline ✘, zstd ✔, gettext ✘
+==> Caveats
+This formula has created a default database cluster with:
+  initdb --locale=C -E UTF-8 /opt/homebrew/var/postgresql@17
+
+When uninstalling, some dead symlinks are left behind so you may want to run:
+  brew cleanup --prune-prefix
+
+postgresql@17 is keg-only, which means it was not symlinked into /opt/homebrew,
+because this is an alternate version of another formula.
+
+To start postgresql@17 now and restart at login:
+  brew services start postgresql@17
+Or, if you don't want/need a background service you can just run:
+  LC_ALL="C" /opt/homebrew/opt/postgresql@17/bin/postgres -D /opt/homebrew/var/postgresql@17
+==> Analytics
+install: 6,954 (30 days), 21,611 (90 days), 36,400 (365 days)
+install-on-request: 6,307 (30 days), 19,641 (90 days), 32,337 (365 days)
+build-error: 23 (30 days)
+
+After installing the brew package and starting the server I can connect via:
+    psql -d postgres
+
+This connects as user 'mark' to the only non-template database available, 'postgres'. Not confusing at all.
+I'm used to 'postgres' being the db super user but here it's 'mark'
+
+Creating a table with a column of type 'timestamp with time zone' looks like this:
+
+    postgres=# insert into test_time(received_at_ms) values(NOW());
+    INSERT 0 1
+    postgres=# select * from test_time ;
+            received_at_ms
+    -------------------------------
+     2025-04-22 09:28:49.010806-04
+    (1 row)
+
+This only gets us to the milliseconds level.
+
+Google's Gemini suggests using time9, a Postgres extension, as a way of supporting nanosecond level timestamps. This instead of splitting the milliseconds and nanosecond components into two columns.
+
+The extension isn't part of the regular distro and requires compiling the code here (https://github.com/optiver/timestamp9)
+
+Needed to install cmake which is very dumb about checking it's version requiring me to hack the timestamp9's CMakeLists.txt file.
+
+...and also the c.h file to comment out references to ENABLE_NLS. I tried #undef'ing it at the top of the file as well as setting
+
+    #define ENABLE_NLS 0
+
+in pg_config.h but neither was sufficient. At first blush, it doesn't seem to be something that will impact Brbl's functionality.
+
+mark@yakko build % sudo make install
+
+Password:
+[  0%] Built target controlfile
+[ 66%] Built target timestamp9
+[100%] Built target sqlfile
+[100%] Built target sqlupdatescripts
+Install the project...
+-- Install configuration: "Release"
+-- Installing: /opt/homebrew/lib/postgresql@17/timestamp9.so
+-- Installing: /opt/homebrew/share/postgresql@17/extension/timestamp9--1.4.0.sql
+-- Installing: /opt/homebrew/share/postgresql@17/extension/timestamp9--0.1.0--0.2.0.sql
+-- Installing: /opt/homebrew/share/postgresql@17/extension/timestamp9--0.2.0--0.3.0.sql
+-- Installing: /opt/homebrew/share/postgresql@17/extension/timestamp9--0.3.0--1.0.0.sql
+-- Installing: /opt/homebrew/share/postgresql@17/extension/timestamp9--1.0.0--1.0.1.sql
+-- Installing: /opt/homebrew/share/postgresql@17/extension/timestamp9--1.0.1--1.1.0.sql
+-- Installing: /opt/homebrew/share/postgresql@17/extension/timestamp9--1.1.0--1.2.0.sql
+-- Installing: /opt/homebrew/share/postgresql@17/extension/timestamp9--1.2.0--1.3.0.sql
+-- Installing: /opt/homebrew/share/postgresql@17/extension/timestamp9--1.3.0--1.4.0.sql
+-- Installing: /opt/homebrew/share/postgresql@17/extension/timestamp9.control
+
+Restarted the database and connected via psql as superuser (mark) then ran
+
+    CREATE EXTENSION timestamp9;
+
+which spits out:
+
+    ERROR:  could not access file "$libdir/timestamp9": No such file or directory
+
+Ah, the produced library file is named with linux convention with the .so extension.
+
+mark@yakko timestamp9 % file /opt/homebrew/lib/postgresql@17/timestamp9.so
+/opt/homebrew/lib/postgresql@17/timestamp9.so: Mach-O 64-bit bundle arm64
+
+So just rename the file? Apparently so...
+
+    postgres=# CREATE EXTENSION timestamp9;
+    CREATE EXTENSION
+
+When declaring a column of this type use timestamp9 leaving off the "WITH TIME ZONE" used with the regular TIMESTAMP type.
+
+Hmm... populating a timestamp9 column via JDBC with Timestamp.from(message.receivedAt()) compared to one with using "timestamp with time zone" -->
+
+    timestamp with time zone      |   timestamp9
+    ------------------------------|------------------------------------
+    2025-04-23 22:03:03.177013-04 | 2025-04-23 22:03:03.177013000 -0400
+
+    It seems like it's just padding the same number by 1000.
+
+Printing the numbers as jdk is running the Message creation code:
+    message.receivedAt() ==> 2025-04-24T02:03:03.177013083Z
+    message.receivedAt().getEpochSecond()    ==> 177013083
+    message.receivedAt().getNano()           ==> 1745460183
+
+
+
+See PersistenceManager.instantInvestigation
+
+nanoclock produced instant...
+Instant:        2025-04-24T22:08:02.454020250Z --> year-month-day-hours-minutes-seconds-nanoseconds
+    --> The last part of this is 9 digits
+toEpochMilli:   1745532482454
+    --> plug this into https://www.epochconverter.com/ --> number of milliseconds since epoch. Nanos are divided by 1 million so only the leading three digits (of a 9 digit number) are added as milliseconds. As the method name suggests its resolution is only ms.
+getEpochSecond: 1745532482    --> Just the number of seconds since the epoch.
+getNano:        454020250   --> the nanos that are added
+instant converted to timestamp...
+as timestamp time: 1745532482454
+as timestamp nanos: 454020250
+timestamp converted back to instant
+Instant:        2025-04-24T22:08:02.454020250Z --> year-month-day-hours-minutes-seconds-nanoseconds
+toEpochMilli:   1745532482454
+getEpochSecond: 1745532482
+getNano:        454020250
+
+Original instant equal to round tripped instant? true
+
+The complete timestamp expressed in nanoseconds would be:
+    1745532482454020150 (19 digits)
+    9223372036854775807 is the max positive value of a Java long.
+Checking and comparing the values while converting from Instant to Timestamp...looks good. Nothing getting dropped.
+
+It seems like the JDBC driver is truncating all but the leading three places of nanoseconds from the java.sql.Timestamp value when it writes the value to the column. This makes sense if the db's timestamp type limits resolution to microseconds.
+Also, weirdly, the timezone offset goes from two digits to four. For example, Eastern Daylight Savings Time it becomes -0400 instead of -04 when psql displays the column value.
+
+We wanted to get better than the thousandth of a second resolution of milliseconds (that means 0-999) but regular Instant/Timestamp stored in a Timestamp column in Postgres gets us another three places of resolution that seems to be equivalent to microseconds. Perhaps this is enough? It would eliminate the need to overcome the JDBC and display issues using the timestamp9 data type.
+
+Note: I am thinking/writing this on the train back from NYC and I'm super tired so totally possible I'm getting it all wrong.
+
+
+===== 2025-04-27 =====
+
+https://www.postgresql.org/docs/current/datatype-datetime.html confirms that the timestamp data type supports microseconds. So our observations were correct.
+
+This is enough for our purposes and removes the need for non-standard type extensions. Moving on...
+
+Thinking about where, in the pipeline, we write the incoming MO...
+We want to be able to associate the Message with the Script element that was used to process it.
+Likewise we want to associate the outgoing MT with the Script that generated it.
+So how about ...
+
+For each incoming Message:
+    - Rcvr writes the full Message with its UUID, the timestamp, and the rest. Before or after enqueuing?
+            CREATE TABLE brbl_logs.messages_mo (
+                id          UUID NOT NULL,
+                rcvd_at     TIMESTAMP WITH TIME ZONE NOT NULL,
+                _from       VARCHAR(15) NOT NULL,
+                _to         VARCHAR(15) NOT NULL,   --> how long are non-SMS (WhatsApp, FB Messenger, etc) identifiers?
+                _text       VARCHAR(2000) NOT NULL  --> should match the MT length
+            );
+    - Operator writes an abbreviated row with just the UUID of the Message, the Session UUID, and the UUID of the handling script.
+            CREATE TABLE brbl_logs.messages_mo_prcd (
+                id          UUID NOT NULL,
+                prcd_at     TIMESTAMP WITH TIME ZONE NOT NULL,
+                session_id  UUID NOT NULL,
+                script_id   UUID NOT NULL
+            );
+
+            To join the two, showing including messages that were received but not processed:
+            SELECT
+                rcvd.id, prcd.session_id, prcd.script_id, rcvd._text
+            FROM
+                brbl_logs.messages_mo AS rcvd
+            LEFT JOIN
+                brbl_logs.messages_mo_prcd AS prcd
+            ON rcvd.id = prcd.id;
+
+For each outgoing Message:
+    - Operator writes the full Message immediately after enqueuing it.
+
+    CREATE TABLE brbl_logs.messages_mt (
+        id          UUID NOT NULL,
+        sent_at     TIMESTAMP WITH TIME ZONE NOT NULL,
+        _from       VARCHAR(15) NOT NULL,
+        _to         VARCHAR(15) NOT NULL,   --> how long are non-SMS (WhatsApp, FB Messenger, etc) identifiers?
+        _text       VARCHAR(2000) NOT NULL,  --> should match the MO length
+        session_id  UUID NOT NULL,
+        script_id   UUID NOT NULL
+    );
+
+For each delivered Message acked by the 3rd party gateway:
+    - Sndr writes an abbreviated row with just the UUID and the delivery timestamp.
+
+    CREATE TABLE brbl_logs.messages_mt_dlvr (
+        id          UUID NOT NULL,
+        dlvr_at     TIMESTAMP WITH TIME ZONE NOT NULL
+    );
+
+===== 2025-04-29 ====
+Finished the insert methods for all four record types.
+
+In tests, inserting two records (brbl_logs.messages_mo and brbl_logs.messages_mo_prcd) appears to take a whopping 112 milliseconds.
+
+delete from brbl_logs.messages_mo;
+delete from brbl_logs.messages_mo_prcd;
+delete from brbl_logs.messages_mt;
+delete from brbl_logs.messages_mt_dlvr ;
+
+select prcd_at - rcvd_at from brbl_logs.messages_mo mos inner join brbl_logs.messages_mo_prcd prcd on mos.id = prcd.id;
+select dlvr_at - sent_at from brbl_logs.messages_mt mts inner join brbl_logs.messages_mt_dlvr dlvr on mts.id = dlvr.id;
+
+No doubt creating a brand new Connection object for each isn't helping to make this quick.
+
+===== 2025-04-29 ====
+
+Plugged in a c3p0 connection pool. This helps reduce the insert times especially if I initialize it before running the timed tests.
+The init call, by itself, took 117 ms to setup 5 connections.
+But subsequent calls to our fetchConnection method return in microseconds.
+
+The batch mode insert functions seem to be a good bit slower (5ms) than the single inserts.
+Is this because they are writing more data?
+Let's try removing the batch setup...helps a little.
+Looking at the times for the insert of the two records we'll do for each and every MO:
+    insertMO: b 2025-04-30T14:22:50.188750583Z a 2025-04-30T14:22:50.192991833Z: d PT0.00424125S
+        ~> 4.2 ms
+    insertProcessedMO: b 2025-04-30T14:22:50.194844917Z a 2025-04-30T14:22:50.195541667Z: d PT0.00069675S
+        ~> 0.6 ms
+And for MTs...
+    insertMT: b 2025-04-30T14:22:50.195807458Z a 2025-04-30T14:22:50.196264708Z: d PT0.00045725S
+        ~> 0.4 ms
+    insertDeliveredMT: b 2025-04-30T14:22:50.196432250Z a 2025-04-30T14:22:50.197066292Z: d PT0.000634042S
+        ~> 0.6 ms
+Okay, so not terrible anymore. To be fair, my testing is really not all that meaningful since it is unrealistically optimized (no other overhead from related application code, database running on localhost) and, at the same time, not ideal (no JVM warmup.) Its quite terrible even as seat-of-the-pants micro benchmarks go.
+
 

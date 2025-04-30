@@ -27,7 +27,7 @@ public class FileQueueProducer implements QueueProducer {
     }
 
     @Override
-    public void enqueue(Object event) {
+    public void enqueue(Message event) {
         Message mt = (Message)event;
         long receivedAt = NanoClock.systemUTC().nanos();
         try {

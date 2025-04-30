@@ -29,7 +29,7 @@ public class Burble {
 
             case "operator" -> Operator.main(args);
 
-            case "fakeoperator" -> FakeOperator.main(args);
+//            case "fakeoperator" -> FakeOperator.main(args);
 
             default -> LOG.error("Unrecognized program: {}", program);
 

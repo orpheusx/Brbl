@@ -1,6 +1,7 @@
 package com.enoughisasgoodasafeast.cli;
 
 
+import com.enoughisasgoodasafeast.Message;
 import com.enoughisasgoodasafeast.PlatformGateway;
 import com.enoughisasgoodasafeast.RecordingHandlerListener;
 import org.fusesource.jansi.AnsiConsole;
@@ -172,8 +173,11 @@ public class BrblCli {
             parent.out.print("Enter message text:");
             String msg = parent.getReader().readLine();
 
-            String structuredMsg = String.format("%s:%s:%s",
-                    currentUserPersona.phoneNumber, currentUserPersona.shortCode, msg);
+            Message structuredMsg = Message.newMO(
+                    currentUserPersona.phoneNumber,
+                    currentUserPersona.shortCode,
+                    msg);
+
             platformGateway.sendMoTraffic(structuredMsg);
 
             //... actually send the message as long it's not empty.

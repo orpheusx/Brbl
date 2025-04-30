@@ -1,17 +1,15 @@
 package com.enoughisasgoodasafeast;
 
+import com.enoughisasgoodasafeast.operator.PersistenceManager;
 import com.rabbitmq.client.*;
+import com.rabbitmq.client.Channel;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
-import org.slf4j.helpers.AbstractLogger;
 
 import java.io.IOException;
-import java.nio.charset.StandardCharsets;
 import java.util.Properties;
-import java.util.Queue;
 import java.util.concurrent.ArrayBlockingQueue;
 import java.util.concurrent.BlockingQueue;
-import java.util.concurrent.LinkedBlockingQueue;
 import java.util.concurrent.TimeoutException;
 
 import static com.enoughisasgoodasafeast.RabbitQueueFunctions.exchangeForQueueName;
@@ -30,7 +28,7 @@ public class RabbitQueueProducer implements QueueProducer {
     private final Connection moConnection;
     private final Channel channel;
 
-    private final ArrayBlockingQueue<Object> internalMessageBuffer // TODO <Object> --> <Message>
+    private final ArrayBlockingQueue<Message> internalMessageBuffer
             = new ArrayBlockingQueue<>(100); // Parameterize the size here
 
 
@@ -103,7 +101,7 @@ public class RabbitQueueProducer implements QueueProducer {
     }
 
     @Override
-    public void enqueue(Object event) throws IOException { //TODO let's please make this only take a Message
+    public void enqueue(Message event) throws IOException { //TODO let's please make this only take a Message
         boolean ok = internalMessageBuffer.offer(event);
         if (!ok) {
             LOG.error("Unable to add message to internalMessageBuffer: {}", event);
@@ -116,9 +114,9 @@ public class RabbitQueueProducer implements QueueProducer {
      */
     private class BrokerPublisher implements Runnable {
         Channel channel;
-        BlockingQueue<Object> queue;
+        BlockingQueue<Message> queue;
 
-        public BrokerPublisher(Channel channel, BlockingQueue<Object> queue) {
+        public BrokerPublisher(Channel channel, BlockingQueue<Message> queue) {
             this.channel = channel;
             this.queue = queue;
         }
@@ -127,7 +125,15 @@ public class RabbitQueueProducer implements QueueProducer {
         public void run() {
             while (true) {
                 try {
-                    enqueueToBroker(channel, queue.take());
+                    final Message taken = queue.take();
+                    enqueueToBroker(channel, taken);
+                    // insert log record
+                    final boolean insertOk = PersistenceManager.insertMO(taken);
+                    if (!insertOk) {
+                        // write to disk instead?
+                        LOG.error("Failed to record MO: {}", taken);
+                    }
+
                 } catch (InterruptedException e) {
                     Thread.currentThread().interrupt();
                 } catch (IOException e) {
@@ -137,15 +143,10 @@ public class RabbitQueueProducer implements QueueProducer {
         }
     }
 
-    private void enqueueToBroker(Channel channel, Object event) throws IOException {
-        byte[] payload = null;
-        switch(event) {
-            case String s -> payload = s.getBytes(StandardCharsets.UTF_8); // remove this
-            case Message m -> payload = m.toBytes();
-            default -> throw new IllegalArgumentException("Unsupported message type: " + event.getClass());
-        }
+    private void enqueueToBroker(Channel channel, Message message) throws IOException {
+        byte[] payload = message.toBytes();
         channel.basicPublish(this.queueName, this.routingKey, /*deliveryModeProps*/null, payload);
-        LOG.info(" [x] Enqueued msg '{}'", event);
+        LOG.info(" [x] Enqueued msg '{}'", message);
     }
 
 
@@ -153,18 +154,6 @@ public class RabbitQueueProducer implements QueueProducer {
     public void shutdown() throws IOException, TimeoutException {
         this.channel.close();
         moConnection.close();
-    }
-
-    // Test only
-    public static void main() throws IOException, TimeoutException {
-        QueueProducer rqp = RabbitQueueProducer.createQueueProducer("queue.properties");
-        long timestamp = System.currentTimeMillis();
-
-        rqp.enqueue("one " + timestamp);
-        rqp.enqueue("two " + timestamp);
-        rqp.enqueue("three " + timestamp);
-
-        LOG.info("Messages sent. Program complete.");
     }
 
 }

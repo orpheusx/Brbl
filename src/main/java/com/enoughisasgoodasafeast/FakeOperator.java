@@ -48,7 +48,7 @@ public class FakeOperator implements MessageProcessor {
     @Override
     public boolean process(Message message) {
         LOG.info("Received message: {}", message);
-        return producerMTHandler.handle(message.text());
+        return producerMTHandler.handle(message);
     }
 
     public static class QueueProducerMTHandler implements MTHandler {
@@ -60,27 +60,26 @@ public class FakeOperator implements MessageProcessor {
         }
 
         @Override
-        public boolean handle(String payload) {
+        public boolean handle(Message payload) {
             // FIXME implement a meaningful return value or change return type.
             try {
                 LOG.info("Processing message, '{}'", payload);
-
-                if(payload.contains("hello")) {
-
-                    // Expects a number followed by a space followed by "hello"
-                    String[] inputs = payload.split(TEST_SPACE_TOKEN,2);
-                    if (inputs.length != 2) {
-                        LOG.error("Unexpected input: {}", payload);
-                        return false;
-                    }
-
-                    LOG.info("Process {} --> {}", inputs[0], inputs[1]);
-
-                    String sndText = inputs[0] + " goodbye";
-                    producer.enqueue(sndText);
-                } else {
-                    producer.enqueue(payload);
-                }
+                //                if(payload.contains("hello")) {
+                //
+                //                    // Expects a number followed by a space followed by "hello"
+                //                    String[] inputs = payload.split(TEST_SPACE_TOKEN,2);
+                //                    if (inputs.length != 2) {
+                //                        LOG.error("Unexpected input: {}", payload);
+                //                        return false;
+                //                    }
+                //
+                //                    LOG.info("Process {} --> {}", inputs[0], inputs[1]);
+                //
+                //                    Message sndText = inputs[0] + " goodbye";
+                //                    producer.enqueue(sndText);
+                //                } else {
+                producer.enqueue(payload);
+                //                }
             } catch (IOException e) {
                 throw new RuntimeException(e);
             }

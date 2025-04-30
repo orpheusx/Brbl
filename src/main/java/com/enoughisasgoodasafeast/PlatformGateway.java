@@ -196,7 +196,7 @@ public class PlatformGateway extends WebService {
         }
     }
 
-    public void sendMoTraffic(String message) {
+    public void sendMoTraffic(Message message) {
         this.client.handle(message);
     }
 
@@ -210,15 +210,15 @@ public class PlatformGateway extends WebService {
          PlatformGateway platformGateway = new PlatformGateway("http://192.168.1.155:4242" + BRBL_ENQUEUE_ENDPOINT);
          platformGateway.init();
 
-         String[] moTraffic = {
-                 "17817299468:1234:1 hello",
-                 "17817299469:1234:2 hi",
-                 "17817299470:1234:3 heya",
-                 "17817299471:1234:4 hey there",
-                 "17817299472:1234:5 greetings"
+         Message[] moTraffic = {
+                 Message.newMO("17817299468","1234","1 hello"),
+                 Message.newMO("17817299469","1234","2 hi"),
+                 Message.newMO("17817299470","1234","3 hea"),
+                 Message.newMO("17817299471","1234","4 hey here"),
+                 Message.newMO("17817299472","1234","5 greetings")
          };
 
-         for (String mo : moTraffic) {
+         for (Message mo : moTraffic) {
              platformGateway.sendMoTraffic(mo);
          }
 

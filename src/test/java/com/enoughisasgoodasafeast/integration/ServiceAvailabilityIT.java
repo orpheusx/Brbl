@@ -1,9 +1,6 @@
 package com.enoughisasgoodasafeast.integration;
 
-import com.enoughisasgoodasafeast.ConfigLoader;
-import com.enoughisasgoodasafeast.GatewaySimStrategy;
-import com.enoughisasgoodasafeast.PlatformGateway;
-import com.enoughisasgoodasafeast.SharedConstants;
+import com.enoughisasgoodasafeast.*;
 import org.junit.jupiter.api.AfterAll;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeAll;
@@ -146,15 +143,15 @@ public class ServiceAvailabilityIT {
         PlatformGateway gateway = new PlatformGateway(effectiveRcvrUrl);
         gateway.init();
 
-        final String[] messages1 = {
-                "21 hello",
-                "22 hello",
-                "23 hello",
-                "24 hello",
-                "25 hello"
+        final Message[] messages1 = {
+                Message.newMO("1234567890", "01234", "21 hello"),
+                Message.newMO("1234567890", "01234", "22 hello"),
+                Message.newMO("1234567890", "01234", "23 hello"),
+                Message.newMO("1234567890", "01234", "24 hello"),
+                Message.newMO("1234567890", "01234", "25 hello")
         };
 
-        for (String message : messages1) {
+        for (Message message : messages1) {
             gateway.sendMoTraffic(message);
         }
 
@@ -174,15 +171,15 @@ public class ServiceAvailabilityIT {
         gateway = new PlatformGateway(effectiveRcvrUrl);
         gateway.init();
 
-        final String[] messages2 = {
-                "26 hello",
-                "27 hello",
-                "28 hello",
-                "29 hello",
-                "30 hello"
+        final Message[] messages2 = {
+                Message.newMO("1234567890", "01234", "26 hello"),
+                Message.newMO("1234567890", "01234", "27 hello"),
+                Message.newMO("1234567890", "01234", "28 hello"),
+                Message.newMO("1234567890", "01234", "29 hello"),
+                Message.newMO("1234567890", "01234", "30 hello")
         };
 
-        for (String message : messages2) {
+        for (Message message : messages2) {
             gateway.sendMoTraffic(message);
         }
 
@@ -201,8 +198,8 @@ public class ServiceAvailabilityIT {
         // -------------------------------------- Evaluate results -----------------------------------------------------//
         int resultCheckAttempts = 0;
 
-        final String[] sentMessages = Stream.concat(Arrays.stream(messages1), Arrays.stream(messages2))
-                .toArray(String[]::new);
+        final Message[] sentMessages = (Message[]) Stream.concat(Arrays.stream(messages1), Arrays.stream(messages2))
+                .toArray();
 
         // Poll for expected number of responses
         List<String> responses = gateway.recordingHandler.retrieve();
@@ -259,10 +256,14 @@ public class ServiceAvailabilityIT {
         PlatformGateway gateway = new PlatformGateway(effectiveRcvrUrl, new GatewaySimStrategy(1));
         gateway.init();
 
-        final String[] messages1 = {
-                "21 hello", "22 hello", "23 hello", "24 hello", "25 hello"
+        final Message[] messages1 = {
+                Message.newMO("1234567890", "01234", "21 hello"),
+                Message.newMO("1234567890", "01234", "22 hello"),
+                Message.newMO("1234567890", "01234", "23 hello"),
+                Message.newMO("1234567890", "01234", "24 hello"),
+                Message.newMO("1234567890", "01234", "25 hello")
         };
-        for (String message : messages1) {
+        for (Message message : messages1) {
             gateway.sendMoTraffic(message);
         }
 
@@ -276,10 +277,14 @@ public class ServiceAvailabilityIT {
         // Make the gateway unavailable
         gateway.filterTrafficByStrategy(true);
 
-        final String[] messages2 = {
-                "26 hello", "27 hello", "28 hello", "29 hello", "30 hello"
+        final Message[] messages2 = {
+                Message.newMO("1234567890", "01234", "26 hello"),
+                Message.newMO("1234567890", "01234", "27 hello"),
+                Message.newMO("1234567890", "01234", "28 hello"),
+                Message.newMO("1234567890", "01234", "29 hello"),
+                Message.newMO("1234567890", "01234", "30 hello")
         };
-        for (String message : messages2) {
+        for (Message message : messages2) {
             gateway.sendMoTraffic(message);
         } // We expect some errors in the Sndr log output, but hopefully it will recover.
 
@@ -294,11 +299,15 @@ public class ServiceAvailabilityIT {
         gateway = new PlatformGateway(effectiveRcvrUrl, new GatewaySimStrategy(3));
         gateway.init();
         gateway.filterTrafficByStrategy(true); // This is rather unwieldy...
-        final String[] messages3 = {
-                "31 hello", "32 hello", "33 hello", "34 hello", "35 hello"
+        final Message[] messages3 = {
+                Message.newMO("1234567890", "01234", "31 hello"),
+                Message.newMO("1234567890", "01234", "32 hello"),
+                Message.newMO("1234567890", "01234", "33 hello"),
+                Message.newMO("1234567890", "01234", "34 hello"),
+                Message.newMO("1234567890", "01234", "35 hello")
         };
         // resend
-        for (String message : messages3) {
+        for (Message message : messages3) {
             gateway.sendMoTraffic(message);
         }
         // Check the ordering and performed transformation
@@ -311,11 +320,15 @@ public class ServiceAvailabilityIT {
         gateway = new PlatformGateway(effectiveRcvrUrl, new GatewaySimStrategy(5));
         gateway.init();
         gateway.filterTrafficByStrategy(true); // This is rather unwieldy...
-        final String[] messages4 = {
-                "36 hello", "37 hello", "38 hello", "39 hello", "40 hello"
+        final Message[] messages4 = {
+                Message.newMO("1234567890", "01234","36 hello"),
+                Message.newMO("1234567890", "01234","37 hello"),
+                Message.newMO("1234567890", "01234","38 hello"),
+                Message.newMO("1234567890", "01234","39 hello"),
+                Message.newMO("1234567890", "01234","40 hello")
         };
         // resend
-        for (String message : messages4) {
+        for (Message message : messages4) {
             gateway.sendMoTraffic(message);
         }
         // Check the ordering and performed transformation
@@ -326,17 +339,17 @@ public class ServiceAvailabilityIT {
     }
 
     private void sendMessagesAndEvaluateResults(PlatformGateway gateway) {
-        final String[] messages = {
+        final Message[] messages = {
 //                "21 hello", "22 hello", "23 hello", "24 hello", "25 hello",
 //                "26 hello", "27 hello", "28 hello", "29 hello", "30 hello",
-                "17817299468:1234:1 hello",
-                "17817299469:1234:2 hi",
-                "17817299470:1234:3 heya",
-                "17817299471:1234:4 hey there",
-                "17817299472:1234:5 greetings"
+                Message.newMO("17817299468", "1234","1 hello"),
+                Message.newMO("17817299469", "1234","2 hi"),
+                Message.newMO("17817299470", "1234","3 heya"),
+                Message.newMO("17817299471", "1234","4 hey there"),
+                Message.newMO("17817299472", "1234","5 greetings")
         };
 
-        for (String message : messages) {
+        for (Message message : messages) {
             gateway.sendMoTraffic(message);
         }
 
@@ -371,7 +384,7 @@ public class ServiceAvailabilityIT {
 //    }
 
     // TODO move this code into the above version and update callers
-    private void evaluateSentAndReceived(String[] sentMessages, List<String> receivedMessages) {
+    private void evaluateSentAndReceived(Message[] sentMessages, List<String> receivedMessages) {
         assertEquals(sentMessages.length, receivedMessages.size());
 //        for (int i = 0; i < sentMessages.length; i++) {
 //            String[] sentParts = sentMessages[i].split(SharedConstants.TEST_SPACE_TOKEN, 2);

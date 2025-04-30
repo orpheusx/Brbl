@@ -3,10 +3,14 @@ package com.enoughisasgoodasafeast.operator;
 import com.enoughisasgoodasafeast.Message;
 import com.enoughisasgoodasafeast.QueueProducer;
 import io.jenetics.util.NanoClock;
+import org.postgresql.PGConnection;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import java.io.IOException;
+import java.sql.Connection;
+import java.sql.DriverManager;
+import java.sql.SQLException;
 import java.util.*;
 
 /**
@@ -39,8 +43,25 @@ public class Session {
 
     List<Script> evaluatedScripts = new ArrayList<>();
 
-    // Db manager goes here...
-    // ...
+    // Db manager goes here
+
+//    public static void main(String[] args) {
+//        String url = "jdbc:postgresql://localhost" + "/brbl_dev";
+//        Properties props = new Properties();
+//        props.setProperty("user", "mark");
+//        props.setProperty("password", "mark");
+//        props.setProperty("ssl", "false");
+//        props.setProperty("preparedStatementCacheQueries", "10");
+//        try {
+//            Connection conn = DriverManager.getConnection(url, props);
+//            final boolean valid = conn.isValid(2000);
+//            final PGConnection extendedConn = conn.unwrap(PGConnection.class);//preparedStatementCacheQueries(10);
+//            extendedConn.escapeIdentifier("");
+//            LOG.info("connection is valid: {}", valid);
+//        } catch (SQLException e) {
+//            throw new RuntimeException(e);
+//        }
+//    }
 
     public Session(UUID id, Script currentScript, User user, QueueProducer producer) {
         startTimeNanos = NanoClock.systemUTC().nanos();

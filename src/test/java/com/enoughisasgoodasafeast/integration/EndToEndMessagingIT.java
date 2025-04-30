@@ -1,5 +1,6 @@
 package com.enoughisasgoodasafeast.integration;
 
+import com.enoughisasgoodasafeast.Message;
 import com.enoughisasgoodasafeast.PlatformGateway;
 import org.junit.jupiter.api.AfterAll;
 import org.junit.jupiter.api.BeforeAll;
@@ -70,20 +71,20 @@ public class EndToEndMessagingIT {
             try {
                 gateway.init();
 
-                final String[] messages = {
-                        "17817299468:1234:21 hello",
-                        "17817299468:1234:22 hello",
-                        "17817299468:1234:23 hello",
-                        "17817299468:1234:24 hello",
-                        "17817299468:1234:25 hello",
-                        "17817299468:1234:26 hello",
-                        "17817299468:1234:27 hello",
-                        "17817299468:1234:28 hello",
-                        "17817299468:1234:29 hello",
-                        "17817299468:1234:30 hello",
+                final Message[] messages = {
+                        Message.newMO("17817299468", "1234", "21 hello"),
+                        Message.newMO("17817299468", "1234", "22 hello"),
+                        Message.newMO("17817299468", "1234", "23 hello"),
+                        Message.newMO("17817299468", "1234", "24 hello"),
+                        Message.newMO("17817299468", "1234", "25 hello"),
+                        Message.newMO("17817299468", "1234", "26 hello"),
+                        Message.newMO("17817299468", "1234", "27 hello"),
+                        Message.newMO("17817299468", "1234", "28 hello"),
+                        Message.newMO("17817299468", "1234", "29 hello"),
+                        Message.newMO("17817299468", "1234", "30 hello"),
                 };
 
-                for (String message : messages) {
+                for (Message message : messages) {
                     gateway.sendMoTraffic(message);
                 }
 
@@ -102,10 +103,11 @@ public class EndToEndMessagingIT {
                 // As well, the content of the MTs should
                 for (int i = 0; i < messages.length; i++) {
                     // e.g. "17817299468:1234:21 hello"
-                    String[] inputMO = messages[i].split(":", 3);
-                    String fromMO = inputMO[0];
-                    String toMO = inputMO[1];
-                    String textMO = inputMO[2];
+                    // String[] inputMO = messages[i].split(":", 3);
+                    Message mo = messages[i];
+                    String fromMO = mo.from();  //inputMO[0];
+                    String toMO = mo.to();      //inputMO[1];
+                    String textMO = mo.text();   //inputMO[2];
 
                     // e.g. "Message[id=8829f0f0-9f67-4247-b4c5-72e8fef9813e, received=2025-04-03T22:40:51.754433625Z, type=MT, platform=BRBL, \
                     // from=1234, to=17817299468, text=PrintWithPrefix: 21 hello]"

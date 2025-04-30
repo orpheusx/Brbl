@@ -3,6 +3,8 @@
 +----------------+
 0) placeholder receiver/enqueue and dequeue/sender
 1) core message processing (ordered, robust error handling for common cases like multiple responses)
+1.1) write-only persistence for messages (MOs received/enqueued, MTs delivered).
+    - size of timestamps (microseconds enough or do we need nanos?)... actually microseconds is fine.
 2) persistence for scripts, sessions, users.
 3) caching
 3.1) profiling memory and performance

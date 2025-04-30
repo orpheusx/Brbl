@@ -8,7 +8,7 @@ import java.util.concurrent.TimeoutException;
  */
 public interface QueueProducer {
 
-    public void enqueue(Object event) throws IOException;
+    public void enqueue(Message event) throws IOException;
 
     public void shutdown() throws IOException, TimeoutException;
 

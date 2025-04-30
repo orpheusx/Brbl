@@ -37,7 +37,12 @@ public class MTConsumer extends DefaultConsumer {
     public void handleDelivery(String consumerTag, Envelope envelope, AMQP.BasicProperties properties, byte[] body) throws IOException {
         // super.handleDelivery(consumerTag, envelope, properties, body);
         long deliveryTag = envelope.getDeliveryTag();
-        String message = new String(body, StandardCharsets.UTF_8);
+        Message message = null;  //new String(body, StandardCharsets.UTF_8);
+        try {
+            message = Message.fromBytes(body);
+        } catch (ClassNotFoundException e) {
+            throw new RuntimeException(e);
+        }
         LOG.info(" [x] Receiving on {}: '{}' (consumerTag: {})", envelope.getRoutingKey(), message, consumerTag);
 
         Integer sessionID = 1; // TODO figure out how we express session identifiers.
@@ -48,7 +53,7 @@ public class MTConsumer extends DefaultConsumer {
          * 2) the message is not the first message.
          */
 
-        String[] messageParts = message.split(SharedConstants.TEST_SPACE_TOKEN, 2);
+        String[] messageParts = message.text().split(SharedConstants.TEST_SPACE_TOKEN, 2);
         Integer seqId = Integer.valueOf(messageParts[0]); // 1
         SessionState latest = states.get(sessionID);
         if (latest != null) {

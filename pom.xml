@@ -19,11 +19,13 @@
 
     <dependencies>
 
+        <!-- https://mvnrepository.com/artifact/io.helidon.webserver/helidon-webserver -->
         <dependency>
             <groupId>io.helidon.webserver</groupId>
             <artifactId>helidon-webserver</artifactId>
             <!-- version controlled by helidon-dependencies below -->
         </dependency>
+
         <dependency>
             <groupId>io.helidon.webserver</groupId>
             <artifactId>helidon-webserver-http2</artifactId>
@@ -33,13 +35,13 @@
         <dependency>
             <groupId>io.helidon.webclient</groupId>
             <artifactId>helidon-webclient</artifactId>
-            <!-- version controlled by helidon-dependencies below? -->
+            <!-- version controlled by helidon-dependencies below -->
         </dependency>
 
         <dependency>
             <groupId>io.helidon.webclient</groupId>
             <artifactId>helidon-webclient-http2</artifactId>
-            <!-- version controlled by helidon-dependencies below? -->
+            <!-- version controlled by helidon-dependencies below -->
         </dependency>
 
         <!-- https://mvnrepository.com/artifact/com.rabbitmq/amqp-client -->
@@ -100,10 +102,25 @@
         <!--            <version>2.0.16</version>-->
         <!--        </dependency>-->
 
+        <!-- https://mvnrepository.com/artifact/com.github.ben-manes.caffeine/caffeine -->
         <dependency>
             <groupId>com.github.ben-manes.caffeine</groupId>
             <artifactId>caffeine</artifactId>
             <version>3.2.0</version>
+        </dependency>
+
+        <!-- https://mvnrepository.com/artifact/org.postgresql/postgresql -->
+        <dependency>
+            <groupId>org.postgresql</groupId>
+            <artifactId>postgresql</artifactId>
+            <version>42.7.5</version>
+        </dependency>
+
+        <!-- https://mvnrepository.com/artifact/com.mchange/c3p0 -->
+        <dependency>
+            <groupId>com.mchange</groupId>
+            <artifactId>c3p0</artifactId>
+            <version>0.11.0</version>
         </dependency>
 
         <dependency>
@@ -168,7 +185,7 @@
             <dependency>
                 <groupId>io.helidon</groupId>
                 <artifactId>helidon-dependencies</artifactId>
-                <version>4.1.4</version>
+                <version>4.1.4</version> <!-- TODO latest version is 4.2.1 -->
                 <type>pom</type>
                 <scope>import</scope>
             </dependency>

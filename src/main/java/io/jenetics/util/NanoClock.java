@@ -40,7 +40,7 @@ public final class NanoClock extends Clock implements Serializable {
     @Serial
     private static final long serialVersionUID = 1L;
 
-    private static final long EPOCH_NANOS = System.currentTimeMillis()*1_000_000;
+    private static final long EPOCH_NANOS = System.currentTimeMillis() * 1_000_000;
     private static final long NANO_START = System.nanoTime();
     private static final long OFFSET_NANOS = EPOCH_NANOS - NANO_START;
 
@@ -98,7 +98,7 @@ public final class NanoClock extends Clock implements Serializable {
     @Override
     public Instant instant() {
         final long now = nanos();
-        return Instant.ofEpochSecond(now/NANOS_PER_SECOND, now%NANOS_PER_SECOND);
+        return Instant.ofEpochSecond(now / NANOS_PER_SECOND, now % NANOS_PER_SECOND);
     }
 
     @Override
