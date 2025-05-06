@@ -2,6 +2,8 @@ package com.enoughisasgoodasafeast.integration;
 
 import com.enoughisasgoodasafeast.*;
 import com.enoughisasgoodasafeast.operator.Operator;
+import com.enoughisasgoodasafeast.operator.PersistenceManager.PersistenceManagerException;
+import com.enoughisasgoodasafeast.operator.TestingPersistenceManager;
 import org.junit.jupiter.api.*;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -68,10 +70,10 @@ public class OperatorMessageFlowIT {
     }
 
     @BeforeEach
-    void setUp() throws IOException, TimeoutException {
+    void setUp() throws IOException, TimeoutException, PersistenceManagerException {
         simulatedMOSource = RabbitQueueProducer.createQueueProducer(testProps);
         operatorProducer = new InMemoryQueueProducer(); // sink for Operator output
-        operator = new Operator(null, operatorProducer);
+        operator = new Operator(null, operatorProducer, new TestingPersistenceManager());
         operator.init(testProps);
     }
 

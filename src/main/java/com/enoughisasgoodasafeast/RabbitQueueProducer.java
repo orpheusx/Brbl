@@ -1,6 +1,5 @@
 package com.enoughisasgoodasafeast;
 
-import com.enoughisasgoodasafeast.operator.PersistenceManager;
 import com.rabbitmq.client.*;
 import com.rabbitmq.client.Channel;
 import org.slf4j.Logger;
@@ -127,17 +126,12 @@ public class RabbitQueueProducer implements QueueProducer {
                 try {
                     final Message taken = queue.take();
                     enqueueToBroker(channel, taken);
-                    // insert log record
-                    final boolean insertOk = PersistenceManager.insertMO(taken);
-                    if (!insertOk) {
-                        // write to disk instead?
-                        LOG.error("Failed to record MO: {}", taken);
-                    }
 
                 } catch (InterruptedException e) {
+                    LOG.error("BrokerPublisher thread interrupted!", e);
                     Thread.currentThread().interrupt();
                 } catch (IOException e) {
-                    LOG.error("Error converting Message to byte array");
+                    LOG.error("Error enqueuing Message", e);
                 }
             }
         }

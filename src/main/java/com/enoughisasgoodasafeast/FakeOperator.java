@@ -1,6 +1,7 @@
 package com.enoughisasgoodasafeast;
 
 import com.enoughisasgoodasafeast.operator.MessageProcessor;
+import com.enoughisasgoodasafeast.operator.Session;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -47,8 +48,14 @@ public class FakeOperator implements MessageProcessor {
 
     @Override
     public boolean process(Message message) {
-        LOG.info("Received message: {}", message);
+        LOG.info("Processed {}", message);
         return producerMTHandler.handle(message);
+    }
+
+    @Override
+    public boolean log(Message message) {
+        LOG.info("Logged {}", message);
+        return false;
     }
 
     public static class QueueProducerMTHandler implements MTHandler {

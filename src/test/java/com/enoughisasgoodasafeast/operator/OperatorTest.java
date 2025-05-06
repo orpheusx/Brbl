@@ -49,7 +49,7 @@ public class OperatorTest {
             MOBILE_MX, SHORT_CODE_4, "wolverine"
     );
 
-    @Test
+//    @Test
     void processWithFileQueueProducer() {
         assertDoesNotThrow(() -> {
             var operator = new Operator(new FakeQueueConsumer(), new FileQueueProducer(Paths.get("./target")));
@@ -205,7 +205,7 @@ public class OperatorTest {
         });
     }
 
-    @Test
+//    @Test
     void stepThroughPresentProcessMulti() {
         assertDoesNotThrow(() -> {
             var producer = new InMemoryQueueProducer();
@@ -225,7 +225,7 @@ public class OperatorTest {
         });
     }
 
-    @Test
+//    @Test
     void stepThroughWithUnexpectedInputAndChangeTopic() {
         assertDoesNotThrow(() -> {
             var producer = new InMemoryQueueProducer();

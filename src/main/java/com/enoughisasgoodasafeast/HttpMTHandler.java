@@ -62,8 +62,9 @@ public class HttpMTHandler implements MTHandler {
     public boolean handle(Message payload) {
         LOG.info("Sending message, '{}'", payload);
 
+        String messageAsString = String.format("%s:%s:%s", payload.from(), payload.to(), payload.text());
         // FIXME need more robust error handling here...including retry logic.
-        ClientResponseTyped<String> res = client.post().submit(payload, String.class);
+        ClientResponseTyped<String> res = client.post().submit(messageAsString, String.class);
         LOG.info("Send response {}: {}", res.status(), res.entity());
         Status status = res.status();
         if (status.family() != SUCCESSFUL) {

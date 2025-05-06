@@ -3,14 +3,10 @@ package com.enoughisasgoodasafeast.operator;
 import com.enoughisasgoodasafeast.Message;
 import com.enoughisasgoodasafeast.QueueProducer;
 import io.jenetics.util.NanoClock;
-import org.postgresql.PGConnection;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import java.io.IOException;
-import java.sql.Connection;
-import java.sql.DriverManager;
-import java.sql.SQLException;
 import java.util.*;
 
 /**
@@ -26,6 +22,7 @@ public class Session {
     final UUID id;
     final User user;
     final QueueProducer producer;
+    final PersistenceManager persistenceManager;
 
     Script currentScript;
 
@@ -63,12 +60,13 @@ public class Session {
 //        }
 //    }
 
-    public Session(UUID id, Script currentScript, User user, QueueProducer producer) {
+    public Session(UUID id, Script currentScript, User user, QueueProducer producer, PersistenceManager persistenceManager) {
         startTimeNanos = NanoClock.systemUTC().nanos();
         this.id = Objects.requireNonNull(id);
         this.currentScript = Objects.requireNonNull(currentScript);
         this.user = Objects.requireNonNull(user);
         this.producer = Objects.requireNonNull(producer);
+        this.persistenceManager = persistenceManager;
         LOG.info("Created Session {} for User {}", id, user.id());
     }
 
@@ -78,10 +76,13 @@ public class Session {
 
     public void flushOutput() throws IOException {
         int numInBuffer = outputBuffer.size();
+        LOG.info("flushOutput: outputBuffer size = {}", numInBuffer);
         for (int i = 0; i < numInBuffer; i++) {
             Message mtMessage = outputBuffer.poll();
             producer.enqueue(mtMessage);
+            persistenceManager.insertMT(mtMessage, this);
         }
+
         outputBuffer.clear();
 
         inputs.forEach(inputHistory::addLast);

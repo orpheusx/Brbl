@@ -10,13 +10,13 @@ import java.util.concurrent.TimeoutException;
 
 /**
  * Rather than building separate binaries for each of the main programs (and likewise building a separate container for
- * each of them) we'll try using this dispatching program that can launch any of them with an overridable arg.
+ * each of them) we'll try using this dispatching program that can launch any of them with an overrideable arg.
  */
 public class Burble {
 
     private static final Logger LOG = LoggerFactory.getLogger(Burble.class);
 
-    public static void main(String[] args) throws InterruptedException, IOException, TimeoutException {
+    public static void main(String[] args) throws Exception {
         final String program = args[0];
         final String[] pargs = Arrays.stream(args, 1, args.length).toArray(String[]::new);
 

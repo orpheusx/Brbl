@@ -207,13 +207,16 @@ public class PlatformGateway extends WebService {
     }
 
      public static void main(String[] args) throws IOException, InterruptedException {
+        LOG.info("Starting PlatformGateway...");
          PlatformGateway platformGateway = new PlatformGateway("http://192.168.1.155:4242" + BRBL_ENQUEUE_ENDPOINT);
+         LOG.info("PlatformGateway constructor called.");
          platformGateway.init();
+         LOG.info("PlatformGateway init called.");
 
          Message[] moTraffic = {
                  Message.newMO("17817299468","1234","1 hello"),
                  Message.newMO("17817299469","1234","2 hi"),
-                 Message.newMO("17817299470","1234","3 hea"),
+                 Message.newMO("17817299470","1234","3 heya"),
                  Message.newMO("17817299471","1234","4 hey here"),
                  Message.newMO("17817299472","1234","5 greetings")
          };

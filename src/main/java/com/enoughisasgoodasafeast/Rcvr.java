@@ -1,5 +1,7 @@
 package com.enoughisasgoodasafeast;
 
+import com.enoughisasgoodasafeast.operator.PersistenceManager;
+import com.enoughisasgoodasafeast.operator.PostgresPersistenceManager;
 import com.enoughisasgoodasafeast.operator.Platform;
 import io.helidon.http.*;
 import io.helidon.webserver.WebServer;
@@ -26,19 +28,13 @@ public class Rcvr extends WebService {
 
     private static final Logger LOG = LoggerFactory.getLogger(Rcvr.class);
 
-    public void init() {
+    public void init(Properties properties) throws IOException, TimeoutException, PersistenceManager.PersistenceManagerException {
         LOG.info("Initializing RCVR");
 
-        QueueProducer queueProducer;
-        int webServerPort;
-        try {
-            final Properties properties = ConfigLoader.readConfig("rcvr.properties");
-            queueProducer = RabbitQueueProducer.createQueueProducer(properties);
-            webServerPort = Integer.parseInt(properties.getProperty("webserver.listener.port"));
-            LOG.info("Listening on port {}", webServerPort);
-        } catch (IOException | TimeoutException e) {
-            throw new RuntimeException(e);
-        }
+        QueueProducer queueProducer = RabbitQueueProducer.createQueueProducer(properties);
+        PersistenceManager persistenceManager = PostgresPersistenceManager.createPersistenceManager(properties);
+        int webServerPort = Integer.parseInt(properties.getProperty("webserver.listener.port"));
+        LOG.info("Listening on port {}", webServerPort);
 
         WebServer.builder()
                 .port(webServerPort)
@@ -50,11 +46,7 @@ public class Rcvr extends WebService {
                 .routing(router -> {
                             // Supported endpoints:
                             router.get(HEALTH_ENDPOINT, new HealthCheckHandler());
-                            //router.post(ENQUEUE_ENDPOINT, new EnqueueMessageHandler(queueProducer));
-                            router.post(BRBL_ENQUEUE_ENDPOINT, new BrblMessageHandler(queueProducer));
-                            // Some test only endpoints:
-                            //router.get("/foo", new HowdyTestResponseHandler());
-                            //router.post("/hello", new GoodbyeTestResponseHandler(queueProducer));
+                            router.post(BRBL_ENQUEUE_ENDPOINT, new BrblMessageHandler(queueProducer, persistenceManager));
                         }
                 )
                 .build()
@@ -72,7 +64,7 @@ public class Rcvr extends WebService {
 
     /**
      * Only address the functionality of the Rcvr itself, not the target queuing system.
-     * So we
+     * FIXME Helidon MP includes /health/live, /health/ready, and /health/started endpoints. We should probably just use those.
      */
     private static class HealthCheckHandler extends BaseHandler {
 
@@ -87,51 +79,45 @@ public class Rcvr extends WebService {
         }
     }
 
-    /**
-     * FIXME Add metrics here
-     */
-    //private static class EnqueueMessageHandler extends BaseHandler {
-    //
-    //    QueueProducer queueProducer;
-    //
-    //    public EnqueueMessageHandler(QueueProducer queueProducer) {
-    //        LOG.info("Setup EnqueueMessageHandler");
-    //        this.queueProducer = queueProducer;
-    //    }
-    //
-    //    public void handle(ServerRequest req, ServerResponse res) throws Exception {
-    //        super.handle(req, res);
-    //        Message rcvText = req.content().as(String.class);
-    //        // TODO produce an Message instead of just the String
-    //        queueProducer.enqueue(rcvText); // TODO catch exceptions and persist the incoming message in a temp store?
-    //
-    //        res.status(OK_200);
-    //        res.send("OK");
-    //        LOG.info("/enqueue: request content: {}", rcvText);
-    //    }
-    //}
-
     private static class BrblMessageHandler extends BaseHandler {
 
         QueueProducer queueProducer;
+        PersistenceManager persistenceManager;
 
-        public BrblMessageHandler(QueueProducer queueProducer) {
+        public BrblMessageHandler(QueueProducer queueProducer, PersistenceManager persistenceManager) {
             LOG.info("Setup BrblMessageHandler");
             this.queueProducer = queueProducer;
+            this.persistenceManager = persistenceManager;
         }
 
         public void handle(ServerRequest req, ServerResponse res) throws Exception {
             super.handle(req, res);
-            LOG.info("{} requested", BRBL_ENQUEUE_ENDPOINT);
+            LOG.info("{} requested", BRBL_ENQUEUE_ENDPOINT); // make debug
             String rcvPayload = req.content().as(String.class); // write this to a log?
 
-            Message moMessage = marshall(rcvPayload);
-            // TODO write message to log file
-            queueProducer.enqueue(moMessage);
+            Message moMessage = null;
+            try {
+                moMessage = marshall(rcvPayload);
+                LOG.info("{} request content: {}", BRBL_ENQUEUE_ENDPOINT, moMessage); // make debug
+
+                queueProducer.enqueue(moMessage);
+
+                boolean isInsertOk = persistenceManager.insertMO(moMessage);
+                if (!isInsertOk) {
+                    // TODO increment a database specific error counter metric in Prometheus?
+                    LOG.error("Failed to log enqueued message, {}", moMessage);
+                }
+
+            } catch (IOException e) {
+                LOG.error("Error handling message: {}", rcvPayload);
+                LOG.error("Cause:", e);
+            }
+            /*finally {
+                // TODO increment a queue specific error counter metric in Prometheus?
+            }*/
 
             res.status(OK_200);
             res.send("OK"); // Is this bit needed?
-            LOG.info("{} request content: {}", BRBL_ENQUEUE_ENDPOINT, moMessage);
         }
 
         public Message marshall(String payload) {
@@ -140,58 +126,9 @@ public class Rcvr extends WebService {
         }
     }
 
-
-//    private static class HowdyTestResponseHandler extends BaseHandler {
-//        static final String contentStr = "howdy\n";
-//        static final byte[] content = contentStr.getBytes();
-//        static final int contentLen = content.length;
-//
-//        @Override
-//        public void handle(ServerRequest req, ServerResponse res) throws Exception {
-//            super.handle(req, res);
-//            res.header(HeaderValues.create(HeaderNames.CONTENT_LENGTH, contentLen));
-//            res.status(OK_200);
-//            res.send(content);
-//            LOG.info(contentStr);
-//        }
-//    }
-
-    // FIXME This should only be temporary. Remove ASAP.
-//    private static class GoodbyeTestResponseHandler extends BaseHandler {
-//
-//        QueueProducer queueProducer;
-//
-//        public GoodbyeTestResponseHandler(QueueProducer queueProducer) {
-//            LOG.info("Setup GoodbyeTestResponseHandler");
-//            this.queueProducer = queueProducer;
-//        }
-//
-//        public void handle(ServerRequest req, ServerResponse res) throws Exception {
-//            super.handle(req, res);
-//            LOG.info("/hello requested");
-//            String rcvText = req.content().as(String.class);
-//
-//            // Expects a number followed by a space followed by "hello"
-//            String[] inputs = rcvText.split(" ", 2);
-//            if (inputs.length != 2) {
-//                LOG.error("Unexpected input to /hello: {}", rcvText);
-//                return;
-//            }
-//
-//            LOG.info("Received {} --> {}", inputs[0], inputs[1]);
-//
-//            Message sndText = inputs[0] + " goodbye";
-//            queueProducer.enqueue(sndText);
-//
-////            Message newMO = new Message(...);
-//
-//            res.status(OK_200);
-//            res.send();
-//        }
-//    }
-
-    public static void main(String[] args) throws InterruptedException {
+    public static void main(String[] args) throws Exception {
         Rcvr rcvr = new Rcvr();
-        rcvr.init();
+        rcvr.init(ConfigLoader.readConfig("rcvr.properties"));
     }
+
 }

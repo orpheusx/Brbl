@@ -23,7 +23,8 @@ class SessionTest {
                 UUID.randomUUID(),
                 new Script("do nothing", EchoWithPrefix, null),
                 new User(UUID.randomUUID(), platformIds, countryCode, languages),
-                new InMemoryQueueProducer());
+                new InMemoryQueueProducer(),
+                null);
         int numElements = MAX_INPUT_HISTORY + 1;
         for (int i = 0; i < numElements; i++) {
             Message mo = Message.newMO(FROM, TO, String.valueOf(i));

@@ -28,4 +28,10 @@ public class TestingMessageProcessor implements MessageProcessor {
         }
         return true;
     }
+
+    @Override
+    public boolean log(Message message) {
+        LOG.info("Logged {}", message);
+        return true;
+    }
 }

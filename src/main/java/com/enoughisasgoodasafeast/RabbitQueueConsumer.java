@@ -61,9 +61,9 @@ public class RabbitQueueConsumer implements QueueConsumer {
         factory.setRequestedHeartbeat(requestedHeartbeatTimeout);
 
         // Setup socket connection, negotiate protocol version and authentication
-        /*Connection*/this.connection = factory.newConnection();
+        this.connection = factory.newConnection();
 
-        /*Channel */this.channel = connection.createChannel();
+        this.channel = connection.createChannel();
 
         // The RabbitMQ docs use a bare string for the exchange type, despite the nice enum that's available.
         // We use the enum because we're not animals.
@@ -87,7 +87,8 @@ public class RabbitQueueConsumer implements QueueConsumer {
         channel.basicQos(3); // An important number where retrying/re-queueing is concerned.
         // My guess is that this influences the number of threads in the driver
 
-        final OperatorConsumer operatorConsumer = new OperatorConsumer(processor, channel); // pooling?
+        // FIXME Is there a need for an Operator specific consumer here?
+        final BrblConsumer operatorConsumer = new OperatorConsumer(processor, channel);
         final String consumerTag = channel.basicConsume(queueName, QUEUE_CONSUME_AUTO_ACK, operatorConsumer);
 
         LOG.info("Negotiated heartbeat: {} seconds", connection.getHeartbeat());

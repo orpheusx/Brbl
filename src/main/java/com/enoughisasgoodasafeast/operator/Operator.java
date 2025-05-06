@@ -1,13 +1,13 @@
 package com.enoughisasgoodasafeast.operator;
 
 import com.enoughisasgoodasafeast.*;
+import com.enoughisasgoodasafeast.operator.PersistenceManager.PersistenceManagerException;
 import com.github.benmanes.caffeine.cache.Caffeine;
 import com.github.benmanes.caffeine.cache.LoadingCache;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import java.io.IOException;
-import java.time.Instant;
 import java.util.*;
 import java.util.concurrent.*;
 import java.util.function.Supplier;
@@ -34,14 +34,20 @@ public class Operator implements MessageProcessor {
 
     private QueueConsumer queueConsumer;
     private QueueProducer queueProducer;
+    private PersistenceManager persistenceManager;
 
     public Operator() {}
 
     public Operator(QueueConsumer queueConsumer, QueueProducer queueProducer) {
+        this(queueConsumer, queueProducer, null);
+    }
+    public Operator(QueueConsumer queueConsumer, QueueProducer queueProducer, PersistenceManager persistenceManager) {
         this.queueConsumer = queueConsumer;
         this.queueProducer = queueProducer;
+        this.persistenceManager = persistenceManager;
     }
 
+    // TODO get rid of this version by updating OperatorTest's use of it.
     public void init() throws IOException, TimeoutException {
         LOG.info("Initializing Brbl Operator");
         if (queueConsumer == null) {
@@ -54,7 +60,7 @@ public class Operator implements MessageProcessor {
         // Other resources? Connections to database/distributed caches?
     }
 
-    public void init(Properties props) throws IOException, TimeoutException {
+    public void init(Properties props) throws IOException, TimeoutException, PersistenceManagerException {
         LOG.info("Initializing Brbl Operator with provided Properties object");
         if (queueConsumer == null) {
             queueConsumer = RabbitQueueConsumer.createQueueConsumer(
@@ -62,6 +68,10 @@ public class Operator implements MessageProcessor {
         }
         if (queueProducer == null) {
             queueProducer = RabbitQueueProducer.createQueueProducer(props);
+        }
+
+        if (persistenceManager == null) {
+            persistenceManager = PostgresPersistenceManager.createPersistenceManager(props);
         }
 
         // Other resources? Connections to database/distributed caches?
@@ -86,7 +96,7 @@ public class Operator implements MessageProcessor {
         return process(session, message);
     }
 
-    boolean process(Session session, Message message) {
+    private boolean process(Session session, Message message) {
         synchronized (session) {
             try {
                 session.addInput(message);
@@ -125,6 +135,14 @@ public class Operator implements MessageProcessor {
         }
     }
 
+    @Override
+    public boolean log(/*Session session, */Message message) {
+        return persistenceManager.insertProcessedMO(
+                message,
+                this.sessionCache.get(SessionKey.newSessionKey(message)));
+        // More logging here if insert fails?
+    }
+
     /**
      * Builder method used with the LoadingCache.
      * @param sessionKey the key associated with the new Session
@@ -139,7 +157,10 @@ public class Operator implements MessageProcessor {
             Supplier<Script> script = scope.fork(() -> findStartingScript(sessionKey));
             scope.join().throwIfFailed(); // TODO consider using joinUntil() to enforce a collective timeout.
 
-            return new Session(UUID.randomUUID(), script.get(), user.get(), getQueueProducer(sessionKey.platform()));
+            return new Session(
+                    UUID.randomUUID(), script.get(), user.get(),
+                    getQueueProducer(sessionKey.platform()),
+                    persistenceManager);
         }
     }
 
@@ -220,7 +241,7 @@ public class Operator implements MessageProcessor {
         return List.of("en");
     }
 
-    public static void main(String[] args) throws IOException, TimeoutException {
+    public static void main(String[] args) throws IOException, TimeoutException, PersistenceManagerException {
         Operator operator = new Operator();
         operator.init(ConfigLoader.readConfig("operator.properties"));
     }

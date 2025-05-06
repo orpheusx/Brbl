@@ -1292,3 +1292,115 @@ And for MTs...
 Okay, so not terrible anymore. To be fair, my testing is really not all that meaningful since it is unrealistically optimized (no other overhead from related application code, database running on localhost) and, at the same time, not ideal (no JVM warmup.) Its quite terrible even as seat-of-the-pants micro benchmarks go.
 
 
+===== 2025-04-30 ====
+
+Cleaned up and pushed the new PersistenceManager class.
+
+
+===== 2025-05-01 ====
+
+Integrating PersistenceManager with Rcvr...
+
+Note: With the Postgres server running locally we need to use host.docker.internal as the hostname for the database connection pool.
+
+Ok, got the MO write working in Rcvr.
+
+
+===== 2025-05-06 ====
+Processed MO, MT, and Delivered MT writes now working...
+
+SELECT prcd_at - rcvd_at FROM brbl_logs.messages_mo mos INNER JOIN brbl_logs.messages_mo_prcd prcd ON mos.id = prcd.id;
+SELECT dlvr_at - sent_at FROM brbl_logs.messages_mt mts INNER JOIN brbl_logs.messages_mt_dlvr dlvr ON mts.id = dlvr.id;
+
+SELECT
+    mos.id, mts.id, mts._text
+FROM
+    brbl_logs.messages_mo_prcd mos
+INNER
+    join brbl_logs.messages_mt mts
+ON
+    mos.session_id = mts.session_id;
+
+To calculate the elapsed time to receive, process and respond to an MO:
+
+    SELECT (dlv.dlvr_at - mos.rcvd_at) AS total_response_time
+    FROM
+        brbl_logs.messages_mo mos
+    INNER JOIN
+        brbl_logs.messages_mo_prcd prc ON mos.id = prc.id
+    INNER JOIN
+        brbl_logs.messages_mt mts ON prc.script_id = mts.script_id
+    INNER JOIN
+        brbl_logs.messages_mt_dlvr dlv ON mts.id = dlv.id
+;
+
+For the 5 messages we send from PlatformGateway the results look something like:
+
+total_response_time
+---------------------
+ 00:00:00.274_010
+ 00:00:00.210_633
+ 00:00:00.203_084
+ 00:00:00.197_272
+ 00:00:00.195_147
+(5 rows)
+
+Run a second time, the numbers improve a bit...
+
+ total_response_time
+---------------------
+ 00:00:00.108_010
+ 00:00:00.067_296
+ 00:00:00.052_973
+ 00:00:00.046_465
+ 00:00:00.044_713
+
+Not neck snapping performance for individual message processing but the concurrency numbers are better.
+
+The inter-message delta for the rcvd time shrinks dramatically proving the value of the database connection pool and threaded http server:
+
+    1)  2025-05-06 09:02:08.063024-04
+    2)  2025-05-06 09:02:08.134534-04 --> #2 - #1 = 128_510
+    3)  2025-05-06 09:02:08.145519-04 --> #3 - #2 = 010_985
+    4)  2025-05-06 09:02:08.154437-04 --> #4 - #3 = 008_918
+    5)  2025-05-06 09:02:08.159682-04 --> #5 - #4 = 005_245
+
+We should revisit implementing a RabbitMQ producer channel pool at some point...
+
+Delta between MT delivered and MO processed time:
+
+    SELECT (dlv.dlvr_at - prc.prcd_at) AS total_response_time
+    FROM
+        brbl_logs.messages_mo_prcd prc
+    INNER JOIN
+        brbl_logs.messages_mt mts ON prc.script_id = mts.script_id
+    INNER JOIN
+        brbl_logs.messages_mt_dlvr dlv ON mts.id = dlv.id
+    ;
+
+ total_response_time
+---------------------
+ 00:00:00.133810
+ 00:00:00.136067
+ 00:00:00.134400
+ 00:00:00.130744
+ 00:00:00.129300
+
+     SELECT (dlv.dlvr_at - mts.sent_at) AS mt_queued_to_delivered
+     FROM
+         brbl_logs.messages_mt mts
+     INNER JOIN
+         brbl_logs.messages_mt_dlvr dlv
+     ON mts.id = dlv.id
+     ;
+
+ mt_queued_to_delivered
+------------------------
+ 00:00:00.166_193
+ 00:00:00.138_192
+ 00:00:00.136_617
+ 00:00:00.131_253
+ 00:00:00.133_792
+
+
+
