@@ -70,8 +70,16 @@ public class Session {
         LOG.info("Created Session {} for User {}", id, user.id());
     }
 
+    public void addInput(Message message) {
+        inputs.add(message);
+    }
+
     public void addOutput(Message mtMessage) {
         outputBuffer.add(mtMessage);
+    }
+    
+    public void addEvaluated(Script script) {
+        evaluatedScripts.addLast(script);
     }
 
     public void flushOutput() throws IOException {
@@ -96,13 +104,5 @@ public class Session {
 
     public Script currentScript() {
         return currentScript;
-    }
-
-    public void addInput(Message message) {
-        inputs.add(message);
-    }
-
-    public void addEvaluated(Script script) {
-        evaluatedScripts.addLast(script);
     }
 }

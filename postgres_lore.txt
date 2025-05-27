@@ -1,0 +1,33 @@
+--> Show table permissions:
+SELECT *
+  FROM information_schema.role_table_grants
+ WHERE grantee = 'YOUR_USER';
+
+-- NOTE: permissions gained from roles granted to 'YOUR_USER' won't show up here.
+
+--> Show table ownership:
+SELECT *
+  FROM pg_tables
+ WHERE tableowner = 'YOUR_USER';
+
+--> Show schema permissions (Note: if a user owns a table or database, no special grant exists as the owner of an object always has full access to that object (without grants)
+SELECT r.usename AS grantor,
+             e.usename AS grantee,
+             nspname,
+             privilege_type,
+             is_grantable
+        FROM pg_namespace
+JOIN LATERAL (SELECT *
+                FROM aclexplode(nspacl) AS x) a
+          ON true
+        JOIN pg_user e
+          ON a.grantee = e.usesysid
+        JOIN pg_user r
+          ON a.grantor = r.usesysid
+       WHERE e.usename = 'YOUR_USER';
+
+--> https://neon.tech/postgresql/postgresql-tutorial/postgresql-fetch
+Some interesting info that could be useful for pagination over stable result sets.
+
+--> https://neon.tech/postgresql/postgresql-tutorial/postgresql-merge
+The merge feature handles inserts/updates/deletes in a single statement and the RETURNING clause provides information on which of the operations it performed.

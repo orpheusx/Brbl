@@ -214,11 +214,11 @@ public class PlatformGateway extends WebService {
          LOG.info("PlatformGateway init called.");
 
          Message[] moTraffic = {
-                 Message.newMO("17817299468","1234","1 hello"),
-                 Message.newMO("17817299469","1234","2 hi"),
-                 Message.newMO("17817299470","1234","3 heya"),
-                 Message.newMO("17817299471","1234","4 hey here"),
-                 Message.newMO("17817299472","1234","5 greetings")
+                 Message.newMO("19787299468","1234","1 hello"),
+                 Message.newMO("19787299469","1234","2 hi"),
+                 Message.newMO("19787299470","1234","3 heya"),
+                 Message.newMO("19787299471","1234","4 hey here"),
+                 Message.newMO("19787299472","1234","5 greetings")
          };
 
          for (Message mo : moTraffic) {

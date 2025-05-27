@@ -1307,6 +1307,7 @@ Ok, got the MO write working in Rcvr.
 
 
 ===== 2025-05-06 ====
+
 Processed MO, MT, and Delivered MT writes now working...
 
 SELECT prcd_at - rcvd_at FROM brbl_logs.messages_mo mos INNER JOIN brbl_logs.messages_mo_prcd prcd ON mos.id = prcd.id;
@@ -1403,4 +1404,227 @@ Delta between MT delivered and MO processed time:
  00:00:00.133_792
 
 
+===== 2025-05-07 ====
+
+Working on the models for Users, Profiles.
+
+See dev.ddl.
+
+How to encode languages and indicate their order of preference?
+
+Just a string of the two character language codes separated by commas? e.g. "ES,EN" or "FR" where list order indicates preference. We wouldn't really need commas given that language code.
+
+The case for using ISO-3 codes for language: 'zh' is the two character code for Chinese but there are two distinct such languages: Cantonese (yue) and Mandarin (cmn).
+
+Changed our existing language support to use the three character codes.
+
+Debating where to place the language and country code. We need the former when starting new conversations. The latter seems less critical but if scripts reference the user's nickname (for general friendliness) then we'd end up making a 1:1 join with the profile table. I guess language seems more like a cross-cutting concern where all the User records for a given user would want to present the same.
+On the other hand, if the user is anonymous (no profile) we still need to know what language to use with them. Likewise, to know what legal rules we have to follow we need their country code. So, alas, we need both in the User record.
+
+It's unclear whether we need/benefit from a Session table.
+
+
+===== 2025-05-12 ====
+
+Got the User/Profile models working. When running the regular docker compose setup with PlatformGateway sending a batch of messages through I realized that the database connections needed read/write access to both the brbl_logs and brbl_users schemas.
+
+Restructured the roles for our two schemas so that we separate privilege definitions from the "users" (really just roles login) that possess them.
+
+===== 2025-05-15 ====
+
+CREATE SCHEMA IF NOT EXISTS brbl_logic AUTHORIZATION brbl_admin ;
+
+CREATE TABLE brbl_logic.scripts (
+    id          UUID PRIMARY KEY,
+    created_at  TIMESTAMP WITH TIME ZONE NOT NULL,
+    text        VARCHAR(255),       --> SMS is limited to 160 chars but other platform have higher limits.
+    type        SMALLINT NOT NULL,  --> see ScriptType enum for meaning.
+    label       VARCHAR(32)         --> the name given to the script element in a UI
+);
+
+CREATE TABLE brbl_logic.edges (
+    id              UUID PRIMARY KEY,
+    created_at      TIMESTAMP WITH TIME ZONE NOT NULL,
+    match_text      VARCHAR(128),       --> the text that must be matched to direct the conversation to the dst script
+    response_text   VARCHAR(255),       --> the text emitted when the edge is selected.
+    src             UUID NOT NULL,      --> FK to scripts table
+    dst             UUID NOT NULL      --> FK to scripts table
+    -- CONSTRAINT fk_script_src
+    --     FOREIGN KEY(id) REFERENCES brbl_logic.scripts(id),
+    -- CONSTRAINT fk_script_dst
+    --     FOREIGN KEY(id) REFERENCES brbl_logic.scripts(id)
+);
+
+-- Script 1
+INSERT INTO brbl_logic.scripts VALUES('89eddcb8-7fe5-4cd1-b18b-78858f0789fb', NOW(),
+    'What is your favorite color? 1) red 2) blue 3) flort', 4, 'ColorQuiz') RETURNING *;
+-- Script 2
+INSERT INTO brbl_logic.scripts VALUES('2ed4ceed-a229-4e82-ab89-668a15835058', NOW(),
+    'Oops, that is not one of the options. Try again with one of the listed numbers or say "change topic" to start talking about something else.', 5, 'EvaluateColorAnswer') RETURNING *;
+-- Script 3
+INSERT INTO brbl_logic.scripts VALUES('f9420f0c-81ca-4f9a-b1d4-7e25fd280399', NOW(),
+    'That is all. Bye.', 1, 'EndOfConversation') RETURNING *;
+
+INSERT INTO brbl_logic.edges VALUES('d9d9d89b-3047-4b18-8c97-5fb870fc1ced', NOW(), '1|red', 'Red is the color of life.',
+    '89eddcb8-7fe5-4cd1-b18b-78858f0789fb', 'f9420f0c-81ca-4f9a-b1d4-7e25fd280399') RETURNING *;
+INSERT INTO brbl_logic.edges VALUES('fee09a2a-5595-43a9-8228-72182789800e', NOW(), '2|blue', 'Blue is my fave, as well.',
+    '89eddcb8-7fe5-4cd1-b18b-78858f0789fb', 'f9420f0c-81ca-4f9a-b1d4-7e25fd280399') RETURNING *;
+INSERT INTO brbl_logic.edges VALUES('49a0e06a-fff6-4bbc-91f7-fcda4b800cc4', NOW(), '3|flort', 'Flort is for the cool kids.',
+    '89eddcb8-7fe5-4cd1-b18b-78858f0789fb', 'f9420f0c-81ca-4f9a-b1d4-7e25fd280399') RETURNING *;
+
+NOTE: gen_random_uuid() is a useful function available in psql.
+
+Next question: how to escape single quotation marks? Likely JDBC already handles this but useful to know when using psql.
+
+
+===== 2025-05-16 ====
+
+Found an ad for Twilio while reading stackoverflow. Led me down the rabbit hole of SMS providers.
+Some leads on low-cost SMS here: https://www.reddit.com/r/rails/comments/175e0fk/which_provider_for_sending_sms_messages_is_the/
+Remember to learn more about the differences between GSM-7 and UCS-2 character sets since we'd like to support non-English languages.
+Climbing out before it drives me mad...
+
+Work on script-related schema moved to dev.ddl.
+
+The design seems plausible for basic interactions. Will it be open enough to support other things? What are those other things?
+
+Useful queries:
+    SELECT id,created_at,type,label,SUBSTR(text,0,40) FROM brbl_logic.scripts;
+    SELECT created_at, match_text,response_text, src, dst FROM brbl_logic.edges ORDER BY src;
+
+Keyword mapping:
+To find the initial script node for a new session...
+
+CREATE TABLE brbl_logic.keywords (
+    id          UUID NOT NULL,
+    word        VARCHAR(128),   --> the default entry likely has no value so this can't be NOT NULL
+    platform    platform,
+    script_id   UUID,
+    is_default  BOOLEAN DEFAULT FALSE,
+    CONSTRAINT fk_script_id
+        FOREIGN KEY(id)
+            REFERENCES brbl_logic.scripts(id)
+);
+
+https://www.postgresql.org/docs/current/sql-createtable.html has some interesting notes about column storage and compression options which might be useful if script text gets large.
+
+===== 2025-05-16 ====
+
+Reading https://stackoverflow.com/questions/54907495/postgresql-recursive-parent-child-query led me to writing the following:
+
+WITH RECURSIVE c AS (
+    SELECT <SCRIPT_TABLE_ID>::UUID AS script_id
+    UNION ALL
+    SELECT e.dst
+    FROM brbl_logic.edges AS e
+        JOIN c ON (c.script_id = e.src)
+)
+SELECT
+    s.id, s.label, s.text,
+    e.match_text, e.response_text, e.dst
+FROM
+    brbl_logic.scripts s
+INNER JOIN
+    brbl_logic.edges e ON s.id = e.src
+WHERE
+    s.id IN (SELECT DISTINCT(c.script_id) FROM c);
+
+The use of the recursive "common table expression" to pull all the data we're looking for recursively starting with the id of the Script, <SCRIPT_TABLE_ID>
+ The Stackoverflow post also suggests a stored procedure that does pretty much the same thing --> https://stackoverflow.com/a/54909559/3524850
+
+http://explain.dalibo.com offers an interesting Postgres EXPLAIN plan analyzer. Might be useful for performance tuning.
+
+The "only" trouble with our recursive query (above) is that the terminal script node doesn't get included (because there are no edges that reference it as the src. The code written to turn the ResultSet into a graph can patch up the temporarily missing references but not that one.
+
+Do we want to support terminating scripts? I think so. The query results won't include the final node because it doesn't have any edges.
+
+To address that problem maybe define a single edge that itself has a null dst? This works to include the final script in the result. But this makes me think...
+
+To support cycles in the conversational graph--to allow loops--we need a different solution unless we can do it programmatically with the same data. The problem is that cycles will blow up the (now endless) recursive CTE graph query (taking the database along with it.)
+
+
+===== 2025-05-23 ====
+
+Still thinking about a way to support cycles in the conversational graph that will still provide queryable
+
+Reading https://www.postgresql.org/docs/current/queries-with.html#QUERIES-WITH-CYCLE presents a possible solution using the built-in CYCLE syntax:
+
+Example from the Postgres documentation:
+
+WITH RECURSIVE search_graph(id, link, data, depth) AS (
+    SELECT g.id, g.link, g.data, 1
+    FROM graph g
+  UNION ALL
+    SELECT g.id, g.link, g.data, sg.depth + 1
+    FROM graph g, search_graph sg
+    WHERE g.id = sg.link
+) CYCLE id SET is_cycle USING path
+SELECT * FROM search_graph;
+
+Let's try:
+
+WITH RECURSIVE cte AS (
+        SELECT '89eddcb8-7fe5-4cd1-b18b-78858f0789fb'::UUID AS script_id
+        UNION ALL
+        SELECT e.dst
+        FROM brbl_logic.edges AS e
+            JOIN cte ON (cte.script_id = e.src)
+    ) CYCLE script_id SET is_cycle USING path
+    SELECT
+        s.id, s.created_at, s.text, s.type, s.label,
+        e.id, e.created_at, e.match_text, e.response_text, e.src, e.dst
+    FROM
+        brbl_logic.scripts s
+    INNER JOIN
+        brbl_logic.edges e ON s.id = e.src
+    WHERE
+        s.id IN (SELECT DISTINCT(cte.script_id) FROM cte);
+
+This executes without complaint. Let's add a edge that creates a cycle and see if it does what we want...
+
+UPDATE brbl_logic.edges e
+    SET dst = '89eddcb8-7fe5-4cd1-b18b-78858f0789fb'
+    WHERE e.id = '4bce9e23-2dc4-42d9-aea9-94744a74d005';
+
+which changes the final edge in the graph to point at the first node.
+Re-running the recursive, cycle-detecting CTE produces a beautiful bounded result set. Just what we wanted!
+
+It does! Postgres rocks!
+
+===== 2025-05-24 ====
+
+Interesting linear time performance regex lib for Java:
+
+    https://github.com/google/re2j  <--- Only 35k .jar file
+
+
+Interesting realization about the recursive query and our current data set:
+Do a query for any of the script id's and you get all the scripts in the results. Since it's a cycle this is actually correct but, for a moment, I thought the query was wrong (because changing the script_id parameter didn't alter the results.) Doh!
+
+Let's create a script chain that is separate and doesn't cycle:
+
+    --> starting and ending scripts
+    INSERT INTO brbl_logic.scripts VALUES('525028ae-0a33-4c80-a22f-868f77bb9531', NOW(),
+        'True or false: people are the worst?', 4, 'BadPeople') RETURNING *;
+    INSERT INTO brbl_logic.scripts VALUES('cf72ce06-50fc-4bf1-852b-dbdbd9f97f66', NOW(),
+        'There is nothing left to say.', 4, 'AnotherEndOfConversation') RETURNING *;
+
+    --> edges connecting them
+    INSERT INTO brbl_logic.edges VALUES('2361468c-571d-43e1-a5cc-a5580841253c', NOW(), 'yes|true', 'Sadly, you are correct.',
+        '525028ae-0a33-4c80-a22f-868f77bb9531', 'cf72ce06-50fc-4bf1-852b-dbdbd9f97f66') RETURNING *;
+    INSERT INTO brbl_logic.edges VALUES('f6c08bf6-a984-4619-97be-3bb2526ba81d', NOW(), 'no|false', 'You are a hopeless optimist.',
+        '525028ae-0a33-4c80-a22f-868f77bb9531', 'cf72ce06-50fc-4bf1-852b-dbdbd9f97f66') RETURNING *;
+    --> terminating edge (with NULL destination)
+    INSERT INTO brbl_logic.edges VALUES('053c7425-dfd9-4c32-b305-a15b50453274', NOW(), 'NOOP', 'NOOP',
+        'cf72ce06-50fc-4bf1-852b-dbdbd9f97f66', NULL) RETURNING *;
+
+Verified. The recursive script query only returns elements that are linked.
+Asking for the graph starting with the BadPeople element yields:
+                 id                   |    label    |                 src                  | match_text |                 dst
+--------------------------------------+-------------+--------------------------------------+------------+-------------------------------------
+ 525028ae-0a33-4c80-a22f-868f77bb9531 | BadPeople   | 525028ae-0a33-4c80-a22f-868f77bb9531 | no|false   | cf72ce06-50fc-4bf1-852b-dbdbd9f97f66
+ 525028ae-0a33-4c80-a22f-868f77bb9531 | BadPeople   | 525028ae-0a33-4c80-a22f-868f77bb9531 | yes|true   | cf72ce06-50fc-4bf1-852b-dbdbd9f97f66
+ cf72ce06-50fc-4bf1-852b-dbdbd9f97f66 | AnotherEn.. | cf72ce06-50fc-4bf1-852b-dbdbd9f97f66 | NOOP       |
+
+ Perfect.
 

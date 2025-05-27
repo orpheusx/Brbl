@@ -1,9 +1,11 @@
 package com.enoughisasgoodasafeast.operator;
 
 import com.enoughisasgoodasafeast.SharedConstants;
+import io.jenetics.util.NanoClock;
 import org.junit.jupiter.api.Assertions;
 import org.junit.jupiter.api.Test;
 
+import java.time.Instant;
 import java.util.*;
 
 import static org.junit.jupiter.api.Assertions.*;
@@ -11,10 +13,11 @@ import static org.junit.jupiter.api.Assertions.*;
 public class CustomerTest {
     final static UUID id = UUID.randomUUID();
     final static Map<Platform, String> platformIds = Map.of(Platform.SMS, "17815551234");
+    final static Map<Platform, Instant> platformCreatedMap = Map.of(Platform.SMS, NanoClock.utcInstant());
     final static String countryCode = Locale.getDefault().getCountry();
-    final static List<String> languages = List.of("es", "fr");
+    final static List<String> languages = List.of("SPA", "FRA");
 
-    final static User user = new User(id, platformIds, countryCode, languages);
+    final static User user = new User(id, platformIds, platformCreatedMap, countryCode, languages);
 
     final String firstName = "Fred";
     final String surname = "Flintstone";

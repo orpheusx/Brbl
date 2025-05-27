@@ -16,11 +16,11 @@ public class Multi {
     static class Present {
 
         /**
-         * Create an MT that containing the currentScripts text field, queues it for sending, then advances to the
+         * Creates an MT from the currentScript's text field, queues it for sending, then advances to the
          * next element in the Script chain.
-         * @param session
-         * @param moMessage
-         * @return
+         * @param session the session being processed.
+         * @param moMessage the incoming MO message that triggered the response message produced here.
+         * @return the next Script in the session's script graph.
          * @throws IOException
          */
         public static Script evaluate(Session session, Message moMessage) throws IOException {
@@ -59,7 +59,7 @@ public class Multi {
 
             final String userText = moMessage.text().trim().toLowerCase();
             for (ResponseLogic option : session.currentScript.next()) {
-                if (option.matchText().contains(userText)) { //TODO make the matching more robust/flexible.
+                if (option.matchText().contains(userText)) { //TODO make the matching more robust/flexible. Efficient regexes?
                     LOG.info("Input, {}, matched logic: {}", userText, option.matchText());
                     final Message mt = newMTfromMO(moMessage, option.text());
                     session.addOutput(mt);
@@ -68,7 +68,7 @@ public class Multi {
                 }
             }
 
-            // Handle the "I want to talk about something else" case here...
+            // Handle the "I want to talk about something else" case here...Should it be above the responselogic loop?
             if (userText.contains("change topic")) {
                 // Create a new Script graph
                 // TODO this should all be handled in the called methods.

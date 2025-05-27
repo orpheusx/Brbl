@@ -5,6 +5,7 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import java.time.Duration;
+import java.util.Arrays;
 import java.util.List;
 
 public class Functions {
@@ -24,6 +25,13 @@ public class Functions {
         }
     }
 
+    // FIXME Investigate fast regexes here.
+    public static List<String> parseMatchTextPatterns(String t) {
+        // For now, split on the pipe character
+        String[] patterns = t.split("\\|");
+        return Arrays.asList(patterns);
+    }
+
     // NB: for now we're putting this logic here. As we start adding database persistence we might make a dedicated
     // class that bundles all such logic.
     // Also, for now, this is just hard-coded for a limited number of cases to make tests work.
@@ -35,8 +43,8 @@ public class Functions {
                     1) wolverines
                     2) international monetary policy
                 """;
-                Script topicPresentation = new Script(text, ScriptType.PresentMulti, null, "topic-selection");
-                Script endScript = new Script("End-of-Conversation", ScriptType.ProcessMulti, null, "e-o-c");
+                Script topicPresentation = new Script(text, ScriptType.PresentMulti, "topic-selection");
+                Script endScript = new Script("End-of-Conversation", ScriptType.ProcessMulti, "e-o-c");
                 ResponseLogic topicOne = new ResponseLogic(List.of("1", "wolverine", "wolverines"), "They have pointy teeth and a nasty disposition", endScript);
                 ResponseLogic topicTwo = new ResponseLogic(List.of("1", "international", "monetary", "policy"), "It's kinda boring actually.", endScript);
                 endScript.next().add(topicOne);

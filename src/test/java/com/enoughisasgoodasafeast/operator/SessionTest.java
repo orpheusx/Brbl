@@ -8,9 +8,7 @@ import java.util.UUID;
 
 import static com.enoughisasgoodasafeast.operator.ScriptType.*;
 import static com.enoughisasgoodasafeast.operator.Session.MAX_INPUT_HISTORY;
-import static com.enoughisasgoodasafeast.operator.UserTest.platformIds;
-import static com.enoughisasgoodasafeast.operator.UserTest.countryCode;
-import static com.enoughisasgoodasafeast.operator.UserTest.languages;
+import static com.enoughisasgoodasafeast.operator.UserTest.*;
 import static org.junit.jupiter.api.Assertions.*;
 
 class SessionTest {
@@ -22,7 +20,7 @@ class SessionTest {
         Session session = new Session(
                 UUID.randomUUID(),
                 new Script("do nothing", EchoWithPrefix, null),
-                new User(UUID.randomUUID(), platformIds, countryCode, languages),
+                new User(UUID.randomUUID(), platformIds, platformsCreated, countryCode, languages),
                 new InMemoryQueueProducer(),
                 null);
         int numElements = MAX_INPUT_HISTORY + 1;

@@ -88,7 +88,7 @@ public class TylerConfigurator extends TylerConfiguratorBase implements Configur
         // Configure component of type PatternLayoutEncoder
         PatternLayoutEncoder patternLayoutEncoder = new PatternLayoutEncoder();
         patternLayoutEncoder.setContext(context);
-//        patternLayoutEncoder.setPattern("%d{HH:mm:ss.SSS} foo");
+        // FIXME remove the INSTANCE_ID? The container prefixes logs with the service name which is what we
         patternLayoutEncoder.setPattern("%date{ISO8601,America/New_York} %-5level [%X{INSTANCE_ID}] [%thread] %logger{36} - %msg %n");
         patternLayoutEncoder.setParent(appenderSTDOUT);
         patternLayoutEncoder.start();

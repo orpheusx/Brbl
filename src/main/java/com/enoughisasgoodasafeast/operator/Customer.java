@@ -18,13 +18,13 @@ public record Customer(User user, String firstName, String surname, String compa
         if (user == null) {
             fail("user cannot be null");
         }
-        if (firstName == null || firstName.length() == 0) {
+        if (firstName == null || firstName.isEmpty()) {
             fail("firstName cannot be null");
         }
-        if (surname == null || surname.length() == 0) {
+        if (surname == null || surname.isEmpty()) {
             fail("surname cannot be null");
         }
-        if (companyName == null || companyName.length() == 0) {
+        if (companyName == null || companyName.isEmpty()) {
             companyName = NO_COMPANY;
         }
     }

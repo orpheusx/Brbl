@@ -17,9 +17,9 @@ import java.util.UUID;
  * @param id
  * @param text
  * @param next
- * @param previous
+ * @param label
  */
-public record Script(UUID id, String text, ScriptType type, List<ResponseLogic> next, Script previous, String label) {
+public record Script(UUID id, String text, ScriptType type, List<ResponseLogic> next/*, Script previous*/, String label) {
 
     private static final Logger LOG = LoggerFactory.getLogger(Script.class);
 
@@ -40,32 +40,25 @@ public record Script(UUID id, String text, ScriptType type, List<ResponseLogic> 
         }
     }
 
-    public Script(String text, ScriptType type, Script previous) {
-        this(null, text, type, null, previous, null);
+    public Script(UUID id, String text, ScriptType type) {
+        this(id, text, type, null, null);
     }
 
-    public Script(String text, ScriptType type, Script previous, String label) {
-        this(null, text, type, null, previous, label);
+    public Script(String text, ScriptType type) {
+        this(null, text, type, null, null);
     }
+
+    public Script(String text, ScriptType type, String label) {
+        this(null, text, type, null, label);
+    }
+
 
     public boolean hasNext() {
         return next != null && !next.isEmpty();
     }
 
-    public boolean hasPrevious() {
-        return null != previous;
-    }
-
     public List<ResponseLogic> next() {
         return next;
-    }
-
-    public Script previous() {
-        return previous;
-    }
-
-    public boolean isStart() {
-        return previous == null;
     }
 
     /**

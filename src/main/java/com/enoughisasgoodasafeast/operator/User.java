@@ -3,6 +3,7 @@ package com.enoughisasgoodasafeast.operator;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
+import java.time.Instant;
 import java.util.List;
 import java.util.Map;
 import java.util.UUID;
@@ -17,6 +18,7 @@ import java.util.UUID;
  *
  * @param id the identifier used within the Brbl ecosystem.
  * @param platformIds the identifiers for this User on other messaging platforms.
+ * @param platformCreationTimes the creation time for this User for each messaging platform.
  * @param countryCode the ISO country of the nation where the User lives.
  * @param languages the list of ISO language codes spoken by the User.
  */
@@ -24,6 +26,7 @@ import java.util.UUID;
 public record User(
         UUID id,
         Map<Platform, String> platformIds,
+        Map<Platform, Instant> platformCreationTimes,
         String countryCode,
         List<String> languages)
 {
@@ -44,7 +47,7 @@ public record User(
         }
 
         switch (countryCode) { // TODO read supported list from a .properties?
-            case "CA","MX","US" -> {}
+            case "CA","MX","US" -> {} // TODO create a Country enum and use it here somehow? This would mirror the type definition in the database...
             default -> fail("Unsupported countryCode");
         }
 
@@ -54,12 +57,12 @@ public record User(
 
         for (String language : languages) {
             switch (language) {
-                case "es","fr","en" -> {}
+                case "SPA","FRA","ENG" -> {} // TODO create a Language enum and use it here somehow?
                 default -> fail("Unsupported language.");
             }
         }
 
-        LOG.info("Created User (id:{})", id);
+        LOG.info("Created new User (id:{})", id);
     }
 
     void fail(String message) {

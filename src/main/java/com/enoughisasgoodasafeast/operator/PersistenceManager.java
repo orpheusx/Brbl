@@ -2,6 +2,9 @@ package com.enoughisasgoodasafeast.operator;
 
 import com.enoughisasgoodasafeast.Message;
 
+import java.util.Map;
+import java.util.UUID;
+
 public interface PersistenceManager {
 
     // Called by Rcvr
@@ -16,6 +19,19 @@ public interface PersistenceManager {
     // Called by Sndr
     boolean insertDeliveredMT(Message message);
 
+    // Called by Operator
+    User getUser(SessionKey sessionKey);
+
+    // Called by Operator
+    boolean insertUser(User user);
+
+    // Called by Operator
+    Map<String, Keyword> getKeywords();
+
+    // Called by Operator
+    Script getScript(UUID scriptId);
+
+    Script getScriptForKeyword(Platform platform, String keyword);
     /*
      * This exception exists simply to slightly abstract the internal details involved.
      */
@@ -24,4 +40,6 @@ public interface PersistenceManager {
             super(message, e);
         }
     }
+
+
 }
