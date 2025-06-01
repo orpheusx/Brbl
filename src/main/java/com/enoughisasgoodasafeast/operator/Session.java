@@ -38,7 +38,7 @@ public class Session {
         }
     };
 
-    List<Script> evaluatedScripts = new ArrayList<>();
+    List<Script> evaluatedScripts = new ArrayList<>(); // TODO make this a stack instead?
 
     // Db manager goes here
 

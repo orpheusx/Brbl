@@ -180,7 +180,7 @@ public class PostgresPersistenceManager implements PersistenceManager {
     public static String SELECT_SCRIPT_GRAPH_RECURSIVE_FOR_KEYWORD =
             """
                     WITH RECURSIVE rgraph AS (
-                            SELECT script_id FROM brbl_logic.keywords WHERE platform= ?::platform AND word= ?
+                            SELECT script_id FROM brbl_logic.keywords WHERE platform= ?::platform AND pattern = ?
                         UNION ALL
                         SELECT e.dst
                         FROM brbl_logic.edges AS e
@@ -206,7 +206,7 @@ public class PostgresPersistenceManager implements PersistenceManager {
     public static String SELECT_ALL_KEYWORDS =
             """
                     SELECT
-                        k.id, k.word, k.platform, k.script_id, k.is_default
+                        k.id, k.pattern, k.platform, k.script_id, k.is_default
                     FROM
                         brbl_logic.keywords k ;
                     """;
@@ -426,6 +426,7 @@ public class PostgresPersistenceManager implements PersistenceManager {
 
     @Override
     public Map<String, Keyword> getKeywords() {
+        LOG.info("(Re)Loading keyword cache...");
         try (Connection connection = fetchConnection()) {
             assert connection != null;
             return getKeywords(connection);
@@ -442,8 +443,8 @@ public class PostgresPersistenceManager implements PersistenceManager {
             while (rs.next()) {
                 // k.id
                 UUID id = (UUID) rs.getObject(1);
-                // k.word
-                String word = rs.getString(2);
+                // k.pattern
+                String pattern = rs.getString(2);
                 // k.platform
                 Platform platform = Platform.byCode(rs.getString(3));
                 // k.script_id
@@ -451,22 +452,10 @@ public class PostgresPersistenceManager implements PersistenceManager {
                 // k.is_default
                 boolean isDefault = rs.getBoolean(5);
 
-                // FIXME get rid of all this temp code
-//                Map<Platform, String> platformIds = new HashMap<>();
-//                platformIds.put(Platform.SMS, "17815551234");
-//                Map<Platform, Instant> platformsCreated = new LinkedHashMap<>();
-//                platformsCreated.put(Platform.SMS, NanoClock.systemUTC().instant());
-//                String countryCode = Locale.getDefault().getCountry();
-//                List<String> languages = new ArrayList<>(1);
-//                languages.add("SPA");
-//                languages.add("FRA");
-//                languages.add("ENG");
-//                User tempUser = new User(UUID.randomUUID(), platformIds, platformsCreated, countryCode, languages);
-
-                Keyword keyword = new Keyword(id, word.trim(), platform, scriptId
+                Keyword keyword = new Keyword(id, pattern.trim(), platform, scriptId
                         /*,new Customer(tempUser
                                 , "givenName", "surname", "companyName")*/);
-                allKeywordMap.put(word, keyword); // word may be a regex
+                allKeywordMap.put(pattern, keyword); // word may be a regex
             }
 
         } catch (SQLException e) {
@@ -498,7 +487,7 @@ public class PostgresPersistenceManager implements PersistenceManager {
 
             // s.id, s.created_at, s.text, s.type, s.label,
             // e.id, e.created_at, e.match_text, e.response_text, e.src, e.dst
-            Map<UUID, List<ResponseLogic>> tempEdges = new HashMap<>();
+            Map<UUID, SequencedSet<ResponseLogic>> tempEdges = new HashMap<>();
             Map<UUID, UUID> edgeIdToDstId = new HashMap<>();
 
             final ResultSet rs = ps.executeQuery();
@@ -529,13 +518,13 @@ public class PostgresPersistenceManager implements PersistenceManager {
                 ); // NB: the destination script may not exist so we will need to update/replace this edge at the end of the while loop
                 edgeIdToDstId.put(edgeId, dstId);
 
-                List<ResponseLogic> edgesForParentScript = tempEdges.computeIfAbsent(srcId, k -> new ArrayList<>());
+                SequencedSet<ResponseLogic> edgesForParentScript = tempEdges.computeIfAbsent(srcId, k -> new LinkedHashSet<>());
                 edgesForParentScript.add(tempEdge);
             }
 
             // Now patch all the references for both the edges and the scripts
             for (Map.Entry<UUID, Script> idAndScript : scriptMap.entrySet()) {
-                List<ResponseLogic> edgesForScript = tempEdges.get(idAndScript.getKey());
+                SequencedSet<ResponseLogic> edgesForScript = tempEdges.get(idAndScript.getKey());
                 Script script = idAndScript.getValue();
                 for (ResponseLogic edge : edgesForScript) {
                     if (edge.script() == null) {
@@ -588,7 +577,7 @@ public class PostgresPersistenceManager implements PersistenceManager {
 
             // s.id, s.created_at, s.text, s.type, s.label,
             // e.id, e.created_at, e.match_text, e.response_text, e.src, e.dst
-            Map<UUID, List<ResponseLogic>> tempEdges = new HashMap<>();
+            Map<UUID, SequencedSet<ResponseLogic>> tempEdges = new HashMap<>();
             Map<UUID, UUID> edgeIdToDstId = new HashMap<>();
 
             final ResultSet rs = ps.executeQuery();
@@ -619,13 +608,13 @@ public class PostgresPersistenceManager implements PersistenceManager {
                 ); // NB: the destination script may not exist so we will need to update/replace this edge at the end of the while loop
                 edgeIdToDstId.put(edgeId, dstId);
 
-                List<ResponseLogic> edgesForParentScript = tempEdges.computeIfAbsent(srcId, k -> new ArrayList<>());
+                SequencedSet<ResponseLogic> edgesForParentScript = tempEdges.computeIfAbsent(srcId, k -> new LinkedHashSet<>());
                 edgesForParentScript.add(tempEdge);
             }
 
             // Now patch all the references for both the edges and the scripts
             for (Map.Entry<UUID, Script> idAndScript : scriptMap.entrySet()) {
-                List<ResponseLogic> edgesForScript = tempEdges.get(idAndScript.getKey());
+                SequencedSet<ResponseLogic> edgesForScript = tempEdges.get(idAndScript.getKey());
                 Script script = idAndScript.getValue();
                 for (ResponseLogic edge : edgesForScript) {
                     if (edge.script() == null) {
@@ -835,18 +824,18 @@ public class PostgresPersistenceManager implements PersistenceManager {
 
     public static void main(String[] args) throws InterruptedException, IOException, PersistenceManagerException {
         PostgresPersistenceManager pm = new PostgresPersistenceManager(ConfigLoader.readConfig("persistence_manager_test.properties"));
-//        LOG.info("Calling getScript...");
-//        Script script = pm.getScript(UUID.fromString("89eddcb8-7fe5-4cd1-b18b-78858f0789fb"));
-//        Script script2 = pm.getScript(UUID.fromString("525028ae-0a33-4c80-a22f-868f77bb9531"));
-//        LOG.info("Return Script graph starting with {}", script);
-//        LOG.info("Return Script graph starting with {}", script2);
-//        Script script = pm.getScriptForKeyword(Platform.SMS, "FOO");
-//        LOG.info("Return Script graph starting with {}", script);
-        LOG.info("Calling getKeywords...");
-        final Map<String, Keyword> keywords = pm.getKeywords();
-        keywords.forEach( (s, keyword) -> {
-            System.out.println(s + "-->" + keyword);
-        });
+
+        Script script = pm.getScript(UUID.fromString("89eddcb8-7fe5-4cd1-b18b-78858f0789fb"));
+        System.out.println("\n\n\n\n\n\n");
+        Script.printGraph(script, script, 0);
+
+//      Script script2 = pm.getScript(UUID.fromString("525028ae-0a33-4c80-a22f-868f77bb9531"));
+
+//        LOG.info("Calling getKeywords...");
+//        final Map<String, Keyword> keywords = pm.getKeywords();
+//        keywords.forEach( (s, keyword) -> {
+//            System.out.println(keyword);
+//        });
     }
 
 }

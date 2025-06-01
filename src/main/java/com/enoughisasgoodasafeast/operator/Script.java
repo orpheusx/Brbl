@@ -6,9 +6,7 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import java.io.IOException;
-import java.util.ArrayList;
-import java.util.List;
-import java.util.UUID;
+import java.util.*;
 
 /**
  * The instructions for processing a message.
@@ -19,7 +17,7 @@ import java.util.UUID;
  * @param next
  * @param label
  */
-public record Script(UUID id, String text, ScriptType type, List<ResponseLogic> next/*, Script previous*/, String label) {
+public record Script(UUID id, String text, ScriptType type, SequencedSet<ResponseLogic> next/*, Script previous*/, String label) {
 
     private static final Logger LOG = LoggerFactory.getLogger(Script.class);
 
@@ -31,7 +29,7 @@ public record Script(UUID id, String text, ScriptType type, List<ResponseLogic> 
             throw new IllegalArgumentException("text cannot be null or empty.");
         }
         if (next == null) {
-            next = new ArrayList<>();
+            next = new LinkedHashSet<>();
         }
         if (label == null) {
             LOG.info("Created Script (type:{}, id:{}", type, id);
@@ -57,7 +55,7 @@ public record Script(UUID id, String text, ScriptType type, List<ResponseLogic> 
         return next != null && !next.isEmpty();
     }
 
-    public List<ResponseLogic> next() {
+    public SequencedSet<ResponseLogic> next() {
         return next;
     }
 
@@ -74,8 +72,7 @@ public record Script(UUID id, String text, ScriptType type, List<ResponseLogic> 
      * FIXME Maybe instead of null we return a symbolic Script that indicates the end of Script.
      */
     public Script evaluate(Session session, Message moMessage) throws IOException {
-        session.addEvaluated(this);
-        return switch (session.currentScript().type) {
+        Script next =  switch (session.currentScript().type) {
             case EchoWithPrefix ->
                 SimpleTestScript.SimpleEchoResponseScript.evaluate(session, moMessage);
 
@@ -100,6 +97,39 @@ public record Script(UUID id, String text, ScriptType type, List<ResponseLogic> 
             case TopicSelection ->
                     TopicSelection.evaluate(session, moMessage);
         };
+
+        // If we didn't advance to a different script then we're not done evaluating this one.
+        if (!this.equals(next)) {
+            session.addEvaluated(this);
+        }
+
+        return next;
     }
 
+    /**
+     * A convenience function that displays the structure of a script graph
+     * @param startScript the origin of the graph
+     * @param script the "current" script in the recursive call
+     * @param indent the current level of recursion
+     */
+    public static void printGraph(Script startScript, Script script, int indent) {
+        printIndent(script, indent);
+        int level = indent + 1;
+        for (ResponseLogic edge : script.next()) {
+            printIndent(edge, level);
+            Script childScript = edge.script();
+
+            if (startScript != childScript) {
+                printGraph(startScript, childScript, level + 1);
+            }
+        }
+    }
+
+    private static void printIndent(Object object, int level) {
+        System.out.print(level + " ");
+        for (int i = 0; i < level; i++) {
+            System.out.print("\t");
+        }
+        System.out.println(object);
+    }
 }

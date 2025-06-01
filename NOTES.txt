@@ -741,7 +741,7 @@ We're not quite at this point yet, I think, but useful for when we have a baseli
 
 Sitting in Logan, waiting to get on a plane to Florida.
 
-Next: replace the List<Script> field, "next" in the Script class with a List<ResponseLogic>
+Next: replace the List<Script> field, "next" in the Script class with a SequencedSet<ResponseLogic>
 
 Discovered an interesting wrinkle of sorts about Records with fields that are collections.
 I was passing List.of() as a parameter to one of the constructors which resulted in the "next" field being an immutable collection.
@@ -1496,14 +1496,16 @@ Keyword mapping:
 To find the initial script node for a new session...
 
 CREATE TABLE brbl_logic.keywords (
-    id          UUID NOT NULL,
-    word        VARCHAR(128),   --> the default entry likely has no value so this can't be NOT NULL
+    id          UUID NOT NULL UNIQUE,
+    pattern     VARCHAR(128),   --> the default entry likely has no value so this can't be NOT NULL
     platform    platform,
     script_id   UUID,
     is_default  BOOLEAN DEFAULT FALSE,
     CONSTRAINT fk_script_id
         FOREIGN KEY(id)
-            REFERENCES brbl_logic.scripts(id)
+            REFERENCES brbl_logic.scripts(id),
+    CONSTRAINT unique_pattern_platform
+        UNIQUE(pattern, platform)_
 );
 
 https://www.postgresql.org/docs/current/sql-createtable.html has some interesting notes about column storage and compression options which might be useful if script text gets large.
@@ -1627,4 +1629,97 @@ Asking for the graph starting with the BadPeople element yields:
  cf72ce06-50fc-4bf1-852b-dbdbd9f97f66 | AnotherEn.. | cf72ce06-50fc-4bf1-852b-dbdbd9f97f66 | NOOP       |
 
  Perfect.
+
+
+===== 2025-05-26 ====
+
+Got the keywords table/query logic working. This won't be a simple, fast cache using Caffeine since we want/need to support
+some amount of regular expressions. Explored embedding the keyword query inside the recursive script/edge query but dropped
+it because it would require doing the pattern match in sql (not necessarily bad but possibly unwieldy) and it was hard to determine
+from the result set where the graph "started."
+
+
+
+===== 2025-05-28 ====
+
+Trying out the combined keyword/script/edge logic in a full running system...
+
+Using PlatformGateway + curl scripts make evaluating this difficult.
+
+Let's bust out the BrblCli hack to see if it helps...
+
+    java -cp target/sndrRcvr-1.0-SNAPSHOT-jar-with-dependencies.jar com.enoughisasgoodasafeast.cli.BrblCli -l
+
+Actually working reasonably well although...
+It shows an issue where the penultimate message in the script graph doesn't send the edge response before moving to the
+end script. i.e. sending 'Iggy' as our choice of best third Stooge doesn't trigger the "Oops, wrong Stooges!" message.
+Instead it just replies with the EchoWithPrefix response "That is all. Bye.: Iggy"
+
+The current data in the scripts and edges table *looks* correct so maybe the Multi.Process logic preceded the node/edge model...
+
+===== 2025-05-29 ====
+
+ALTER ROLE <your_login_role> SET search_path TO a,b,c;
+
+Idea: Leverage the evaluatedScripts list in the Multi.Process.evaluate() method to access the previous Script (the Multi.Present) to reference ResponseLogic elements to process the current input and route the conversation to the next Script.
+
+Implemented a printGraph function for the Script class to better visualize the graph we're producing.
+The terminal script node for each branch ends up with three redundant ResponseLogic elements (the 'NOOP' edges.)
+This could be a problem with the query or the way we're assembling the graph from the query results.
+Otherwise, the structure looks like what we intended.
+
+Which means the behavior we see walking through it via the BrblCli is a problem with the script processing.
+
+Realized that the Multi.Present -> Process combo is supposed to have the former pointing (only) at the latter.
+Also that its the latter that contains the references to the choices. So we need to fix the data in brbl_logic.scripts/edges.
+
+===== 2025-05-30 ====
+
+Fixing the data...
+
+TABLE brbl_logic.scripts:
+ id         | uuid                     |           | not null |
+ created_at | timestamp with time zone |           | not null |
+ text       | character varying(255)   |           |          |
+ type       | smallint                 |           | not null |
+ label      | character varying(32)    |           |
+
+=== Create the new Multi.Process scripts
+insert into brbl_logic.scripts values(gen_random_uuid(), now(), 'Error message for ColorQuizProcess', 5, 'ColorQuizProcess') returning id;          --> 95441b9a-3636-4f45-bd0a-ec35e84dd5f7
+insert into brbl_logic.scripts values(gen_random_uuid(), now(), 'Error message for StoogeQuiz_Process', 5, 'StoogeQuiz_Process') returning id;          --> 3f467ee3-4874-4ad1-82b1-99be06f575ab
+insert into brbl_logic.scripts values(gen_random_uuid(), now(), 'Error message for UtensilQuiz_Process', 5, 'UtensilQuiz_Process') returning id;            --> 1bda7846-31b4-4983-92ec-161eba46c758
+insert into brbl_logic.scripts values(gen_random_uuid(), now(), 'Error message for ShapeQuiz_Process', 5, 'ShapeQuiz_Process') returning id;            --> 23f00a69-55b7-4c29-b777-5c278b7088ed
+insert into brbl_logic.scripts values(gen_random_uuid(), now(), 'Error message for BadPeople_Process', 5, 'BadPeople_Process') returning id;            --> ae28c0e3-9303-4807-979f-694bc9981dd7
+insert into brbl_logic.scripts values(gen_random_uuid(), now(), 'Error message for AnotherEndOfConversation_Process', 5, 'AnotherEndOfConversation_Process') returning id;          --> aec8789f-546f-42c2-b1d5-c80bd10014f0
+
+=== Point the existing edges to the new scripts:
+UPDATE brbl_logic.edges set src = '95441b9a-3636-4f45-bd0a-ec35e84dd5f7' where src = '89eddcb8-7fe5-4cd1-b18b-78858f0789fb' ;
+UPDATE brbl_logic.edges set src = '3f467ee3-4874-4ad1-82b1-99be06f575ab' where src = '0b2861b6-a16a-4197-910a-158610967dd9' ;
+UPDATE brbl_logic.edges set src = '1bda7846-31b4-4983-92ec-161eba46c758' where src = '385a1f99-d844-42e6-9fa3-a0e3a116757d' ;
+UPDATE brbl_logic.edges set src = '23f00a69-55b7-4c29-b777-5c278b7088ed' where src = 'b48d36ce-2512-4ee0-a9b9-b743d72e95e9' ;
+UPDATE brbl_logic.edges set src = 'ae28c0e3-9303-4807-979f-694bc9981dd7' where src = '525028ae-0a33-4c80-a22f-868f77bb9531' ;
+UPDATE brbl_logic.edges set src = 'aec8789f-546f-42c2-b1d5-c80bd10014f0' where src = 'cf72ce06-50fc-4bf1-852b-dbdbd9f97f66' ;
+
+=== Create new edges linking the original Multi.Present scripts (type 4) to the new Process scripts (type 5):
+id            | uuid                     |           | not null |
+created_at    | timestamp with time zone |           | not null |
+match_text    | character varying(128)   |           |          |
+response_text | character varying(255)   |           |          |
+src           | uuid                     |           | not null |
+dst           | uuid                     |           |          |
+
+INSERT INTO brbl_logic.edges VALUES (gen_random_uuid(),now(),'n/a','n/a', '89eddcb8-7fe5-4cd1-b18b-78858f0789fb','95441b9a-3636-4f45-bd0a-ec35e84dd5f7') returning id ;
+INSERT INTO brbl_logic.edges VALUES (gen_random_uuid(),now(),'n/a','n/a', '0b2861b6-a16a-4197-910a-158610967dd9','3f467ee3-4874-4ad1-82b1-99be06f575ab') returning id ;
+INSERT INTO brbl_logic.edges VALUES (gen_random_uuid(),now(),'n/a','n/a', '385a1f99-d844-42e6-9fa3-a0e3a116757d','1bda7846-31b4-4983-92ec-161eba46c758') returning id ;
+INSERT INTO brbl_logic.edges VALUES (gen_random_uuid(),now(),'n/a','n/a', 'b48d36ce-2512-4ee0-a9b9-b743d72e95e9','23f00a69-55b7-4c29-b777-5c278b7088ed') returning id ;
+INSERT INTO brbl_logic.edges VALUES (gen_random_uuid(),now(),'n/a','n/a', '525028ae-0a33-4c80-a22f-868f77bb9531','ae28c0e3-9303-4807-979f-694bc9981dd7') returning id ;
+INSERT INTO brbl_logic.edges VALUES (gen_random_uuid(),now(),'n/a','n/a', 'cf72ce06-50fc-4bf1-852b-dbdbd9f97f66','aec8789f-546f-42c2-b1d5-c80bd10014f0') returning id ;
+
+New edge ids:
+65078637-9862-4682-8bbe-0a52ed29bf6b
+ed53f6d3-3e66-4321-9ba7-ad3c36e79eb4
+31ec69f2-c618-492a-aaa7-68bb6a4475f5
+77ff5c56-ac17-4410-8cf9-439b34e7c587
+83408cce-85a9-4824-b622-651c6839f399
+4aaf8877-f0dc-4182-94f9-86f05e87de3a
 

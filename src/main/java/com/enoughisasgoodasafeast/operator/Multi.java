@@ -21,9 +21,8 @@ public class Multi {
          * @param session the session being processed.
          * @param moMessage the incoming MO message that triggered the response message produced here.
          * @return the next Script in the session's script graph.
-         * @throws IOException
          */
-        public static Script evaluate(Session session, Message moMessage) throws IOException {
+        public static Script evaluate(Session session, Message moMessage) {
             LOG.info("Multi.Present evaluating '{}'", moMessage.text());
             // Is this the right place to handle platform-dependent message text formatting?
             String mtText = Functions.renderForPlatform(moMessage.platform(), session.currentScript().text());
@@ -32,7 +31,7 @@ public class Multi {
             return advance(session);
         }
 
-        // TODO move this into a ScriptManager type of class that other Script impls can use.
+        // TODO move this into a ScriptManager type of class that other Script impls can use?
         static Script advance(Session session) {
             if (session.currentScript.next().isEmpty()) {
                 LOG.info("End of script, '{}', reached.", session.currentScript.label());
@@ -49,26 +48,39 @@ public class Multi {
 
         // FIXME in practice, this cannot be a constant. This could, however, serve as a default.
         final static String UNEXPECTED_INPUT_MESSAGE = """
-                Oops, that's not one of the options. Try again with one of the listed numbers
+                Oops, that's not one of the options. Try again with one of the listed options
                 or say 'change topic' to start talking about something else.
                 """;
 
         public static Script evaluate(Session session, Message moMessage) throws IOException {
             LOG.info("Multi.Process evaluating '{}'", moMessage.text());
-            String noMatchText = session.currentScript.text(); //overloading the use of the text field feels bad. Add an errorText field to Script?
 
+            final String noMatchText = session.currentScript.text(); //overloading the use of the text field feels bad. Add an errorText field to Script?x
             final String userText = moMessage.text().trim().toLowerCase();
-            for (ResponseLogic option : session.currentScript.next()) {
+
+            LOG.info("Present currentScript: {}", session.currentScript());
+
+            for (ResponseLogic option : session.currentScript().next()) {
+                LOG.info("Checking option for match {} -> {}", userText, option.matchText());
                 if (option.matchText().contains(userText)) { //TODO make the matching more robust/flexible. Efficient regexes?
                     LOG.info("Input, {}, matched logic: {}", userText, option.matchText());
                     final Message mt = newMTfromMO(moMessage, option.text());
                     session.addOutput(mt);
                     LOG.info("Enqueued {}", mt);
-                    return option.script();
+                    /*Script nextScript =*/ return option.script();
+//                    if (nextScript != null && !ScriptType.ProcessMulti.equals(nextScript.type())) {
+//                        return nextScript.evaluate(session, moMessage); // continue until we hit a Script that requires user input.
+//                    }
+//                    else {
+//                        return nextScript;
+//                    }
+
+                } else {
+                    LOG.info("No match {} != {}", userText, option.matchText());
                 }
             }
 
-            // Handle the "I want to talk about something else" case here...Should it be above the responselogic loop?
+            // Handle the "I want to talk about something else" case here...Should it be above the ResponseLogic loop?
             if (userText.contains("change topic")) {
                 // Create a new Script graph
                 // TODO this should all be handled in the called methods.
@@ -78,13 +90,18 @@ public class Multi {
             }
 
 
-            // TODO "go back to revisit a previous stage"?
+            // TODO add "go back to revisit a previous stage"?
+            // ...
 
             // Still here? Provide a 'bad input' message.
             // Would it make sense to re-print the previous Multi.Present? Seems like it would be clear what the
             // actual options are since it's only a few lines above in the chat history, right?
             session.addOutput(newMTfromMO(moMessage, noMatchText==null ? UNEXPECTED_INPUT_MESSAGE : noMatchText));
-            return session.currentScript; // we don't advance in this case.
+            return session.currentScript; // we won't advance in this case.
+        }
+
+        static Script advance(Session session) {
+            return null;
         }
 
         /*

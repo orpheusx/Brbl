@@ -226,35 +226,37 @@ WHERE
     s.id = '89eddcb8-7fe5-4cd1-b18b-78858f0789fb';
 
 
--- Query to find the id of the intial Script per platform and keyword, including default.
+-- Query to find the id of the initial Script per platform and keyword, including default.
 CREATE TABLE brbl_logic.keywords (
-    id          UUID NOT NULL,
-    word        VARCHAR(128),   --> the default entry likely has no value so this can't be NOT NULL
+    id          UUID NOT NULL UNIQUE,
+    pattern     VARCHAR(128),   --> the default entry likely has no value so this can't be NOT NULL
     platform    platform,
     script_id   UUID,
     is_default  BOOLEAN DEFAULT FALSE,
     CONSTRAINT fk_script_id
         FOREIGN KEY(script_id)
             REFERENCES brbl_logic.scripts(id),
+    CONSTRAINT unique_pattern_platform
+        UNIQUE(pattern, platform)
 );
 
 INSERT INTO brbl_logic.keywords VALUES(
     gen_random_uuid(),
     'FOO',
     'S'::Platform,
-    '89eddcb8-7fe5-4cd1-b18b-78858f0789fb',
+    '89eddcb8-7fe5-4cd1-b18b-78858f0789fb'::UUID,
     FALSE
 );
 
 -- Query to populate a keyword cache:
 SELECT
-    word, script_id
+    pattern, script_id
 FROM
     brbl_logic.keywords
 WHERE
     platform = 'S'
     AND (
-    word = ?
+    pattern = ?
     OR
     is_default IS TRUE
     );

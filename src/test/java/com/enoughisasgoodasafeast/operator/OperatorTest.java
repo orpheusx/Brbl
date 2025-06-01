@@ -238,6 +238,7 @@ public class OperatorTest {
             assertTrue(operator.process(mo4));
 
             var session = operator.sessionCache.get(SessionKey.newSessionKey(mo4));
+            assertNotNull(session);
             assertTrue(requireNonNull(queuedMessages.getFirst()).text().contains("favorite color"));
             queuedMessages.clear();
 

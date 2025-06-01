@@ -29,9 +29,12 @@ public class Operator implements MessageProcessor {
             .expireAfterAccess(20, TimeUnit.MINUTES)
             .build(key -> findOrCreateUser(key));
 
-    //    final LoadingCache<String, Keyword> keywordCache = Caffeine.newBuilder()
-//            .expireAfterAccess(20, TimeUnit.MINUTES)
-//            .build(keyword -> findStartingScript());
+/*        final LoadingCache<String, Keyword> keywordCache = Caffeine.newBuilder()
+ *            .expireAfterAccess(20, TimeUnit.MINUTES)
+ *           .build(keyword -> findStartingScript());*/
+
+    // TODO build a two layer cache: 1) regular exact match key map 2) a set of regex patterns that when matched put the matched value into the
+    // exact match map (for efficiency). The regexes would be compiled once.
     Map<String, Keyword> keywordCache = new ConcurrentHashMap<>();
 
 
@@ -135,9 +138,21 @@ public class Operator implements MessageProcessor {
                     }
                 }
 
+                // FIXME Session.evaluate handles appending the script to the evaluatedScript list
+                // FIXME why split the logic for handling currentScript? Move it into Session? Or move both here?
                 Script next = session.currentScript.evaluate(session, message);
                 if (next != null) {
+                    LOG.info("Next script is {}", next);
                     session.currentScript = next;
+                    if (!next.type().equals(ScriptType.ProcessMulti)) {
+                        LOG.info("Playing PresentMulti...");
+                        // Assumes Present and Process are always paired. If this works, make the pattern more generic.
+                        // FIXME This is hideous because we're using Session variables as globals here and in the static Multi functions
+                        session.currentScript = session.currentScript.evaluate(session, message);
+                    }
+
+                } else {
+                    LOG.info("Reached end of script graph."); // FIXME change to debug
                 }
                 session.flushOutput();
                 return true; // when would this be false?
@@ -161,8 +176,8 @@ public class Operator implements MessageProcessor {
      *
      * @param sessionKey the key associated with the new Session
      * @return the newly constructed Session added to the sessionCache
-     * @throws InterruptedException
-     * @throws ExecutionException
+     * @throws InterruptedException if any of the involved threads was interrupted
+     * @throws ExecutionException if any of the subtasks failed
      */
     Session createSession(SessionKey sessionKey) throws InterruptedException, ExecutionException {
         try (var scope = new StructuredTaskScope.ShutdownOnFailure()) {
@@ -215,9 +230,9 @@ public class Operator implements MessageProcessor {
      */
     Script findStartingScript(SessionKey sessionKey) {
         if (keywordCache.isEmpty()) {
-            keywordCache = persistenceManager.getKeywords();
+            keywordCache.putAll(persistenceManager.getKeywords());
         }
-        Keyword keyword = keywordCache.get(sessionKey.keyword()); // TODO possibly replace with a loop over the regex patterns represented by the cache keys
+        Keyword keyword = keywordCache.get(sessionKey.keyword()); // TODO loop over the regex patterns represented by the cache keys?
         LOG.info("Found existing keyword mapping: {}", keyword);
         return persistenceManager.getScript(keyword.scriptId());
 //        Script startingScript = scriptCache.get(sessionKey.to());
