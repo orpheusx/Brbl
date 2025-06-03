@@ -67,9 +67,9 @@ public record Script(UUID id, String text, ScriptType type, SequencedSet<Respons
      *  - schedule new messages
      *  - invoke an ML operation
      * @param session the user context
-     * @param moMessage the message being processed
+     * @param moMessage the MO message being processed
      * @return the next Script in the conversation (or null if the conversation is complete?)
-     * FIXME Maybe instead of null we return a symbolic Script that indicates the end of Script.
+     * FIXME Maybe instead of null we return a symbolic Script that indicates the end of Script?
      */
     public Script evaluate(Session session, Message moMessage) throws IOException {
         Script next =  switch (session.currentScript().type) {
@@ -91,16 +91,16 @@ public record Script(UUID id, String text, ScriptType type, SequencedSet<Respons
             case ProcessMulti ->
                     Multi.Process.evaluate(session, moMessage);
 
-            case Pivot ->
-                    Pivot.evaluate(session);
-
-            case TopicSelection ->
-                    TopicSelection.evaluate(session, moMessage);
+//            case Pivot ->
+//                    Pivot.evaluate(session);
+//
+//            case TopicSelection ->
+//                    TopicSelection.evaluate(session, moMessage);
         };
 
         // If we didn't advance to a different script then we're not done evaluating this one.
         if (!this.equals(next)) {
-            session.addEvaluated(this);
+            session.registerEvaluated(this);
         }
 
         return next;

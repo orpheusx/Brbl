@@ -4,18 +4,21 @@ package com.enoughisasgoodasafeast.operator;
  * An enumeration used to define the type of logic applied to the processing of a message.
  */
 public enum ScriptType {
-    EchoWithPrefix(1),
-    ReverseText(2),
-    HelloGoodbye(3),
-    PresentMulti(4),
-    ProcessMulti(5),
-    Pivot(6),
-    TopicSelection(7);
+    EchoWithPrefix  (1, false), // FIXME get rid of these
+    ReverseText     (2, false), // FIXME get rid of these
+    HelloGoodbye    (3, false), // FIXME get rid of these
+    PresentMulti    (4, false),
+    ProcessMulti    (5, true)
+    ;
+//    Pivot           (6, false),
+//    TopicSelection  (7, false);
 
     private final int value;
+    private final boolean awaitsInput;
 
-    ScriptType(int value) {
+    ScriptType(int value, boolean awaitsInput) {
         this.value = value;
+        this.awaitsInput = awaitsInput;
     }
 
     int value() {

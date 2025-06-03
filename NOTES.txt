@@ -1723,3 +1723,38 @@ ed53f6d3-3e66-4321-9ba7-ad3c36e79eb4
 83408cce-85a9-4824-b622-651c6839f399
 4aaf8877-f0dc-4182-94f9-86f05e87de3a
 
+Hmm, what is the "current" script at the end of the chain?
+
+
+===== 2025-06-01 ====
+
+Scripts are now chaining correctly albeit with some ugly code that I'll have to fix up.
+
+The ScriptType enum currently defines the following types:
+*   EchoWithPrefix(1),
+    ReverseText(2),
+    HelloGoodbye(3),
+*   PresentMulti(4),
+*   ProcessMulti(5),
+    Pivot(6),
+    TopicSelection(7);
+
+Of these, only the first, fourth and fifth are being used and can be said to be useful.
+#2 and #3 were only for early stage development testing.
+#6 and #7 are not implemented.
+
+Let's clear the deck and only consider the *Multi types to be in play.
+What additional scenarios do we want/need to support in addition to these two?
+
+A) A notification. Just a one and done message (possibly split into multiple text messages.) This could include instructions on how to start new conversations. No response expected. It chains to a EndOfChat script.
+B) Ask a question that invites a free text input and reply with something canned e.g. "Thanks for the feedback" **
+C) Same thing but apply sentiment or other textual analysis to the input and, based on the result, select the response sent back. For example, if the response was negative reply with "Uh oh. We're sorry you weren't happy with X..." The selection of next script would be determined by this evaluation, meaning that we require a bounded set of possibilities. In practice, this only requires that there be a default response. The sentiment analysis done by Vader and NLTK both return a value within a bounded range (-1..1 or some variation.)
+D) The TopicSelection type is meant to provide an entry point if the user doesn't arrive by keyword (or they continue after completing their original script.) This function could be implemented with either Present/ProcessMulti or the free form option.
+E) The Pivot is meant to be used when the user wants to break out of the current script either by using the "change topic" input or by repeatedly failing input validation. "If you want to talk about something else (enter "1" or continue with the current chat (enter "2")" This would chain the 1 response to a TopicSelection script and the 2 response back to the previous script requiring input (found using the Session.evaluated stack.) The implementation of a Pivot could be done simply with a *.Multi pair.
+F) EndOfChat is a terminal node. It is used to avoid overloading null with the same meaning. Null should only indicate an error. An existing  Session where the currentScript is EndOfChat would trigger a call to the same findStartingScript method used when creating a new Session.
+
+** We will have the raw text of the MO recorded in the brbl_logs.message_mo table but it might be useful to have a dedicated "user_poll" table that contains the evaluated response. For example, if the question was "Did you like our cupcakes?" and the MO response was "yup" then the user_poll table might be set with a value from a fixed set (e.g. YES, NO, UNKNOWN) presumably using some kind of sentiment or textual analysis.
+
+
+
+

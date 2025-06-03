@@ -70,16 +70,19 @@ public class Session {
         LOG.info("Created Session {} for User {}", id, user.id());
     }
 
-    public void addInput(Message message) {
-        inputs.add(message);
+    public void registerInput(Message moMessage) {
+        inputs.add(moMessage);
+        LOG.info("Registered input message {}", moMessage);
     }
 
-    public void addOutput(Message mtMessage) {
+    public void registerOutput(Message mtMessage) {
         outputBuffer.add(mtMessage);
+        LOG.info("Registered output message {}", mtMessage);
     }
     
-    public void addEvaluated(Script script) {
+    public void registerEvaluated(Script script) {
         evaluatedScripts.addLast(script);
+        LOG.info("Registered evaluated script {}", script.id());
     }
 
     public void flushOutput() throws IOException {

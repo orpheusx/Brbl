@@ -115,7 +115,7 @@ public class Operator implements MessageProcessor {
     private boolean process(Session session, Message message) {
         synchronized (session) {
             try {
-                session.addInput(message);
+                session.registerInput(message);
                 int size = session.inputs.size();
                 if (size > EXPECTED_INPUT_COUNT) {
                     LOG.error("Uh oh, there are more inputs ({}) than expected in session ({})", size, session);
@@ -144,11 +144,13 @@ public class Operator implements MessageProcessor {
                 if (next != null) {
                     LOG.info("Next script is {}", next);
                     session.currentScript = next;
-                    if (!next.type().equals(ScriptType.ProcessMulti)) {
-                        LOG.info("Playing PresentMulti...");
+                    if (!next.type().equals(ScriptType.ProcessMulti)) { // Idea: define a trait called Awaits for this to signal
+                        LOG.info("Continuing playback...");
                         // Assumes Present and Process are always paired. If this works, make the pattern more generic.
                         // FIXME This is hideous because we're using Session variables as globals here and in the static Multi functions
                         session.currentScript = session.currentScript.evaluate(session, message);
+                    } else {
+                        LOG.info("Stopping playback for await script");
                     }
 
                 } else {

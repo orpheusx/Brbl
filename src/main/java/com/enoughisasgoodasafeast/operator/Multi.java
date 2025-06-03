@@ -5,7 +5,6 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import java.io.IOException;
-import java.util.List;
 
 import static com.enoughisasgoodasafeast.Message.newMTfromMO;
 
@@ -27,7 +26,7 @@ public class Multi {
             // Is this the right place to handle platform-dependent message text formatting?
             String mtText = Functions.renderForPlatform(moMessage.platform(), session.currentScript().text());
             Message mt = newMTfromMO(moMessage, mtText); // FIXME Move the renderForPlatform into Message's static methods?
-            session.addOutput(mt);
+            session.registerOutput(mt);
             return advance(session);
         }
 
@@ -65,16 +64,9 @@ public class Multi {
                 if (option.matchText().contains(userText)) { //TODO make the matching more robust/flexible. Efficient regexes?
                     LOG.info("Input, {}, matched logic: {}", userText, option.matchText());
                     final Message mt = newMTfromMO(moMessage, option.text());
-                    session.addOutput(mt);
+                    session.registerOutput(mt);
                     LOG.info("Enqueued {}", mt);
-                    /*Script nextScript =*/ return option.script();
-//                    if (nextScript != null && !ScriptType.ProcessMulti.equals(nextScript.type())) {
-//                        return nextScript.evaluate(session, moMessage); // continue until we hit a Script that requires user input.
-//                    }
-//                    else {
-//                        return nextScript;
-//                    }
-
+                    return option.script();
                 } else {
                     LOG.info("No match {} != {}", userText, option.matchText());
                 }
@@ -85,7 +77,7 @@ public class Multi {
                 // Create a new Script graph
                 // TODO this should all be handled in the called methods.
                 Message changeTopicNotification = newMTfromMO(moMessage, "You want to talk about something else? OK...");
-                session.addOutput(changeTopicNotification);
+                session.registerOutput(changeTopicNotification);
                 return Process.constructTopicScript(session, moMessage);
             }
 
@@ -96,7 +88,7 @@ public class Multi {
             // Still here? Provide a 'bad input' message.
             // Would it make sense to re-print the previous Multi.Present? Seems like it would be clear what the
             // actual options are since it's only a few lines above in the chat history, right?
-            session.addOutput(newMTfromMO(moMessage, noMatchText==null ? UNEXPECTED_INPUT_MESSAGE : noMatchText));
+            session.registerOutput(newMTfromMO(moMessage, noMatchText==null ? UNEXPECTED_INPUT_MESSAGE : noMatchText));
             return session.currentScript; // we won't advance in this case.
         }
 
