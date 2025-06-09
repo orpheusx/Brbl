@@ -256,12 +256,12 @@ public class Operator implements MessageProcessor {
 //                    Node one = new Node("What's you favorite color? 1) red 2) blue 3) flort", NodeType.PresentMulti, "ColorQuiz");
 //                    Node two = new Node("Oops, that's not one of the options. Try again with one of the listed numbers or say 'change topic' to start talking about something else.",
 //                            NodeType.ProcessMulti, "EvaluateColorAnswer");
-//                    ResponseLogic linkOneToTwo = new ResponseLogic(null, null, two);
+//                    Edge linkOneToTwo = new Edge(null, null, two);
 //                    one.next().add(linkOneToTwo);
 //                    Node tre = new Node("End-of-Conversation", NodeType.EchoWithPrefix, "EndOfConversation");
-//                    ResponseLogic twoOption1 = new ResponseLogic(List.of("1", "red"), "Red is the color of life.", tre);
-//                    ResponseLogic twoOption2 = new ResponseLogic(List.of("2", "blue"), "Blue is my fave, as well.", tre);
-//                    ResponseLogic twoOption3 = new ResponseLogic(List.of("1", "flort"), "Flort is for the cool kids.", tre);
+//                    Edge twoOption1 = new Edge(List.of("1", "red"), "Red is the color of life.", tre);
+//                    Edge twoOption2 = new Edge(List.of("2", "blue"), "Blue is my fave, as well.", tre);
+//                    Edge twoOption3 = new Edge(List.of("1", "flort"), "Flort is for the cool kids.", tre);
 //                    two.next().add(twoOption1);
 //                    two.next().add(twoOption2);
 //                    two.next().add(twoOption3);

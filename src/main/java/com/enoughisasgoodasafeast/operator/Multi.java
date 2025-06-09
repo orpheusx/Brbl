@@ -36,7 +36,7 @@ public class Multi {
                 LOG.info("End of node, '{}', reached.", session.getCurrentScript().label());
                 return null;
             } else {
-                final Node nextNode = session.getCurrentScript().edges().getFirst().node(); // only one ResponseLogic available
+                final Node nextNode = session.getCurrentScript().edges().getFirst().node(); // only one Edge available
                 LOG.info("Multi.Present {} dispatching to {}", session.getCurrentScript().label(), nextNode);
                 return nextNode;
             }
@@ -61,7 +61,7 @@ public class Multi {
 
             LOG.info("Present currentNode: {}", context.getCurrentScript());
 
-            for (ResponseLogic option : current.edges()) {
+            for (Edge option : current.edges()) {
                 LOG.info("Checking option for match {} -> {}", userText, option.matchText());
                 if (option.matchText().contains(userText)) { //TODO make the matching more robust/flexible. Efficient regexes?
                     LOG.info("Input, {}, matched logic: {}", userText, option.matchText());
@@ -74,7 +74,7 @@ public class Multi {
                 }
             }
 
-            // Handle the "I want to talk about something else" case here...Should it be above the ResponseLogic loop?
+            // Handle the "I want to talk about something else" case here...Should it be above the Edge loop?
             if (userText.contains("change topic")) {
                 // Create a new Node graph
                 // TODO this should all be handled in the called methods.

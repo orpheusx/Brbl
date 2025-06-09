@@ -25,7 +25,7 @@ public class Functions {
             return null;
         } else {
             assert context.getCurrentScript().edges().size() == 1;
-            final Node nextNode = context.getCurrentScript().edges().getFirst().node(); // only one ResponseLogic available
+            final Node nextNode = context.getCurrentScript().edges().getFirst().node(); // only one Edge available
             LOG.info("Advancing from {} dispatching to {}", context.getCurrentScript().label(), nextNode);
             return nextNode;
         }
@@ -59,11 +59,11 @@ public class Functions {
 //                """;
 //                Node topicPresentation = new Node(text, NodeType.PresentMulti, "topic-selection");
 //                Node endScript = new Node("End-of-Conversation", NodeType.ProcessMulti, "e-o-c");
-//                ResponseLogic topicOne = new ResponseLogic(List.of("1", "wolverine", "wolverines"), "They have pointy teeth and a nasty disposition", endScript);
-//                ResponseLogic topicTwo = new ResponseLogic(List.of("1", "international", "monetary", "policy"), "It's kinda boring actually.", endScript);
+//                Edge topicOne = new Edge(List.of("1", "wolverine", "wolverines"), "They have pointy teeth and a nasty disposition", endScript);
+//                Edge topicTwo = new Edge(List.of("1", "international", "monetary", "policy"), "It's kinda boring actually.", endScript);
 //                endScript.next().add(topicOne);
 //                endScript.next().add(topicTwo);
-//                topicPresentation.next().add(new ResponseLogic(null, null, endScript));//define a constant that means "unset" instead of overloading null.
+//                topicPresentation.next().add(new Edge(null, null, endScript));//define a constant that means "unset" instead of overloading null.
 //                yield topicPresentation;
 //            } // more to come before we fully implement using a database?
 //            default -> null;

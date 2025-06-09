@@ -1825,10 +1825,17 @@ With these additional rows added to the database, I'm able to test and confirm t
 
 ===== 2025-06-08 ====
 
-
-
 https://vladmihalcea.com/hibernate-with-recursive-query/ has some interesting info about using recursive CTEs with Hibernate.
 Hopefully still compatible with the newly released Hibernate 7.
+
+Started a new project/repo: BrblEdit.
+
+To reference the sndrRcvr code (which we should rename to just Brbl as is reflected on GitHub) its simple enough to run:
+
+    mvn install -DskipTests=true
+
+This generates and installs the jar and .pom file in my local ~/.m2 folder.
+
 
 
 

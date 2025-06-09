@@ -17,7 +17,7 @@ import java.util.*;
  * @param edges
  * @param label
  */
-public record Node(UUID id, String text, NodeType type, SequencedSet<ResponseLogic> edges/*, Node previous*/, String label) {
+public record Node(UUID id, String text, NodeType type, SequencedSet<Edge> edges, String label) {
 
     private static final Logger LOG = LoggerFactory.getLogger(Node.class);
 
@@ -55,7 +55,7 @@ public record Node(UUID id, String text, NodeType type, SequencedSet<ResponseLog
         return edges != null && !edges.isEmpty();
     }
 
-    public SequencedSet<ResponseLogic> edges() {
+    public SequencedSet<Edge> edges() {
         return edges;
     }
 
@@ -123,7 +123,7 @@ public record Node(UUID id, String text, NodeType type, SequencedSet<ResponseLog
     public static void printGraph(Node startNode, Node node, int indent) {
         printIndent(node, indent);
         int level = indent + 1;
-        for (ResponseLogic edge : node.edges()) {
+        for (Edge edge : node.edges()) {
             printIndent(edge, level);
             Node childNode = edge.node();
 

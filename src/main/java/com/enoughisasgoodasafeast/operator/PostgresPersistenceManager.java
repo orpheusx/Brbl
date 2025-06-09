@@ -484,7 +484,7 @@ public class PostgresPersistenceManager implements PersistenceManager {
 
             // s.id, s.created_at, s.text, s.type, s.label,
             // e.id, e.created_at, e.match_text, e.response_text, e.src, e.dst
-            Map<UUID, SequencedSet<ResponseLogic>> tempEdges = new HashMap<>();
+            Map<UUID, SequencedSet<Edge>> tempEdges = new HashMap<>();
             Map<UUID, UUID> edgeIdToDstId = new HashMap<>();
 
             final ResultSet rs = ps.executeQuery();
@@ -503,34 +503,34 @@ public class PostgresPersistenceManager implements PersistenceManager {
                     scriptMap.put(id, node);
                 }
 
-                UUID edgeId = (UUID) rs.getObject(6); // ResponseLogic.id
+                UUID edgeId = (UUID) rs.getObject(6); // Edge.id
                 // index 7, skip the createdAt
                 List<String> matchText = Functions.parseMatchTextPatterns(rs.getString(8)); // matchText
                 String responseText = rs.getString(9);
                 UUID srcId = (UUID) rs.getObject(10);
                 UUID dstId = (UUID) rs.getObject(11);
 
-                ResponseLogic tempEdge = new ResponseLogic(
+                Edge tempEdge = new Edge(
                         edgeId, responseText, matchText, scriptMap.get(dstId)
                 ); // NB: the destination node may not exist so we will need to update/replace this edge at the end of the while loop
                 edgeIdToDstId.put(edgeId, dstId);
 
-                SequencedSet<ResponseLogic> edgesForParentScript = tempEdges.computeIfAbsent(srcId, k -> new LinkedHashSet<>());
+                SequencedSet<Edge> edgesForParentScript = tempEdges.computeIfAbsent(srcId, k -> new LinkedHashSet<>());
                 edgesForParentScript.add(tempEdge);
             }
 
             // Now patch all the references for both the edges and the scripts
             for (Map.Entry<UUID, Node> idAndScript : scriptMap.entrySet()) {
-                SequencedSet<ResponseLogic> edgesForScript = tempEdges.get(idAndScript.getKey());
+                SequencedSet<Edge> edgesForScript = tempEdges.get(idAndScript.getKey());
                 Node node = idAndScript.getValue();
-                for (ResponseLogic edge : edgesForScript) {
+                for (Edge edge : edgesForScript) {
                     if (edge.node() == null) {
                         UUID destinationScriptID = edgeIdToDstId.get(edge.id());
                         Node missingNode = scriptMap.get(destinationScriptID);
                         //LOG.info("Patching edge {} with dst: {}", node.id(), missingNode);
                         edge = edge.copyReplacing(missingNode);
                     }
-                    // else the node was already available when we created the ResponseLogic from the ResultSet
+                    // else the node was already available when we created the Edge from the ResultSet
 
                     node.edges().add(edge);
                 }
@@ -574,7 +574,7 @@ public class PostgresPersistenceManager implements PersistenceManager {
 
             // s.id, s.created_at, s.text, s.type, s.label,
             // e.id, e.created_at, e.match_text, e.response_text, e.src, e.dst
-            Map<UUID, SequencedSet<ResponseLogic>> tempEdges = new HashMap<>();
+            Map<UUID, SequencedSet<Edge>> tempEdges = new HashMap<>();
             Map<UUID, UUID> edgeIdToDstId = new HashMap<>();
 
             final ResultSet rs = ps.executeQuery();
@@ -593,27 +593,27 @@ public class PostgresPersistenceManager implements PersistenceManager {
                     scriptMap.put(id, node);
                 }
 
-                UUID edgeId = (UUID) rs.getObject(6); // ResponseLogic.id
+                UUID edgeId = (UUID) rs.getObject(6); // Edge.id
                 // index 7, skip the createdAt
                 List<String> matchText = Functions.parseMatchTextPatterns(rs.getString(8)); // matchText
                 String responseText = rs.getString(9);
                 UUID srcId = (UUID) rs.getObject(10);
                 UUID dstId = (UUID) rs.getObject(11);
 
-                ResponseLogic tempEdge = new ResponseLogic(
+                Edge tempEdge = new Edge(
                         edgeId, responseText, matchText, scriptMap.get(dstId)
                 ); // NB: the destination node may not exist so we will need to update/replace this edge at the end of the while loop
                 edgeIdToDstId.put(edgeId, dstId);
 
-                SequencedSet<ResponseLogic> edgesForParentScript = tempEdges.computeIfAbsent(srcId, k -> new LinkedHashSet<>());
+                SequencedSet<Edge> edgesForParentScript = tempEdges.computeIfAbsent(srcId, k -> new LinkedHashSet<>());
                 edgesForParentScript.add(tempEdge);
             }
 
             // Now patch all the references for both the edges and the scripts
             for (Map.Entry<UUID, Node> idAndScript : scriptMap.entrySet()) {
-                SequencedSet<ResponseLogic> edgesForScript = tempEdges.get(idAndScript.getKey());
+                SequencedSet<Edge> edgesForScript = tempEdges.get(idAndScript.getKey());
                 Node node = idAndScript.getValue();
-                for (ResponseLogic edge : edgesForScript) {
+                for (Edge edge : edgesForScript) {
                     if (edge.node() == null) {
                         UUID destinationScriptID = edgeIdToDstId.get(edge.id());
                         Node missingNode = scriptMap.get(destinationScriptID);
@@ -622,7 +622,7 @@ public class PostgresPersistenceManager implements PersistenceManager {
                     } else {
                         //LOG.info("Edge {} already points to {}", edge.id(), edge.node());
                     }
-                    // else the node was already available when we created the ResponseLogic from the ResultSet
+                    // else the node was already available when we created the Edge from the ResultSet
 
                     node.edges().add(edge);
                 }
