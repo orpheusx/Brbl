@@ -165,7 +165,7 @@ SET search_path TO brbl_logs, brbl_users, brbl_logic
 
 CREATE SCHEMA IF NOT EXISTS brbl_logic AUTHORIZATION brbl_admin ;
 
-CREATE TABLE brbl_logic.scripts (
+CREATE TABLE brbl_logic.nodes (
     id          UUID PRIMARY KEY,
     created_at  TIMESTAMP WITH TIME ZONE NOT NULL,
     text        VARCHAR(255),       --> SMS is limited to 160 chars but other platform have higher limits.
@@ -181,19 +181,19 @@ CREATE TABLE brbl_logic.edges (
     src             UUID NOT NULL,      --> FK to scripts table
     dst             UUID NOT NULL      --> FK to scripts table
     -- CONSTRAINT fk_script_src
-    --     FOREIGN KEY(id) REFERENCES brbl_logic.scripts(id),
+    --     FOREIGN KEY(id) REFERENCES brbl_logic.nodes(id),
     -- CONSTRAINT fk_script_dst
-    --     FOREIGN KEY(id) REFERENCES brbl_logic.scripts(id)
+    --     FOREIGN KEY(id) REFERENCES brbl_logic.nodes(id)
 );
 
 -- Script 1
-INSERT INTO brbl_logic.scripts VALUES('89eddcb8-7fe5-4cd1-b18b-78858f0789fb', NOW(),
+INSERT INTO brbl_logic.nodes VALUES('89eddcb8-7fe5-4cd1-b18b-78858f0789fb', NOW(),
     'What is your favorite color? 1) red 2) blue 3) flort', 4, 'ColorQuiz') RETURNING *;
 -- Script 2
-INSERT INTO brbl_logic.scripts VALUES('2ed4ceed-a229-4e82-ab89-668a15835058', NOW(),
+INSERT INTO brbl_logic.nodes VALUES('2ed4ceed-a229-4e82-ab89-668a15835058', NOW(),
     'Oops, that is not one of the options. Try again with one of the listed numbers or say "change topic" to start talking about something else.', 5, 'EvaluateColorAnswer') RETURNING *;
 -- Script 3
-INSERT INTO brbl_logic.scripts VALUES('f9420f0c-81ca-4f9a-b1d4-7e25fd280399', NOW(),
+INSERT INTO brbl_logic.nodes VALUES('f9420f0c-81ca-4f9a-b1d4-7e25fd280399', NOW(),
     'That is all. Bye.', 1, 'EndOfConversation') RETURNING *;
 
 INSERT INTO brbl_logic.edges VALUES('d9d9d89b-3047-4b18-8c97-5fb870fc1ced', NOW(), '1|red', 'Red is the color of life.',
@@ -209,7 +209,7 @@ GRANT ALL ON ALL TABLES IN SCHEMA "brbl_users", "brbl_logs", "brbl_logic" TO brb
 -- brbl_logic_read_role --> (no login) read all the brbl_logs.message_* tables
 CREATE ROLE brbl_logic_read_role ;
 GRANT USAGE ON SCHEMA brbl_logic TO brbl_logic_read_role ;
-GRANT SELECT ON brbl_logic.scripts TO brbl_logic_read_role ;
+GRANT SELECT ON brbl_logic.nodes TO brbl_logic_read_role ;
 GRANT SELECT ON brbl_logic.edges TO brbl_logic_read_role ;
 
 GRANT brbl_logic_read_role TO brbl_operator;
@@ -219,7 +219,7 @@ SELECT
     s.id, s.label, s.text,
     e.match_text, e.response_text, e.dst
 FROM
-    brbl_logic.scripts s
+    brbl_logic.nodes s
 INNER JOIN
     brbl_logic.edges e ON s.id = e.src
 WHERE
@@ -235,7 +235,7 @@ CREATE TABLE brbl_logic.keywords (
     is_default  BOOLEAN DEFAULT FALSE,
     CONSTRAINT fk_script_id
         FOREIGN KEY(script_id)
-            REFERENCES brbl_logic.scripts(id),
+            REFERENCES brbl_logic.nodes(id),
     CONSTRAINT unique_pattern_platform
         UNIQUE(pattern, platform)
 );
@@ -276,7 +276,7 @@ WITH RECURSIVE c AS (
 SELECT parent_id FROM c;
 
 -- Need to add some data to really see if the above query does what we want...
-INSERT INTO brbl_logic.scripts VALUES('b48d36ce-2512-4ee0-a9b9-b743d72e95e9', NOW(),
+INSERT INTO brbl_logic.nodes VALUES('b48d36ce-2512-4ee0-a9b9-b743d72e95e9', NOW(),
     'Another question. What is your fave shape: 1) triangle, 2) square or 3) circle', 4, 'ShapeQuiz') RETURNING *;
 INSERT INTO brbl_logic.edges VALUES('190dc5a3-fab2-49c5-b475-242d8e06292f', NOW(), '1|triangle', 'Triangles are so pointy!',
     'b48d36ce-2512-4ee0-a9b9-b743d72e95e9', 'f9420f0c-81ca-4f9a-b1d4-7e25fd280399') RETURNING *;
@@ -285,7 +285,7 @@ INSERT INTO brbl_logic.edges VALUES('1a5aabc0-74f2-4faf-a1fa-783e412d4db9', NOW(
 INSERT INTO brbl_logic.edges VALUES('6da7f442-71f2-431c-8e9c-3d758c5b18de', NOW(), '3|circle', 'Circles go round and round!',
     'b48d36ce-2512-4ee0-a9b9-b743d72e95e9', 'f9420f0c-81ca-4f9a-b1d4-7e25fd280399') RETURNING *;
 
-INSERT INTO brbl_logic.scripts VALUES('385a1f99-d844-42e6-9fa3-a0e3a116757d', NOW(),
+INSERT INTO brbl_logic.nodes VALUES('385a1f99-d844-42e6-9fa3-a0e3a116757d', NOW(),
     'Second question. What is your fave utensil: 1) fork, 2) knife or 3) spoon', 4, 'UtensilQuiz') RETURNING *;
 INSERT INTO brbl_logic.edges VALUES('e3c895c7-9318-4597-b99d-8b647f1da409', NOW(), '1|fork', 'Good for stabbing your food!',
     '385a1f99-d844-42e6-9fa3-a0e3a116757d', 'f9420f0c-81ca-4f9a-b1d4-7e25fd280399') RETURNING *;
@@ -294,7 +294,7 @@ INSERT INTO brbl_logic.edges VALUES('731d8193-c8f8-4ce0-ac90-026371bdc927', NOW(
 INSERT INTO brbl_logic.edges VALUES('43e373db-4e32-42fa-9039-12e69aa30223', NOW(), '3|spoon', 'I guess you like soup!',
     '385a1f99-d844-42e6-9fa3-a0e3a116757d', 'f9420f0c-81ca-4f9a-b1d4-7e25fd280399') RETURNING *;
 
-INSERT INTO brbl_logic.scripts VALUES('0b2861b6-a16a-4197-910a-158610967dd9', NOW(),
+INSERT INTO brbl_logic.nodes VALUES('0b2861b6-a16a-4197-910a-158610967dd9', NOW(),
     'Third question. Which is the best third Stooge: 1) Shemp, 2) Curly or 3) Iggy', 4, 'StoogeQuiz') RETURNING *;
 INSERT INTO brbl_logic.edges VALUES('b71f650a-e48a-4eb2-9909-33327e99050f', NOW(), '1|Shemp', 'Shemp was fire!',
     '0b2861b6-a16a-4197-910a-158610967dd9', 'f9420f0c-81ca-4f9a-b1d4-7e25fd280399') RETURNING *;
@@ -323,7 +323,7 @@ WITH RECURSIVE c AS (
     s.id, s.label, s.text,
     e.match_text, e.response_text, e.dst
   FROM
-    brbl_logic.scripts s
+    brbl_logic.nodes s
   INNER JOIN
     brbl_logic.edges e ON s.id = e.src
   WHERE
@@ -356,7 +356,7 @@ WITH RECURSIVE cte AS (
         s.id, s.created_at, s.text, s.type, s.label,
         e.id, e.created_at, e.match_text, e.response_text, e.src, e.dst
     FROM
-        brbl_logic.scripts s
+        brbl_logic.nodes s
     INNER JOIN
         brbl_logic.edges e ON s.id = e.src
     WHERE

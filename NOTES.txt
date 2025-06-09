@@ -1434,7 +1434,7 @@ Restructured the roles for our two schemas so that we separate privilege definit
 
 CREATE SCHEMA IF NOT EXISTS brbl_logic AUTHORIZATION brbl_admin ;
 
-CREATE TABLE brbl_logic.scripts (
+CREATE TABLE brbl_logic.nodes (
     id          UUID PRIMARY KEY,
     created_at  TIMESTAMP WITH TIME ZONE NOT NULL,
     text        VARCHAR(255),       --> SMS is limited to 160 chars but other platform have higher limits.
@@ -1450,19 +1450,19 @@ CREATE TABLE brbl_logic.edges (
     src             UUID NOT NULL,      --> FK to scripts table
     dst             UUID NOT NULL      --> FK to scripts table
     -- CONSTRAINT fk_script_src
-    --     FOREIGN KEY(id) REFERENCES brbl_logic.scripts(id),
+    --     FOREIGN KEY(id) REFERENCES brbl_logic.nodes(id),
     -- CONSTRAINT fk_script_dst
-    --     FOREIGN KEY(id) REFERENCES brbl_logic.scripts(id)
+    --     FOREIGN KEY(id) REFERENCES brbl_logic.nodes(id)
 );
 
 -- Script 1
-INSERT INTO brbl_logic.scripts VALUES('89eddcb8-7fe5-4cd1-b18b-78858f0789fb', NOW(),
+INSERT INTO brbl_logic.nodes VALUES('89eddcb8-7fe5-4cd1-b18b-78858f0789fb', NOW(),
     'What is your favorite color? 1) red 2) blue 3) flort', 4, 'ColorQuiz') RETURNING *;
 -- Script 2
-INSERT INTO brbl_logic.scripts VALUES('2ed4ceed-a229-4e82-ab89-668a15835058', NOW(),
+INSERT INTO brbl_logic.nodes VALUES('2ed4ceed-a229-4e82-ab89-668a15835058', NOW(),
     'Oops, that is not one of the options. Try again with one of the listed numbers or say "change topic" to start talking about something else.', 5, 'EvaluateColorAnswer') RETURNING *;
 -- Script 3
-INSERT INTO brbl_logic.scripts VALUES('f9420f0c-81ca-4f9a-b1d4-7e25fd280399', NOW(),
+INSERT INTO brbl_logic.nodes VALUES('f9420f0c-81ca-4f9a-b1d4-7e25fd280399', NOW(),
     'That is all. Bye.', 1, 'EndOfConversation') RETURNING *;
 
 INSERT INTO brbl_logic.edges VALUES('d9d9d89b-3047-4b18-8c97-5fb870fc1ced', NOW(), '1|red', 'Red is the color of life.',
@@ -1489,7 +1489,7 @@ Work on node-related schema moved to dev.ddl.
 The design seems plausible for basic interactions. Will it be open enough to support other things? What are those other things?
 
 Useful queries:
-    SELECT id,created_at,type,label,SUBSTR(text,0,40) FROM brbl_logic.scripts;
+    SELECT id,created_at,type,label,SUBSTR(text,0,40) FROM brbl_logic.nodes;
     SELECT created_at, match_text,response_text, src, dst FROM brbl_logic.edges ORDER BY src;
 
 Keyword mapping:
@@ -1503,7 +1503,7 @@ CREATE TABLE brbl_logic.keywords (
     is_default  BOOLEAN DEFAULT FALSE,
     CONSTRAINT fk_script_id
         FOREIGN KEY(id)
-            REFERENCES brbl_logic.scripts(id),
+            REFERENCES brbl_logic.nodes(id),
     CONSTRAINT unique_pattern_platform
         UNIQUE(pattern, platform)_
 );
@@ -1525,7 +1525,7 @@ SELECT
     s.id, s.label, s.text,
     e.match_text, e.response_text, e.dst
 FROM
-    brbl_logic.scripts s
+    brbl_logic.nodes s
 INNER JOIN
     brbl_logic.edges e ON s.id = e.src
 WHERE
@@ -1576,7 +1576,7 @@ WITH RECURSIVE cte AS (
         s.id, s.created_at, s.text, s.type, s.label,
         e.id, e.created_at, e.match_text, e.response_text, e.src, e.dst
     FROM
-        brbl_logic.scripts s
+        brbl_logic.nodes s
     INNER JOIN
         brbl_logic.edges e ON s.id = e.src
     WHERE
@@ -1606,9 +1606,9 @@ Do a query for any of the node id's and you get all the scripts in the results. 
 Let's create a node chain that is separate and doesn't cycle:
 
     --> starting and ending scripts
-    INSERT INTO brbl_logic.scripts VALUES('525028ae-0a33-4c80-a22f-868f77bb9531', NOW(),
+    INSERT INTO brbl_logic.nodes VALUES('525028ae-0a33-4c80-a22f-868f77bb9531', NOW(),
         'True or false: people are the worst?', 4, 'BadPeople') RETURNING *;
-    INSERT INTO brbl_logic.scripts VALUES('cf72ce06-50fc-4bf1-852b-dbdbd9f97f66', NOW(),
+    INSERT INTO brbl_logic.nodes VALUES('cf72ce06-50fc-4bf1-852b-dbdbd9f97f66', NOW(),
         'There is nothing left to say.', 4, 'AnotherEndOfConversation') RETURNING *;
 
     --> edges connecting them
@@ -1671,13 +1671,13 @@ Otherwise, the structure looks like what we intended.
 Which means the behavior we see walking through it via the BrblCli is a problem with the node processing.
 
 Realized that the Multi.Present -> Process combo is supposed to have the former pointing (only) at the latter.
-Also that its the latter that contains the references to the choices. So we need to fix the data in brbl_logic.scripts/edges.
+Also that its the latter that contains the references to the choices. So we need to fix the data in brbl_logic.nodes/edges.
 
 ===== 2025-05-30 ====
 
 Fixing the data...
 
-TABLE brbl_logic.scripts:
+TABLE brbl_logic.nodes:
  id         | uuid                     |           | not null |
  created_at | timestamp with time zone |           | not null |
  text       | character varying(255)   |           |          |
@@ -1685,12 +1685,12 @@ TABLE brbl_logic.scripts:
  label      | character varying(32)    |           |
 
 === Create the new Multi.Process scripts
-insert into brbl_logic.scripts values(gen_random_uuid(), now(), 'Error message for ColorQuizProcess', 5, 'ColorQuizProcess') returning id;          --> 95441b9a-3636-4f45-bd0a-ec35e84dd5f7
-insert into brbl_logic.scripts values(gen_random_uuid(), now(), 'Error message for StoogeQuiz_Process', 5, 'StoogeQuiz_Process') returning id;          --> 3f467ee3-4874-4ad1-82b1-99be06f575ab
-insert into brbl_logic.scripts values(gen_random_uuid(), now(), 'Error message for UtensilQuiz_Process', 5, 'UtensilQuiz_Process') returning id;            --> 1bda7846-31b4-4983-92ec-161eba46c758
-insert into brbl_logic.scripts values(gen_random_uuid(), now(), 'Error message for ShapeQuiz_Process', 5, 'ShapeQuiz_Process') returning id;            --> 23f00a69-55b7-4c29-b777-5c278b7088ed
-insert into brbl_logic.scripts values(gen_random_uuid(), now(), 'Error message for BadPeople_Process', 5, 'BadPeople_Process') returning id;            --> ae28c0e3-9303-4807-979f-694bc9981dd7
-insert into brbl_logic.scripts values(gen_random_uuid(), now(), 'Error message for AnotherEndOfConversation_Process', 5, 'AnotherEndOfConversation_Process') returning id;          --> aec8789f-546f-42c2-b1d5-c80bd10014f0
+insert into brbl_logic.nodes values(gen_random_uuid(), now(), 'Error message for ColorQuizProcess', 5, 'ColorQuizProcess') returning id;          --> 95441b9a-3636-4f45-bd0a-ec35e84dd5f7
+insert into brbl_logic.nodes values(gen_random_uuid(), now(), 'Error message for StoogeQuiz_Process', 5, 'StoogeQuiz_Process') returning id;          --> 3f467ee3-4874-4ad1-82b1-99be06f575ab
+insert into brbl_logic.nodes values(gen_random_uuid(), now(), 'Error message for UtensilQuiz_Process', 5, 'UtensilQuiz_Process') returning id;            --> 1bda7846-31b4-4983-92ec-161eba46c758
+insert into brbl_logic.nodes values(gen_random_uuid(), now(), 'Error message for ShapeQuiz_Process', 5, 'ShapeQuiz_Process') returning id;            --> 23f00a69-55b7-4c29-b777-5c278b7088ed
+insert into brbl_logic.nodes values(gen_random_uuid(), now(), 'Error message for BadPeople_Process', 5, 'BadPeople_Process') returning id;            --> ae28c0e3-9303-4807-979f-694bc9981dd7
+insert into brbl_logic.nodes values(gen_random_uuid(), now(), 'Error message for AnotherEndOfConversation_Process', 5, 'AnotherEndOfConversation_Process') returning id;          --> aec8789f-546f-42c2-b1d5-c80bd10014f0
 
 === Point the existing edges to the new scripts:
 UPDATE brbl_logic.edges set src = '95441b9a-3636-4f45-bd0a-ec35e84dd5f7' where src = '89eddcb8-7fe5-4cd1-b18b-78858f0789fb' ;
@@ -1798,10 +1798,10 @@ Ahead of Time Method Profiling is supposed to make programs running in standard 
 Project Lilliput has been working on making object headers more compact. Looks easy to try out:
 java -XX:+UseCompactObjectHeaders
 
-INSERT INTO brbl_logic.scripts VALUES('abfd6e3c-b71d-445d-87fd-89744e66e5d1', now(), 'Thanks for dropping by our bakery!', 9, 'ThanksForVisit') RETURNING id;
-INSERT INTO brbl_logic.scripts VALUES('35ab8b42-fbdf-47e1-ac62-bae86c3c7178', now(), 'How did you like our new matcha cupcake?', 7, 'AskCupcakePoll') RETURNING id;
-INSERT INTO brbl_logic.scripts VALUES('23b09d2a-18f7-46ac-bff2-3968bd3a4dbe', now(), 'n/a', 8, 'ProcessCupcakePoll') RETURNING id;
-INSERT INTO brbl_logic.scripts VALUES('669eea27-2dc1-4dff-bd0f-bc7d029bf714'', now(), 'Thanks for letting us know! We hope to see you again soon <3', 6, 'CyaLater') RETURNING id;
+INSERT INTO brbl_logic.nodes VALUES('abfd6e3c-b71d-445d-87fd-89744e66e5d1', now(), 'Thanks for dropping by our bakery!', 9, 'ThanksForVisit') RETURNING id;
+INSERT INTO brbl_logic.nodes VALUES('35ab8b42-fbdf-47e1-ac62-bae86c3c7178', now(), 'How did you like our new matcha cupcake?', 7, 'AskCupcakePoll') RETURNING id;
+INSERT INTO brbl_logic.nodes VALUES('23b09d2a-18f7-46ac-bff2-3968bd3a4dbe', now(), 'n/a', 8, 'ProcessCupcakePoll') RETURNING id;
+INSERT INTO brbl_logic.nodes VALUES('669eea27-2dc1-4dff-bd0f-bc7d029bf714'', now(), 'Thanks for letting us know! We hope to see you again soon <3', 6, 'CyaLater') RETURNING id;
 --link thanks to input request
 INSERT INTO brbl_logic.edges VALUES ('abe3e848-8d89-4949-b881-0017f10c10cb',now(),'n/a','n/a',
         'abfd6e3c-b71d-445d-87fd-89744e66e5d1','35ab8b42-fbdf-47e1-ac62-bae86c3c7178') returning id ;
@@ -1836,6 +1836,9 @@ To reference the sndrRcvr code (which we should rename to just Brbl as is reflec
 
 This generates and installs the jar and .pom file in my local ~/.m2 folder.
 
+select * from brbl_logs.messages_mo mos
+inner join brbl_logs.messages_mo_prcd prcd on mos.id=prcd.id
+where rcvd_at >= '2025-06-09 17:00:00';
 
 
 

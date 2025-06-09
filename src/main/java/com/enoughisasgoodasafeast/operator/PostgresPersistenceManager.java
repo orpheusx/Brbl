@@ -123,7 +123,7 @@ public class PostgresPersistenceManager implements PersistenceManager {
                         s.id, s.label, s.text,
                         e.match_text, e.response_text, e.dst
                     FROM
-                        brbl_logic.scripts s
+                        brbl_logic.nodes s
                     INNER JOIN
                         brbl_logic.edges e ON s.id = e.src
                     WHERE
@@ -143,7 +143,7 @@ public class PostgresPersistenceManager implements PersistenceManager {
 //                        s.id, s.created_at, s.text, s.type, s.label,
 //                        e.id, e.created_at, e.match_text, e.response_text, e.src, e.dst
 //                    FROM
-//                        brbl_logic.scripts s
+//                        brbl_logic.nodes s
 //                    INNER JOIN
 //                        brbl_logic.edges e ON s.id = e.src
 //                        WHERE
@@ -164,7 +164,7 @@ public class PostgresPersistenceManager implements PersistenceManager {
                         s.id, s.created_at, s.text, s.type, s.label,
                         e.id, e.created_at, e.match_text, e.response_text, e.src, e.dst
                     FROM
-                        brbl_logic.scripts s
+                        brbl_logic.nodes s
                     INNER JOIN
                         brbl_logic.edges e ON s.id = e.src
                     INNER JOIN
@@ -190,7 +190,7 @@ public class PostgresPersistenceManager implements PersistenceManager {
                         s.id, s.created_at, s.text, s.type, s.label,
                         e.id, e.created_at, e.match_text, e.response_text, e.src, e.dst
                     FROM
-                        brbl_logic.scripts s
+                        brbl_logic.nodes s
                     INNER JOIN
                         brbl_logic.edges e ON s.id = e.src
                     INNER JOIN
@@ -231,16 +231,6 @@ public class PostgresPersistenceManager implements PersistenceManager {
             return false;
         }
     }
-
-
-    //    public boolean insertMO(List<Message> messages) {
-    //        try (Connection connection = fetchConnection()) {
-    //            return insertMO(connection, messages);
-    //        } catch (SQLException e) {
-    //            LOG.error("fetchConnection failed", e);
-    //            return false;
-    //        }
-    //    }
 
     private static boolean insertMO(Connection connection, Message message) {
         //Instant before = NanoClock.utcInstant();
