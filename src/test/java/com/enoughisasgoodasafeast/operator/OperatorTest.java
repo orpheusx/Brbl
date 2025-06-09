@@ -150,8 +150,8 @@ public class OperatorTest {
 
             Script finalScript = secondScript.evaluate(session, unexpected);
             // An error message should be produced...
-            assertTrue(requireNonNull(session.outputBuffer.poll()).text().contains("favorite color"));
-            assertTrue(requireNonNull(session.outputBuffer.poll()).text().contains("Oops"));
+            assertTrue(requireNonNull(session.getOutputBuffer().poll()).text().contains("favorite color"));
+            assertTrue(requireNonNull(session.getOutputBuffer().poll()).text().contains("Oops"));
             // ...but the current script should not have advanced
             assertEquals(ScriptType.ProcessMulti, finalScript.type());
             assertEquals(secondScript, finalScript);
@@ -166,6 +166,7 @@ public class OperatorTest {
 
             SessionKey mo4SessionKey = SessionKey.newSessionKey(mo4);
             var session = operator.sessionCache.get(mo4SessionKey);
+            assertNotNull(session);
 
             Script firstScript = operator.findStartingScript(mo4SessionKey);
             assertNotNull(firstScript, "Failed to return first Script.");
@@ -180,30 +181,30 @@ public class OperatorTest {
             Script thirdScript = secondScript.evaluate(session, unexpected);
 
             // An error message should be produced...
-            assertTrue(requireNonNull(session.outputBuffer.poll()).text().contains("favorite color"));
-            assertTrue(requireNonNull(session.outputBuffer.poll()).text().contains("Oops"));
+            assertTrue(requireNonNull(session.getOutputBuffer().poll()).text().contains("favorite color"));
+            assertTrue(requireNonNull(session.getOutputBuffer().poll()).text().contains("Oops"));
 
             // ...but the current script should not have advanced
             assertEquals(ScriptType.ProcessMulti, thirdScript.type());
             assertEquals(secondScript, thirdScript);
             session.currentScript = thirdScript;
 
-            assertEquals(0, session.outputBuffer.size());
+            assertEquals(0, session.getOutputBuffer().size());
 
             Script fourthScript = thirdScript.evaluate(session, changeTopic);
             assertEquals("e-o-c", fourthScript.label());
             assertEquals(ScriptType.ProcessMulti, fourthScript.type());
             session.currentScript = fourthScript;
-            assertEquals(2, session.outputBuffer.size());
+            assertEquals(2, session.getOutputBuffer().size());
 
-            assertTrue(requireNonNull(session.outputBuffer.poll()).text().contains("something else"));
-            assertTrue(requireNonNull(session.outputBuffer.poll()).text().contains("monetary"));
+            assertTrue(requireNonNull(session.getOutputBuffer().poll()).text().contains("something else"));
+            assertTrue(requireNonNull(session.getOutputBuffer().poll()).text().contains("monetary"));
 
-            assertEquals(0, session.outputBuffer.size());
+            assertEquals(0, session.getOutputBuffer().size());
 
             Script finalScript = fourthScript.evaluate(session, wolverine);
-            System.out.println(session.outputBuffer);
-            assertTrue(session.outputBuffer.poll().text().contains("pointy teeth"));
+            System.out.println(session.getOutputBuffer());
+            assertTrue(session.getOutputBuffer().poll().text().contains("pointy teeth"));
         });
     }
 
@@ -218,11 +219,11 @@ public class OperatorTest {
             var session = operator.sessionCache.get(SessionKey.newSessionKey(mo4));
             final List<Message> queuedMessages = producer.getQueuedMessages();
             assertTrue(requireNonNull(queuedMessages.getFirst()).text().contains("favorite color"));
-            assertEquals(ScriptType.ProcessMulti, session.currentScript().type());
+            assertEquals(ScriptType.ProcessMulti, session.getCurrentScript().type());
 
             assertTrue(operator.process(mo5));
             assertTrue(requireNonNull(queuedMessages.get(1)).text().contains("cool kids"));
-            assertEquals(ScriptType.EchoWithPrefix, session.currentScript().type());
+            assertEquals(ScriptType.EchoWithPrefix, session.getCurrentScript().type());
 
         });
     }
@@ -242,7 +243,7 @@ public class OperatorTest {
             assertTrue(requireNonNull(queuedMessages.getFirst()).text().contains("favorite color"));
             queuedMessages.clear();
 
-            Script faveColorScript = session.currentScript();
+            Script faveColorScript = session.getCurrentScript();
             assertEquals(ScriptType.ProcessMulti, faveColorScript.type());
 
             assertTrue(operator.process(unexpected));
@@ -250,15 +251,15 @@ public class OperatorTest {
             assertTrue(requireNonNull(queuedMessages.getFirst()).text().contains("Oops"));
             queuedMessages.clear();
 
-            Script stillFaveColorScript = session.currentScript();
+            Script stillFaveColorScript = session.getCurrentScript();
             assertEquals(ScriptType.ProcessMulti, faveColorScript.type());
             assertEquals(faveColorScript, stillFaveColorScript);
 
-            assertEquals(0, session.outputBuffer.size());
+            assertEquals(0, session.getOutputBuffer().size());
 
             assertTrue(operator.process(changeTopic)); // will emit a notice message and the topic display message
             assertEquals(2, queuedMessages.size());
-            Script changeTopicScript = session.currentScript();
+            Script changeTopicScript = session.getCurrentScript();
             assertEquals(ScriptType.ProcessMulti, changeTopicScript.type());
 
             assertTrue(requireNonNull(queuedMessages.getFirst()).text().contains("something else"));
@@ -266,7 +267,7 @@ public class OperatorTest {
             queuedMessages.clear();
 
             assertTrue(operator.process(wolverine));
-            assertEquals(ScriptType.ProcessMulti, session.currentScript().type());
+            assertEquals(ScriptType.ProcessMulti, session.getCurrentScript().type());
             assertEquals(1, queuedMessages.size());
             assertTrue(requireNonNull(queuedMessages.getFirst()).text().contains("pointy teeth"));
         });

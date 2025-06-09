@@ -116,7 +116,7 @@ public class Operator implements MessageProcessor {
         synchronized (session) {
             try {
                 session.registerInput(message);
-                int size = session.inputs.size();
+                int size = session.currentInputsCount();
                 if (size > EXPECTED_INPUT_COUNT) {
                     LOG.error("Uh oh, there are more inputs ({}) than expected in session ({})", size, session);
                     // Corner case: user sent multiple responses that arrived closely together (probably due to delays/buffering in
@@ -130,7 +130,7 @@ public class Operator implements MessageProcessor {
 
                 // Also check if the current Message was created prior to the previous Message in the session's history.
                 // This would signal out-of-order processing which Is Bad™
-                Message previousInputMessage = session.inputHistory.isEmpty() ? null : session.inputHistory.getLast();
+                Message previousInputMessage = session.previousInput();
                 if (previousInputMessage != null) {
                     if (previousInputMessage.receivedAt().isAfter(message.receivedAt())) {
                         LOG.error("Oh shit, we processed an MO received later than this one: {} > {}",
@@ -141,22 +141,24 @@ public class Operator implements MessageProcessor {
                 // FIXME Session.evaluate handles appending the script to the evaluatedScript list
                 // FIXME why split the logic for handling currentScript? Move it into Session? Or move both here?
                 Script next = session.currentScript.evaluate(session, message);
-                if (next != null) {
-                    LOG.info("Next script is {}", next);
-                    session.currentScript = next;
-                    if (!next.type().equals(ScriptType.ProcessMulti)) { // Idea: define a trait called Awaits for this to signal
-                        LOG.info("Continuing playback...");
-                        // Assumes Present and Process are always paired. If this works, make the pattern more generic.
-                        // FIXME This is hideous because we're using Session variables as globals here and in the static Multi functions
-                        session.currentScript = session.currentScript.evaluate(session, message);
-                    } else {
-                        LOG.info("Stopping playback for await script");
+                session.registerEvaluated(session.currentScript); //FIXME what if this is null?
+                LOG.info("Next script is {}", next);
+                session.currentScript = next;
+
+                while (next != null && !next.type().isAwaitInput()) {
+                    LOG.info("Continuing playback...");
+                    // Assumes Present and Process are always paired. If this works, make the pattern more generic.
+                    // FIXME This is hideous because we're using Session variables as globals here and in the static Multi functions
+                    session.currentScript = session.currentScript.evaluate(session, message);
+                    if (session.currentScript != null) {
+                        session.registerEvaluated(session.currentScript);
                     }
 
-                } else {
-                    LOG.info("Reached end of script graph."); // FIXME change to debug
+                    next = session.currentScript;
+
                 }
-                session.flushOutput();
+
+                session.flush(); //FIXME should be in a finally block but writing to db can throw. Hmm...
                 return true; // when would this be false?
             } catch (IOException e) {
                 LOG.error("Processing error", e);
@@ -164,6 +166,8 @@ public class Operator implements MessageProcessor {
             }
         }
     }
+
+
 
     @Override
     public boolean log(/*Session session, */Message message) {

@@ -1750,10 +1750,104 @@ A) A notification. Just a one and done message (possibly split into multiple tex
 B) Ask a question that invites a free text input and reply with something canned e.g. "Thanks for the feedback" **
 C) Same thing but apply sentiment or other textual analysis to the input and, based on the result, select the response sent back. For example, if the response was negative reply with "Uh oh. We're sorry you weren't happy with X..." The selection of next script would be determined by this evaluation, meaning that we require a bounded set of possibilities. In practice, this only requires that there be a default response. The sentiment analysis done by Vader and NLTK both return a value within a bounded range (-1..1 or some variation.)
 D) The TopicSelection type is meant to provide an entry point if the user doesn't arrive by keyword (or they continue after completing their original script.) This function could be implemented with either Present/ProcessMulti or the free form option.
-E) The Pivot is meant to be used when the user wants to break out of the current script either by using the "change topic" input or by repeatedly failing input validation. "If you want to talk about something else (enter "1" or continue with the current chat (enter "2")" This would chain the 1 response to a TopicSelection script and the 2 response back to the previous script requiring input (found using the Session.evaluated stack.) The implementation of a Pivot could be done simply with a *.Multi pair.
+E) The Pivot is meant to be used when the user wants to break out of the current script either by using the "change topic" input or by repeatedly failing input validation. "If you want to talk about something else (enter "1" or continue with the current chat (enter "2")" This would chain the 1 response to a TopicSelection script and the 2 response back to the previous script requiring input (found using the Session.evaluated stack.) The implementation of a Pivot could be done simply with a *.Multi pair. The big difference is that Pivot isn't part of the graph. They are injected dynamically to deal with user requested breaks in the flow. Q: How do we reference the Pivot that should be used for a given graph? By Customer?
 F) EndOfChat is a terminal node. It is used to avoid overloading null with the same meaning. Null should only indicate an error. An existing  Session where the currentScript is EndOfChat would trigger a call to the same findStartingScript method used when creating a new Session.
 
 ** We will have the raw text of the MO recorded in the brbl_logs.message_mo table but it might be useful to have a dedicated "user_poll" table that contains the evaluated response. For example, if the question was "Did you like our cupcakes?" and the MO response was "yup" then the user_poll table might be set with a value from a fixed set (e.g. YES, NO, UNKNOWN) presumably using some kind of sentiment or textual analysis.
+
+
+
+
+===== 2025-06-04 ====
+
+pysentimiento is the name of a sentiment analysis library trained on Spanish. NLTK-Vader is English only.
+
+---
+
+Some proposed rules for interaction between Script, Session and Operator.
+
+Scripts evaluate the Session's current Script and return the Script that should become the new current on the basis of that evaluation.
+    -> Session.getCurrentScript()
+Scripts may queue MTs
+    -> Session.registerOutput(Message)
+Scripts may, e.g. Pivots, may access the stack of previously evaluated Scripts.
+    -> Session.getEvaluatedScripts()
+
+Operator may retrieve the Session's currentScript.
+    -> Session.getCurrentScript()
+Operator calls a Script's evaluate method.
+Operator may update the Session's currentScript
+    -> Session.setCurrentScript(Script)
+Operator calls Session.flush().
+
+Defined ScriptContext to constrain the functionality needed by script functions.
+Using this class in the various script functions changes help mitigate the problem, I think.
+
+Testing with the brblcli, changes don't appear to have caused any regressions.
+
+Note: discovered an issue where we get into an unusable state if the keyword->script lookup doesn't find anything. Need to setup a default script to address this.
+
+
+===== 2025-06-05 ====
+
+Watching a video about the Java 25 release...
+Ahead of Time Method Profiling is supposed to make programs running in standard JVM (i.e. not GraalVM) warm up much faster.
+    (train) -XX:AOTMode ...
+    then apply the profiling info...
+
+Project Lilliput has been working on making object headers more compact. Looks easy to try out:
+java -XX:+UseCompactObjectHeaders
+
+INSERT INTO brbl_logic.scripts VALUES('abfd6e3c-b71d-445d-87fd-89744e66e5d1', now(), 'Thanks for dropping by our bakery!', 9, 'ThanksForVisit') RETURNING id;
+INSERT INTO brbl_logic.scripts VALUES('35ab8b42-fbdf-47e1-ac62-bae86c3c7178', now(), 'How did you like our new matcha cupcake?', 7, 'AskCupcakePoll') RETURNING id;
+INSERT INTO brbl_logic.scripts VALUES('23b09d2a-18f7-46ac-bff2-3968bd3a4dbe', now(), 'n/a', 8, 'ProcessCupcakePoll') RETURNING id;
+INSERT INTO brbl_logic.scripts VALUES('669eea27-2dc1-4dff-bd0f-bc7d029bf714'', now(), 'Thanks for letting us know! We hope to see you again soon <3', 6, 'CyaLater') RETURNING id;
+--link thanks to input request
+INSERT INTO brbl_logic.edges VALUES ('abe3e848-8d89-4949-b881-0017f10c10cb',now(),'n/a','n/a',
+        'abfd6e3c-b71d-445d-87fd-89744e66e5d1','35ab8b42-fbdf-47e1-ac62-bae86c3c7178') returning id ;
+
+--link input request to process response
+INSERT INTO brbl_logic.edges VALUES ('c6e395ed-eb0e-4954-bf51-da80242da49a', now(), 'n/a', 'n/a',
+        '35ab8b42-fbdf-47e1-ac62-bae86c3c7178','23b09d2a-18f7-46ac-bff2-3968bd3a4dbe') returning id ;
+
+--link process response to endOfChat
+INSERT INTO brbl_logic.edges VALUES (gen_random_uuid(),now(),'n/a','n/a',
+        '23b09d2a-18f7-46ac-bff2-3968bd3a4dbe','669eea27-2dc1-4dff-bd0f-bc7d029bf714') returning id ;
+
+--finally link to null required to have the script node included in the graph
+INSERT INTO brbl_logic.edges VALUES ('5e57ede3-0f45-4fc5-b7cb-80de35c94f71',now(),'n/a','n/a',
+        '669eea27-2dc1-4dff-bd0f-bc7d029bf714', null) returning id ;
+
+
+With these additional rows added to the database, I'm able to test and confirm that the new message types (SendMessage, RequestInput, ProcessInput and EndOfChat) work as expected. Cool cool cool...
+
+
+
+===== 2025-06-08 ====
+
+
+
+https://vladmihalcea.com/hibernate-with-recursive-query/ has some interesting info about using recursive CTEs with Hibernate.
+Hopefully still compatible with the newly released Hibernate 7.
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 
 
 

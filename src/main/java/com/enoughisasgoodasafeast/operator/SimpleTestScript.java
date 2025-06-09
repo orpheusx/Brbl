@@ -6,6 +6,7 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import java.io.IOException;
+import java.util.Arrays;
 
 import static com.enoughisasgoodasafeast.Message.newMT;
 
@@ -13,11 +14,11 @@ public class SimpleTestScript {
 
     private static final Logger LOG = LoggerFactory.getLogger(SimpleTestScript.class);
 
-    static Script computeNextScript(Session session) {
-        if (session.currentScript.next().isEmpty()) {
+    static Script computeNextScript(ScriptContext session) {
+        if (session.getCurrentScript().edges().isEmpty()) {
             return null;
         } else {
-            return session.currentScript.next().getFirst().script();
+            return session.getCurrentScript().edges().getFirst().script();
         }
 //        if (!n.await()) {
 //            return n.evaluate(session, moMessage);
@@ -30,8 +31,8 @@ public class SimpleTestScript {
      * Sends
      */
     public static class SimpleEchoResponseScript {
-        public static Script evaluate(Session session, Message moMessage) throws IOException {
-            String mtText = String.format("%s: %s", session.currentScript.text(), moMessage.text());
+        public static Script evaluate(ScriptContext session, Message moMessage) throws IOException {
+            String mtText = String.format("%s: %s", session.getCurrentScript().text(), moMessage.text());
             // Remember the from and to fields of the MT must be the reverse of the MO
             Message mt = newMT(moMessage.to(), moMessage.from(), mtText);
             session.registerOutput(mt);
@@ -47,7 +48,7 @@ public class SimpleTestScript {
     }
 
     public static class ReverseTextResponseScript {
-        public static Script evaluate(Session session, Message moMessage) throws IOException {
+        public static Script evaluate(ScriptContext session, Message moMessage) throws IOException {
             String mtText = new StringBuilder(moMessage.text()).reverse().toString();
             Message mt = newMT(moMessage.to(), moMessage.from(), mtText);
             session.registerOutput(mt);
@@ -67,13 +68,13 @@ public class SimpleTestScript {
      * and will send a response: '<num> goodbye'
      */
     public static class HelloGoodbyeResponseScript {
-        public static Script evaluate(Session session, Message moMessage) throws IOException {
+        public static Script evaluate(ScriptContext session, Message moMessage) throws IOException {
             String[] moText = moMessage.text().split(SharedConstants.TEST_SPACE_TOKEN, 2);
             Message mt = null;
             if (moText[1].equals("hello")) {
                 mt = newMT(moMessage.to(), moMessage.from(), moText[0] + " " + "goodbye");
             } else {
-                mt = newMT(moMessage.to(), moMessage.from(), "Unexpected input: " + moText);
+                mt = newMT(moMessage.to(), moMessage.from(), "Unexpected input: " + Arrays.toString(moText));
             }
             session.registerOutput(mt);
 

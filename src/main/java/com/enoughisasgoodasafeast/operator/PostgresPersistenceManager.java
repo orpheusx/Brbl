@@ -9,7 +9,6 @@ import org.slf4j.LoggerFactory;
 
 import java.beans.PropertyVetoException;
 import java.io.IOException;
-import java.security.Key;
 import java.sql.*;
 import java.time.Instant;
 import java.util.*;
@@ -306,19 +305,17 @@ public class PostgresPersistenceManager implements PersistenceManager {
     private static boolean insertProcessedMO(Connection connection, Message message, Session session) {
         //Instant before = NanoClock.utcInstant();
         try (PreparedStatement ps = connection.prepareStatement(MO_MESSAGE_PRCD)) {
-            ps.setObject(1, message.id());                      // id
-            ps.setTimestamp(2, Timestamp.from(Instant.now()));  // prcd_at
-            ps.setObject(3, session.id);                        // session_id
-            ps.setObject(4, session.currentScript.id());        // script_id
-            // FIXME Actually, haven't we already advanced to the next script at this point?
-            // FIXME if so then we'd need to grab the most recent script from session.evaluatedScripts
+            ps.setObject(1, message.id());                              // id
+            ps.setTimestamp(2, Timestamp.from(Instant.now()));          // prcd_at
+            ps.setObject(3, session.id);                                // session_id
+            ps.setObject(4, session.getScriptForProcessedMO().id());    // script_id
             ps.execute();
         } catch (SQLException e) {
             LOG.error("insertProcessedMO failed", e);
             return false;
         }
-        //Instant after = NanoClock.utcInstant();
-        //LOG.info("insertProcessedMO: b {} a {}: d {} ", before, after, Duration.between(before, after));
+        /*Instant after = NanoClock.utcInstant();
+         *LOG.info("insertProcessedMO: b {} a {}: d {} ", before, after, Duration.between(before, after)); */
         return true;
     }
 
@@ -356,7 +353,7 @@ public class PostgresPersistenceManager implements PersistenceManager {
             ps.setString(4, message.to());                              // _to
             ps.setString(5, message.text());                            // _text
             ps.setObject(6, session.id);                                // session_id
-            ps.setObject(7, session.evaluatedScripts.getLast().id());   // script_id
+            ps.setObject(7, session.previousScript().id());    // script_id
             ps.execute();
         } catch (SQLException e) {
             LOG.error("insertMT failed", e);
@@ -535,7 +532,7 @@ public class PostgresPersistenceManager implements PersistenceManager {
                     }
                     // else the script was already available when we created the ResponseLogic from the ResultSet
 
-                    script.next().add(edge);
+                    script.edges().add(edge);
                 }
             }
 
@@ -627,7 +624,7 @@ public class PostgresPersistenceManager implements PersistenceManager {
                     }
                     // else the script was already available when we created the ResponseLogic from the ResultSet
 
-                    script.next().add(edge);
+                    script.edges().add(edge);
                 }
             }
 

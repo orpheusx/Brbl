@@ -6,15 +6,18 @@ import io.jenetics.util.NanoClock;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
+import java.io.IO;
 import java.io.IOException;
 import java.util.*;
+import java.util.function.Predicate;
+import java.util.stream.Collectors;
 
 /**
  * The Session tracks and persists state for a single User
  * Won't work as a Record since we need to update the currentScript field
  * and maintain state
  */
-public class Session {
+public class Session implements ScriptContext {
     private static final Logger LOG = LoggerFactory.getLogger(Session.class);
     public static final int MAX_INPUT_HISTORY = 10;
 
@@ -26,9 +29,9 @@ public class Session {
 
     Script currentScript;
 
-    final Queue<Message> outputBuffer = new LinkedList<>();
-    final SequencedSet<Message> inputs = new LinkedHashSet<>();
-    final SequencedSet<Message> inputHistory = new LinkedHashSet<Message>(MAX_INPUT_HISTORY) {
+    private final Queue<Message> outputBuffer = new LinkedList<>();
+    private final SequencedSet<Message> inputs = new LinkedHashSet<>();
+    private final SequencedSet<Message> inputHistory = new LinkedHashSet<Message>(MAX_INPUT_HISTORY) {
         @Override
         public void addLast(Message message) {
             if (1 + this.size() > MAX_INPUT_HISTORY) {
@@ -37,29 +40,16 @@ public class Session {
             super.addLast(message);
         }
     };
+    private final List<Script> evaluatedScripts = new ArrayList<>(); // TODO make this a stack instead?
 
-    List<Script> evaluatedScripts = new ArrayList<>(); // TODO make this a stack instead?
-
-    // Db manager goes here
-
-//    public static void main(String[] args) {
-//        String url = "jdbc:postgresql://localhost" + "/brbl_dev";
-//        Properties props = new Properties();
-//        props.setProperty("user", "mark");
-//        props.setProperty("password", "mark");
-//        props.setProperty("ssl", "false");
-//        props.setProperty("preparedStatementCacheQueries", "10");
-//        try {
-//            Connection conn = DriverManager.getConnection(url, props);
-//            final boolean valid = conn.isValid(2000);
-//            final PGConnection extendedConn = conn.unwrap(PGConnection.class);//preparedStatementCacheQueries(10);
-//            extendedConn.escapeIdentifier("");
-//            LOG.info("connection is valid: {}", valid);
-//        } catch (SQLException e) {
-//            throw new RuntimeException(e);
-//        }
-//    }
-
+    /**
+     * Creates a new, fully configured Session object.
+     * @param id the unique identifier
+     * @param currentScript the starting Script in the graph
+     * @param user the unique User
+     * @param producer the sink for messages created on behalf of this Session
+     * @param persistenceManager the object that writes artifacts created for this Session
+     */
     public Session(UUID id, Script currentScript, User user, QueueProducer producer, PersistenceManager persistenceManager) {
         startTimeNanos = NanoClock.systemUTC().nanos();
         this.id = Objects.requireNonNull(id);
@@ -70,11 +60,37 @@ public class Session {
         LOG.info("Created Session {} for User {}", id, user.id());
     }
 
+    public int currentInputsCount() {
+        return inputs.size();
+    }
+
+    public Message previousInput() {
+        return inputHistory.isEmpty() ? null : inputHistory.getLast();
+    }
+
+    public SequencedSet<Message> getInputHistory() {
+        return inputHistory;
+    }
+
+    public Queue<Message> getOutputBuffer() {
+        return outputBuffer;
+    }
+
+    public Script previousScript() {
+        return evaluatedScripts.getLast();
+    }
+
+    @Override
+    public List<Script> getEvaluatedScripts() {
+        return evaluatedScripts;
+    }
+
     public void registerInput(Message moMessage) {
-        inputs.add(moMessage);
+        inputs.addLast(moMessage);
         LOG.info("Registered input message {}", moMessage);
     }
 
+    @Override
     public void registerOutput(Message mtMessage) {
         outputBuffer.add(mtMessage);
         LOG.info("Registered output message {}", mtMessage);
@@ -85,7 +101,29 @@ public class Session {
         LOG.info("Registered evaluated script {}", script.id());
     }
 
-    public void flushOutput() throws IOException {
+    /**
+     * Since multiple Scripts may be evaluated in response to a single MO we need a way of
+     * finding the one that prompted it. Used when logging the processed MO.
+     * @return the Script that prompted the User's latest MO.
+     */
+
+    public Script getScriptForProcessedMO() {
+
+        if (currentScript != null) { // FIXME should
+            return currentScript;
+        }
+
+        for (int i = evaluatedScripts.size() - 1; i >= 0; i--) {
+            Script evaluated = evaluatedScripts.get(i);
+            if (evaluated.type().isAwaitInput()) {
+                return evaluated;
+            }
+        }
+
+        return evaluatedScripts.getFirst();
+    }
+
+    public void flush() throws IOException {
         int numInBuffer = outputBuffer.size();
         LOG.info("flushOutput: outputBuffer size = {}", numInBuffer);
         for (int i = 0; i < numInBuffer; i++) {
@@ -105,7 +143,12 @@ public class Session {
         return user;
     }
 
-    public Script currentScript() {
+    @Override
+    public Script getCurrentScript() {
         return currentScript;
+    }
+
+    public void setCurrentScript(Script script) {
+        currentScript = script;
     }
 }

@@ -1,6 +1,5 @@
 package com.enoughisasgoodasafeast.operator;
 
-import com.enoughisasgoodasafeast.Message;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -15,6 +14,21 @@ public class Functions {
         return switch (platform) { // TODO an actual implementation
             default -> mtText;
         };
+    }
+
+    /*
+     * Usable by Scripts that only have/expect a single edge
+     */
+    public static Script advanceToFirstAndOnly(ScriptContext context) {
+        if (context.getCurrentScript().edges().isEmpty()) {
+            LOG.info("End of script, '{}', reached.", context.getCurrentScript().label());
+            return null;
+        } else {
+            assert context.getCurrentScript().edges().size() == 1;
+            final Script nextScript = context.getCurrentScript().edges().getFirst().script(); // only one ResponseLogic available
+            LOG.info("Advancing from {} dispatching to {}", context.getCurrentScript().label(), nextScript);
+            return nextScript;
+        }
     }
 
     public static void waitSeconds(int num) {
@@ -35,25 +49,25 @@ public class Functions {
     // NB: for now we're putting this logic here. As we start adding database persistence we might make a dedicated
     // class that bundles all such logic.
     // Also, for now, this is just hard-coded for a limited number of cases to make tests work.
-    public static Script findTopicScript(Session session, Message message) {
-        return switch (message) {
-            case Message m when m.to().equals("45678") -> {
-                String text = """
-                    Here are the topics I can talk about:
-                    1) wolverines
-                    2) international monetary policy
-                """;
-                Script topicPresentation = new Script(text, ScriptType.PresentMulti, "topic-selection");
-                Script endScript = new Script("End-of-Conversation", ScriptType.ProcessMulti, "e-o-c");
-                ResponseLogic topicOne = new ResponseLogic(List.of("1", "wolverine", "wolverines"), "They have pointy teeth and a nasty disposition", endScript);
-                ResponseLogic topicTwo = new ResponseLogic(List.of("1", "international", "monetary", "policy"), "It's kinda boring actually.", endScript);
-                endScript.next().add(topicOne);
-                endScript.next().add(topicTwo);
-                topicPresentation.next().add(new ResponseLogic(null, null, endScript));//define a constant that means "unset" instead of overloading null.
-                yield topicPresentation;
-            } // more to come before we fully implement using a database?
-            default -> null;
-        };
-    }
+//    public static Script findTopicScript(Session session, Message message) {
+//        return switch (message) {
+//            case Message m when m.to().equals("45678") -> {
+//                String text = """
+//                    Here are the topics I can talk about:
+//                    1) wolverines
+//                    2) international monetary policy
+//                """;
+//                Script topicPresentation = new Script(text, ScriptType.PresentMulti, "topic-selection");
+//                Script endScript = new Script("End-of-Conversation", ScriptType.ProcessMulti, "e-o-c");
+//                ResponseLogic topicOne = new ResponseLogic(List.of("1", "wolverine", "wolverines"), "They have pointy teeth and a nasty disposition", endScript);
+//                ResponseLogic topicTwo = new ResponseLogic(List.of("1", "international", "monetary", "policy"), "It's kinda boring actually.", endScript);
+//                endScript.next().add(topicOne);
+//                endScript.next().add(topicTwo);
+//                topicPresentation.next().add(new ResponseLogic(null, null, endScript));//define a constant that means "unset" instead of overloading null.
+//                yield topicPresentation;
+//            } // more to come before we fully implement using a database?
+//            default -> null;
+//        };
+//    }
 
 }

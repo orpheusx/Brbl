@@ -14,10 +14,10 @@ import java.util.*;
  *
  * @param id
  * @param text
- * @param next
+ * @param edges
  * @param label
  */
-public record Script(UUID id, String text, ScriptType type, SequencedSet<ResponseLogic> next/*, Script previous*/, String label) {
+public record Script(UUID id, String text, ScriptType type, SequencedSet<ResponseLogic> edges/*, Script previous*/, String label) {
 
     private static final Logger LOG = LoggerFactory.getLogger(Script.class);
 
@@ -28,8 +28,8 @@ public record Script(UUID id, String text, ScriptType type, SequencedSet<Respons
         if (text == null || text.isEmpty()) {
             throw new IllegalArgumentException("text cannot be null or empty.");
         }
-        if (next == null) {
-            next = new LinkedHashSet<>();
+        if (edges == null) {
+            edges = new LinkedHashSet<>();
         }
         if (label == null) {
             LOG.info("Created Script (type:{}, id:{}", type, id);
@@ -52,11 +52,11 @@ public record Script(UUID id, String text, ScriptType type, SequencedSet<Respons
 
 
     public boolean hasNext() {
-        return next != null && !next.isEmpty();
+        return edges != null && !edges.isEmpty();
     }
 
-    public SequencedSet<ResponseLogic> next() {
-        return next;
+    public SequencedSet<ResponseLogic> edges() {
+        return edges;
     }
 
     /**
@@ -71,8 +71,8 @@ public record Script(UUID id, String text, ScriptType type, SequencedSet<Respons
      * @return the next Script in the conversation (or null if the conversation is complete?)
      * FIXME Maybe instead of null we return a symbolic Script that indicates the end of Script?
      */
-    public Script evaluate(Session session, Message moMessage) throws IOException {
-        Script next =  switch (session.currentScript().type) {
+    public Script evaluate(/*Session*/ ScriptContext session, Message moMessage) throws IOException {
+        return switch (session.getCurrentScript().type) {
             case EchoWithPrefix ->
                 SimpleTestScript.SimpleEchoResponseScript.evaluate(session, moMessage);
 
@@ -86,24 +86,32 @@ public record Script(UUID id, String text, ScriptType type, SequencedSet<Respons
             // be of the following types or more specific versions thereof. Simple chaining conversations can
             // simply have a single logic list.
             case PresentMulti ->
-                    Multi.Present.evaluate(session, moMessage);
+                    Multi.Present.evaluate(session, moMessage); // Could re-use SendMessage logic while keeping the type difference
 
             case ProcessMulti ->
                     Multi.Process.evaluate(session, moMessage);
 
-//            case Pivot ->
-//                    Pivot.evaluate(session);
-//
-//            case TopicSelection ->
-//                    TopicSelection.evaluate(session, moMessage);
+            // TODO Behaves like a SendMessage albeit with the expectation that there's no "next" script so we could replace impl
+            case EndOfChat -> SendMessage.evaluate(session, moMessage); //EndOfSession? 'request' that the session be cleared?
+
+            // TODO Even easier to replace with SendMessage.evaluate(). The Editor will always pair it with an Input.Process
+            case RequestInput ->
+                    Input.Request.evaluate(session, moMessage);
+
+            case ProcessInput ->
+                    Input.Process.evaluate(session, moMessage);
+
+            case SendMessage ->
+                    SendMessage.evaluate(session, moMessage);
+
         };
 
         // If we didn't advance to a different script then we're not done evaluating this one.
-        if (!this.equals(next)) {
-            session.registerEvaluated(this);
-        }
+        //        if (!this.equals(next)) {
+        //            session.registerEvaluated(this);
+        //        }
+        //        return next;
 
-        return next;
     }
 
     /**
@@ -115,7 +123,7 @@ public record Script(UUID id, String text, ScriptType type, SequencedSet<Respons
     public static void printGraph(Script startScript, Script script, int indent) {
         printIndent(script, indent);
         int level = indent + 1;
-        for (ResponseLogic edge : script.next()) {
+        for (ResponseLogic edge : script.edges()) {
             printIndent(edge, level);
             Script childScript = edge.script();
 
