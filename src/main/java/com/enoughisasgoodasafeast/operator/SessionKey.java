@@ -8,9 +8,9 @@ import java.util.Objects;
 /**
  * A record that defines the key for a LoadingCache derived from a MessageType.MO.
  * Logically it's the subset of the properties contained in a Message that are needed to create a User and find the
- * initial Script graph.
+ * initial Node graph.
  * Note: We include the text of the message because (for SMS, at least) it may contain the keyword needed to find the
- * starting script. However, we don't want it to be included in the hashCode() or equals() calculation because the
+ * starting node. However, we don't want it to be included in the hashCode() or equals() calculation because the
  * SessionKey needs to stay consistent for session tracking purposes.
  * No doubt someone will think this code smells funny, but we are being up front about the hack.
  *

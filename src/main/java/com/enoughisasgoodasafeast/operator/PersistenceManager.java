@@ -29,9 +29,9 @@ public interface PersistenceManager {
     Map<String, Keyword> getKeywords();
 
     // Called by Operator
-    Script getScript(UUID scriptId);
+    Node getScript(UUID scriptId);
 
-    Script getScriptForKeyword(Platform platform, String keyword);
+    Node getScriptForKeyword(Platform platform, String keyword);
     /*
      * This exception exists simply to slightly abstract the internal details involved.
      */

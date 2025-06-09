@@ -39,7 +39,7 @@ public class Operator implements MessageProcessor {
 
 
     // Consider async loading cache for this, assuming we preload all scripts
-    final LoadingCache<SessionKey, Script> scriptCache = Caffeine.newBuilder()
+    final LoadingCache<SessionKey, Node> scriptCache = Caffeine.newBuilder()
             .expireAfterAccess(20, TimeUnit.MINUTES)
             .build(key -> findStartingScript(key));
 
@@ -121,8 +121,8 @@ public class Operator implements MessageProcessor {
                     LOG.error("Uh oh, there are more inputs ({}) than expected in session ({})", size, session);
                     // Corner case: user sent multiple responses that arrived closely together (probably due to delays/buffering in
                     // the telco's SMSc) and, due to an unfortunate thread context switch, we've processed each in the same
-                    // Likely this creates an unexpected situation. To handle it we should create a new Script of
-                    // ScriptType.PivotScript and chain the remaining Scripts to it.
+                    // Likely this creates an unexpected situation. To handle it we should create a new Node of
+                    // NodeType.PivotScript and chain the remaining Scripts to it.
                     // These scripts will explain the problem and ask what the user what they want to do.
                     // We'll do the same in other cases as well.
                     // TODO...fetch the PivotScript for the given shortcode
@@ -138,23 +138,23 @@ public class Operator implements MessageProcessor {
                     }
                 }
 
-                // FIXME Session.evaluate handles appending the script to the evaluatedScript list
-                // FIXME why split the logic for handling currentScript? Move it into Session? Or move both here?
-                Script next = session.currentScript.evaluate(session, message);
-                session.registerEvaluated(session.currentScript); //FIXME what if this is null?
-                LOG.info("Next script is {}", next);
-                session.currentScript = next;
+                // FIXME Session.evaluate handles appending the node to the evaluatedScript list
+                // FIXME why split the logic for handling currentNode? Move it into Session? Or move both here?
+                Node next = session.currentNode.evaluate(session, message);
+                session.registerEvaluated(session.currentNode); //FIXME what if this is null?
+                LOG.info("Next node is {}", next);
+                session.currentNode = next;
 
                 while (next != null && !next.type().isAwaitInput()) {
                     LOG.info("Continuing playback...");
                     // Assumes Present and Process are always paired. If this works, make the pattern more generic.
                     // FIXME This is hideous because we're using Session variables as globals here and in the static Multi functions
-                    session.currentScript = session.currentScript.evaluate(session, message);
-                    if (session.currentScript != null) {
-                        session.registerEvaluated(session.currentScript);
+                    session.currentNode = session.currentNode.evaluate(session, message);
+                    if (session.currentNode != null) {
+                        session.registerEvaluated(session.currentNode);
                     }
 
-                    next = session.currentScript;
+                    next = session.currentNode;
 
                 }
 
@@ -189,7 +189,7 @@ public class Operator implements MessageProcessor {
         try (var scope = new StructuredTaskScope.ShutdownOnFailure()) {
 
             Supplier<User> user = scope.fork(() -> userCache.get(sessionKey));
-            Supplier<Script> script = scope.fork(() -> findStartingScript(sessionKey));
+            Supplier<Node> script = scope.fork(() -> findStartingScript(sessionKey));
             scope.join().throwIfFailed(); // TODO consider using joinUntil() to enforce a collective timeout.
 
             return new Session(
@@ -230,35 +230,35 @@ public class Operator implements MessageProcessor {
 
     /*
      * This is all hard coded for the moment. Obviously it needs to be replaced with something that loads
-     * a Script from a database based on the content of the Message.
+     * a Node from a database based on the content of the Message.
      * When we replace this be sure to convert the scriptCache to be a Caffeine cache with a synchronous callback
      * doing the work of returning the values.
      */
-    Script findStartingScript(SessionKey sessionKey) {
+    Node findStartingScript(SessionKey sessionKey) {
         if (keywordCache.isEmpty()) {
             keywordCache.putAll(persistenceManager.getKeywords());
         }
         Keyword keyword = keywordCache.get(sessionKey.keyword()); // TODO loop over the regex patterns represented by the cache keys?
         LOG.info("Found existing keyword mapping: {}", keyword);
         return persistenceManager.getScript(keyword.scriptId());
-//        Script startingScript = scriptCache.get(sessionKey.to());
+//        Node startingScript = scriptCache.get(sessionKey.to());
 //        if (startingScript == null) {
 //            // TODO Expand this to look for keyword in message, other logic.
 //            // TODO fetch from Redis/Postgres/file system...
-//            LOG.info("No script found in cache for {}. Using default for platform, {}.", sessionKey.to(), sessionKey.platform());
+//            LOG.info("No node found in cache for {}. Using default for platform, {}.", sessionKey.to(), sessionKey.platform());
 //
 //            startingScript = switch (sessionKey.to()) {
-//                case "1234" -> new Script("PrintWithPrefix", ScriptType.EchoWithPrefix, "1234");
-//                case "2345" -> new Script("ReverseText", ScriptType.ReverseText, "2345");
-//                case "3456" -> new Script("HelloGoodbye", ScriptType.HelloGoodbye, "3456");
+//                case "1234" -> new Node("PrintWithPrefix", NodeType.EchoWithPrefix, "1234");
+//                case "2345" -> new Node("ReverseText", NodeType.ReverseText, "2345");
+//                case "3456" -> new Node("HelloGoodbye", NodeType.HelloGoodbye, "3456");
 //
 //                case "45678" -> { // chain Scripts together using the PresentMulti/ProcessMulti
-//                    Script one = new Script("What's you favorite color? 1) red 2) blue 3) flort", ScriptType.PresentMulti, "ColorQuiz");
-//                    Script two = new Script("Oops, that's not one of the options. Try again with one of the listed numbers or say 'change topic' to start talking about something else.",
-//                            ScriptType.ProcessMulti, "EvaluateColorAnswer");
+//                    Node one = new Node("What's you favorite color? 1) red 2) blue 3) flort", NodeType.PresentMulti, "ColorQuiz");
+//                    Node two = new Node("Oops, that's not one of the options. Try again with one of the listed numbers or say 'change topic' to start talking about something else.",
+//                            NodeType.ProcessMulti, "EvaluateColorAnswer");
 //                    ResponseLogic linkOneToTwo = new ResponseLogic(null, null, two);
 //                    one.next().add(linkOneToTwo);
-//                    Script tre = new Script("End-of-Conversation", ScriptType.EchoWithPrefix, "EndOfConversation");
+//                    Node tre = new Node("End-of-Conversation", NodeType.EchoWithPrefix, "EndOfConversation");
 //                    ResponseLogic twoOption1 = new ResponseLogic(List.of("1", "red"), "Red is the color of life.", tre);
 //                    ResponseLogic twoOption2 = new ResponseLogic(List.of("2", "blue"), "Blue is my fave, as well.", tre);
 //                    ResponseLogic twoOption3 = new ResponseLogic(List.of("1", "flort"), "Flort is for the cool kids.", tre);
@@ -276,9 +276,9 @@ public class Operator implements MessageProcessor {
 //        return startingScript;
     }
 
-    Script defaultScript(Platform platform, String shortCodeOrKeywordOrChannelName) {
-        // TODO use params to determine the correct initial script.
-        return new Script("TEST SCRIPT RESPONSE PREFIX", ScriptType.EchoWithPrefix, "DefaultScript");
+    Node defaultScript(Platform platform, String shortCodeOrKeywordOrChannelName) {
+        // TODO use params to determine the correct initial node.
+        return new Node("TEST SCRIPT RESPONSE PREFIX", NodeType.EchoWithPrefix, "DefaultScript");
     }
 
     Map<Platform, String> defaultPlatformIdMap(String from) {

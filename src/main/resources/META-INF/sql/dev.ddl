@@ -34,7 +34,7 @@ CREATE TABLE brbl_logs.messages_mo (
     _text       VARCHAR(2000) NOT NULL  --> should match the MT length
 );
 
--- Operator writes an abbreviated row with just the UUID of the Message, the Session UUID, and the UUID of the handling script.
+-- Operator writes an abbreviated row with just the UUID of the Message, the Session UUID, and the UUID of the handling node.
 CREATE TABLE brbl_logs.messages_mo_prcd (
     id          UUID NOT NULL,
     prcd_at     TIMESTAMP WITH TIME ZONE NOT NULL,
@@ -170,13 +170,13 @@ CREATE TABLE brbl_logic.scripts (
     created_at  TIMESTAMP WITH TIME ZONE NOT NULL,
     text        VARCHAR(255),       --> SMS is limited to 160 chars but other platform have higher limits.
     type        SMALLINT NOT NULL,  --> see ScriptType enum for meaning.
-    label       VARCHAR(32)         --> the name given to the script element in a UI
+    label       VARCHAR(32)         --> the name given to the node element in a UI
 );
 
 CREATE TABLE brbl_logic.edges (
     id              UUID PRIMARY KEY,
     created_at      TIMESTAMP WITH TIME ZONE NOT NULL,
-    match_text      VARCHAR(128),       --> the text that must be matched to direct the conversation to the dst script
+    match_text      VARCHAR(128),       --> the text that must be matched to direct the conversation to the dst node
     response_text   VARCHAR(255),       --> the text emitted when the edge is selected.
     src             UUID NOT NULL,      --> FK to scripts table
     dst             UUID NOT NULL      --> FK to scripts table
@@ -332,12 +332,12 @@ WITH RECURSIVE c AS (
 -- YES!!! This works but it doesn't include the final Script because there aren't any rows in the EDGES table that reference it.
 -- This is a problem...
 
--- Removed the NOT NULL constraint on the dst column for brbl_logic.edges and added a row for the final script that has null as it's dst value:
+-- Removed the NOT NULL constraint on the dst column for brbl_logic.edges and added a row for the final node that has null as it's dst value:
 
 INSERT INTO brbl_logic.edges VALUES(gen_random_uuid(), NOW(), 'NOOP', 'NOOP',
     'f9420f0c-81ca-4f9a-b1d4-7e25fd280399', null) RETURNING *;
 
--- Now the last script in the graph is included by the recursive query.
+-- Now the last node in the graph is included by the recursive query.
 
 -- Next problem: supporting cycles...
 

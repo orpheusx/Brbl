@@ -6,7 +6,7 @@ import org.junit.jupiter.api.Test;
 
 import java.util.UUID;
 
-import static com.enoughisasgoodasafeast.operator.ScriptType.*;
+import static com.enoughisasgoodasafeast.operator.NodeType.*;
 import static com.enoughisasgoodasafeast.operator.Session.MAX_INPUT_HISTORY;
 import static com.enoughisasgoodasafeast.operator.UserTest.*;
 import static org.junit.jupiter.api.Assertions.*;
@@ -20,7 +20,7 @@ class SessionTest {
             String TO = "12345";
             Session session = new Session(
                     UUID.randomUUID(),
-                    new Script("do nothing", EchoWithPrefix, null),
+                    new Node("do nothing", EchoWithPrefix, null),
                     new User(UUID.randomUUID(), platformIds, platformsCreated, countryCode, languages),
                     new InMemoryQueueProducer(),
                     null);

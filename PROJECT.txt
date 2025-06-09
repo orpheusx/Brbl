@@ -9,7 +9,7 @@
 3) caching
 3.1) profiling memory and performance
 3.2) metrics with Prometheus (or something lighter weight)
-4) script authoring (domain models > records)
+4) node authoring (domain models > records)
 5) initial gateway support (SMS via Twilio or similar)
 6) basic sentiment analysis
 7) deployment & operations including backups (we need actual hardware at this stage)

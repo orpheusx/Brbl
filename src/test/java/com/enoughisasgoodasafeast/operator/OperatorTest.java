@@ -111,20 +111,20 @@ public class OperatorTest {
             var mo4SessionKey = SessionKey.newSessionKey(mo4);
             var session = operator.sessionCache.get(mo4SessionKey);
 
-            Script firstScript = operator.findStartingScript(mo4SessionKey);
-            assertNotNull(firstScript, "Failed to return first Script.");
-            assertEquals(ScriptType.PresentMulti, firstScript.type());
-            assertEquals("ColorQuiz", firstScript.label());
+            Node firstNode = operator.findStartingScript(mo4SessionKey);
+            assertNotNull(firstNode, "Failed to return first Node.");
+            assertEquals(NodeType.PresentMulti, firstNode.type());
+            assertEquals("ColorQuiz", firstNode.label());
 
-            Script secondScript = firstScript.evaluate(session, mo4);
-            System.out.println(secondScript);
-            assertEquals(ScriptType.ProcessMulti, secondScript.type());
-            session.currentScript = secondScript; // Required! Normally occurs in Operator method, process(Session, Message).
+            Node secondNode = firstNode.evaluate(session, mo4);
+            System.out.println(secondNode);
+            assertEquals(NodeType.ProcessMulti, secondNode.type());
+            session.currentNode = secondNode; // Required! Normally occurs in Operator method, process(Session, Message).
 
-            Script finalScript = secondScript.evaluate(session, mo5);
-            System.out.println(finalScript);
-            assertEquals(ScriptType.EchoWithPrefix, finalScript.type());
-            session.currentScript = finalScript;
+            Node finalNode = secondNode.evaluate(session, mo5);
+            System.out.println(finalNode);
+            assertEquals(NodeType.EchoWithPrefix, finalNode.type());
+            session.currentNode = finalNode;
         });
     }
 
@@ -137,24 +137,24 @@ public class OperatorTest {
             var session = operator.sessionCache.get(SessionKey.newSessionKey(mo4));
 
             SessionKey mo4SessionKey = SessionKey.newSessionKey(mo4);
-            Script firstScript = operator.findStartingScript(mo4SessionKey);
+            Node firstNode = operator.findStartingScript(mo4SessionKey);
 
-            assertNotNull(firstScript, "Failed to return first Script.");
-            assertEquals(ScriptType.PresentMulti, firstScript.type());
-            assertEquals("ColorQuiz", firstScript.label());
+            assertNotNull(firstNode, "Failed to return first Node.");
+            assertEquals(NodeType.PresentMulti, firstNode.type());
+            assertEquals("ColorQuiz", firstNode.label());
 
-            Script secondScript = firstScript.evaluate(session, mo4);
-            System.out.println(secondScript);
-            assertEquals(ScriptType.ProcessMulti, secondScript.type());
-            session.currentScript = secondScript; // Required! Normally occurs in Operator method, process(Session, Message).
+            Node secondNode = firstNode.evaluate(session, mo4);
+            System.out.println(secondNode);
+            assertEquals(NodeType.ProcessMulti, secondNode.type());
+            session.currentNode = secondNode; // Required! Normally occurs in Operator method, process(Session, Message).
 
-            Script finalScript = secondScript.evaluate(session, unexpected);
+            Node finalNode = secondNode.evaluate(session, unexpected);
             // An error message should be produced...
             assertTrue(requireNonNull(session.getOutputBuffer().poll()).text().contains("favorite color"));
             assertTrue(requireNonNull(session.getOutputBuffer().poll()).text().contains("Oops"));
-            // ...but the current script should not have advanced
-            assertEquals(ScriptType.ProcessMulti, finalScript.type());
-            assertEquals(secondScript, finalScript);
+            // ...but the current node should not have advanced
+            assertEquals(NodeType.ProcessMulti, finalNode.type());
+            assertEquals(secondNode, finalNode);
         });
     }
 
@@ -168,33 +168,33 @@ public class OperatorTest {
             var session = operator.sessionCache.get(mo4SessionKey);
             assertNotNull(session);
 
-            Script firstScript = operator.findStartingScript(mo4SessionKey);
-            assertNotNull(firstScript, "Failed to return first Script.");
-            assertEquals(ScriptType.PresentMulti, firstScript.type());
-            assertEquals("ColorQuiz", firstScript.label());
+            Node firstNode = operator.findStartingScript(mo4SessionKey);
+            assertNotNull(firstNode, "Failed to return first Node.");
+            assertEquals(NodeType.PresentMulti, firstNode.type());
+            assertEquals("ColorQuiz", firstNode.label());
 
-            Script secondScript = firstScript.evaluate(session, mo4);
-            System.out.println(secondScript);
-            assertEquals(ScriptType.ProcessMulti, secondScript.type());
-            session.currentScript = secondScript; // Required! Normally occurs in Operator method, process(Session, Message).
+            Node secondNode = firstNode.evaluate(session, mo4);
+            System.out.println(secondNode);
+            assertEquals(NodeType.ProcessMulti, secondNode.type());
+            session.currentNode = secondNode; // Required! Normally occurs in Operator method, process(Session, Message).
 
-            Script thirdScript = secondScript.evaluate(session, unexpected);
+            Node thirdNode = secondNode.evaluate(session, unexpected);
 
             // An error message should be produced...
             assertTrue(requireNonNull(session.getOutputBuffer().poll()).text().contains("favorite color"));
             assertTrue(requireNonNull(session.getOutputBuffer().poll()).text().contains("Oops"));
 
-            // ...but the current script should not have advanced
-            assertEquals(ScriptType.ProcessMulti, thirdScript.type());
-            assertEquals(secondScript, thirdScript);
-            session.currentScript = thirdScript;
+            // ...but the current node should not have advanced
+            assertEquals(NodeType.ProcessMulti, thirdNode.type());
+            assertEquals(secondNode, thirdNode);
+            session.currentNode = thirdNode;
 
             assertEquals(0, session.getOutputBuffer().size());
 
-            Script fourthScript = thirdScript.evaluate(session, changeTopic);
-            assertEquals("e-o-c", fourthScript.label());
-            assertEquals(ScriptType.ProcessMulti, fourthScript.type());
-            session.currentScript = fourthScript;
+            Node fourthNode = thirdNode.evaluate(session, changeTopic);
+            assertEquals("e-o-c", fourthNode.label());
+            assertEquals(NodeType.ProcessMulti, fourthNode.type());
+            session.currentNode = fourthNode;
             assertEquals(2, session.getOutputBuffer().size());
 
             assertTrue(requireNonNull(session.getOutputBuffer().poll()).text().contains("something else"));
@@ -202,7 +202,7 @@ public class OperatorTest {
 
             assertEquals(0, session.getOutputBuffer().size());
 
-            Script finalScript = fourthScript.evaluate(session, wolverine);
+            Node finalNode = fourthNode.evaluate(session, wolverine);
             System.out.println(session.getOutputBuffer());
             assertTrue(session.getOutputBuffer().poll().text().contains("pointy teeth"));
         });
@@ -219,11 +219,11 @@ public class OperatorTest {
             var session = operator.sessionCache.get(SessionKey.newSessionKey(mo4));
             final List<Message> queuedMessages = producer.getQueuedMessages();
             assertTrue(requireNonNull(queuedMessages.getFirst()).text().contains("favorite color"));
-            assertEquals(ScriptType.ProcessMulti, session.getCurrentScript().type());
+            assertEquals(NodeType.ProcessMulti, session.getCurrentScript().type());
 
             assertTrue(operator.process(mo5));
             assertTrue(requireNonNull(queuedMessages.get(1)).text().contains("cool kids"));
-            assertEquals(ScriptType.EchoWithPrefix, session.getCurrentScript().type());
+            assertEquals(NodeType.EchoWithPrefix, session.getCurrentScript().type());
 
         });
     }
@@ -243,31 +243,31 @@ public class OperatorTest {
             assertTrue(requireNonNull(queuedMessages.getFirst()).text().contains("favorite color"));
             queuedMessages.clear();
 
-            Script faveColorScript = session.getCurrentScript();
-            assertEquals(ScriptType.ProcessMulti, faveColorScript.type());
+            Node faveColorNode = session.getCurrentScript();
+            assertEquals(NodeType.ProcessMulti, faveColorNode.type());
 
             assertTrue(operator.process(unexpected));
             // An error message should have been produced...
             assertTrue(requireNonNull(queuedMessages.getFirst()).text().contains("Oops"));
             queuedMessages.clear();
 
-            Script stillFaveColorScript = session.getCurrentScript();
-            assertEquals(ScriptType.ProcessMulti, faveColorScript.type());
-            assertEquals(faveColorScript, stillFaveColorScript);
+            Node stillFaveColorNode = session.getCurrentScript();
+            assertEquals(NodeType.ProcessMulti, faveColorNode.type());
+            assertEquals(faveColorNode, stillFaveColorNode);
 
             assertEquals(0, session.getOutputBuffer().size());
 
             assertTrue(operator.process(changeTopic)); // will emit a notice message and the topic display message
             assertEquals(2, queuedMessages.size());
-            Script changeTopicScript = session.getCurrentScript();
-            assertEquals(ScriptType.ProcessMulti, changeTopicScript.type());
+            Node changeTopicNode = session.getCurrentScript();
+            assertEquals(NodeType.ProcessMulti, changeTopicNode.type());
 
             assertTrue(requireNonNull(queuedMessages.getFirst()).text().contains("something else"));
             assertTrue(requireNonNull(queuedMessages.get(1)).text().contains("monetary"));
             queuedMessages.clear();
 
             assertTrue(operator.process(wolverine));
-            assertEquals(ScriptType.ProcessMulti, session.getCurrentScript().type());
+            assertEquals(NodeType.ProcessMulti, session.getCurrentScript().type());
             assertEquals(1, queuedMessages.size());
             assertTrue(requireNonNull(queuedMessages.getFirst()).text().contains("pointy teeth"));
         });

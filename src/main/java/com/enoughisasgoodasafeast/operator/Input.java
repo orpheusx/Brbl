@@ -15,7 +15,7 @@ public class Input {
     static class Request {
 
         // NOTE: This is nearly identical to SendMessage.evaluate. // TODO DRY opportunity here
-        public static Script evaluate(ScriptContext context, Message moMessage) {
+        public static Node evaluate(ScriptContext context, Message moMessage) {
             LOG.info("Input.Request evaluating '{}'", context.getCurrentScript());
             context.registerOutput(
                     newMTfromMO(moMessage,
@@ -27,7 +27,7 @@ public class Input {
     }
 
     static class Process {
-        public static Script evaluate(ScriptContext context, Message moMessage) {
+        public static Node evaluate(ScriptContext context, Message moMessage) {
             String userText = moMessage.text().trim().toLowerCase();
             LOG.info("Input.Process evaluating '{}'", userText);
 

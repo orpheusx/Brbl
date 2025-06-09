@@ -465,7 +465,7 @@ public class PostgresPersistenceManager implements PersistenceManager {
 
 
         @Override
-    public Script getScriptForKeyword(Platform platform, String keyword) {
+    public Node getScriptForKeyword(Platform platform, String keyword) {
         try (Connection connection = fetchConnection()) {
             assert connection != null;
             return getScriptForKeyword(connection, platform, keyword);
@@ -475,8 +475,8 @@ public class PostgresPersistenceManager implements PersistenceManager {
         }
     }
 
-    public Script getScriptForKeyword(Connection connection, Platform platform, String keyword) {
-        Map<UUID, Script> scriptMap = new HashMap<>(); // FIXME does the ordering matter?
+    public Node getScriptForKeyword(Connection connection, Platform platform, String keyword) {
+        Map<UUID, Node> scriptMap = new HashMap<>(); // FIXME does the ordering matter?
         try (PreparedStatement ps = connection.prepareStatement(SELECT_SCRIPT_GRAPH_RECURSIVE_FOR_KEYWORD)) {
 //            ps.setObject(1, platform);
             ps.setString(1, platform.code());
@@ -492,15 +492,15 @@ public class PostgresPersistenceManager implements PersistenceManager {
 
                 UUID id = (UUID) rs.getObject(1); // id
 
-                Script script = scriptMap.get(id);
-                if (script == null) {
+                Node node = scriptMap.get(id);
+                if (node == null) {
                     // columnIndex 2, // createdAt
                     String text = rs.getString(3);  // text
-                    ScriptType type = ScriptType.forValue(rs.getInt(4));  // type
+                    NodeType type = NodeType.forValue(rs.getInt(4));  // type
                     String label = rs.getString(5); // label
 
-                    script = new Script(id, text, type, null, label); // no next entries yet...
-                    scriptMap.put(id, script);
+                    node = new Node(id, text, type, null, label); // no next entries yet...
+                    scriptMap.put(id, node);
                 }
 
                 UUID edgeId = (UUID) rs.getObject(6); // ResponseLogic.id
@@ -512,7 +512,7 @@ public class PostgresPersistenceManager implements PersistenceManager {
 
                 ResponseLogic tempEdge = new ResponseLogic(
                         edgeId, responseText, matchText, scriptMap.get(dstId)
-                ); // NB: the destination script may not exist so we will need to update/replace this edge at the end of the while loop
+                ); // NB: the destination node may not exist so we will need to update/replace this edge at the end of the while loop
                 edgeIdToDstId.put(edgeId, dstId);
 
                 SequencedSet<ResponseLogic> edgesForParentScript = tempEdges.computeIfAbsent(srcId, k -> new LinkedHashSet<>());
@@ -520,19 +520,19 @@ public class PostgresPersistenceManager implements PersistenceManager {
             }
 
             // Now patch all the references for both the edges and the scripts
-            for (Map.Entry<UUID, Script> idAndScript : scriptMap.entrySet()) {
+            for (Map.Entry<UUID, Node> idAndScript : scriptMap.entrySet()) {
                 SequencedSet<ResponseLogic> edgesForScript = tempEdges.get(idAndScript.getKey());
-                Script script = idAndScript.getValue();
+                Node node = idAndScript.getValue();
                 for (ResponseLogic edge : edgesForScript) {
-                    if (edge.script() == null) {
+                    if (edge.node() == null) {
                         UUID destinationScriptID = edgeIdToDstId.get(edge.id());
-                        Script missingScript = scriptMap.get(destinationScriptID);
-                        //LOG.info("Patching edge {} with dst: {}", script.id(), missingScript);
-                        edge = edge.copyReplacing(missingScript);
+                        Node missingNode = scriptMap.get(destinationScriptID);
+                        //LOG.info("Patching edge {} with dst: {}", node.id(), missingNode);
+                        edge = edge.copyReplacing(missingNode);
                     }
-                    // else the script was already available when we created the ResponseLogic from the ResultSet
+                    // else the node was already available when we created the ResponseLogic from the ResultSet
 
-                    script.edges().add(edge);
+                    node.edges().add(edge);
                 }
             }
 
@@ -546,18 +546,18 @@ public class PostgresPersistenceManager implements PersistenceManager {
             LOG.info(v.toString());
         });
 
-        Script initialScript = null;
-        for (Script s : scriptMap.values()) {
+        Node initialNode = null;
+        for (Node s : scriptMap.values()) {
             if (s.text().equals(keyword)) {
-                initialScript = s;
+                initialNode = s;
                 break;
             }
         }
-        return initialScript;
+        return initialNode;
     }
 
     @Override
-    public Script getScript(UUID scriptId) {
+    public Node getScript(UUID scriptId) {
         try (Connection connection = fetchConnection()) {
             assert connection != null;
             return getScript(connection, scriptId);
@@ -567,8 +567,8 @@ public class PostgresPersistenceManager implements PersistenceManager {
         }
     }
 
-    public Script getScript(Connection connection, UUID scriptId) {
-        Map<UUID, Script> scriptMap = new HashMap<>(); // FIXME does the ordering matter?
+    public Node getScript(Connection connection, UUID scriptId) {
+        Map<UUID, Node> scriptMap = new HashMap<>(); // FIXME does the ordering matter?
         try (PreparedStatement ps = connection.prepareStatement(SELECT_SCRIPT_GRAPH_RECURSIVE)) {
             ps.setObject(1, scriptId);
 
@@ -582,15 +582,15 @@ public class PostgresPersistenceManager implements PersistenceManager {
 
                 UUID id = (UUID) rs.getObject(1); // id
 
-                Script script = scriptMap.get(id);
-                if (script == null) {
+                Node node = scriptMap.get(id);
+                if (node == null) {
                     // columnIndex 2, // createdAt
                     String text = rs.getString(3);  // text
-                    ScriptType type = ScriptType.forValue(rs.getInt(4));  // type
+                    NodeType type = NodeType.forValue(rs.getInt(4));  // type
                     String label = rs.getString(5); // label
 
-                    script = new Script(id, text, type, null, label); // no next entries yet...
-                    scriptMap.put(id, script);
+                    node = new Node(id, text, type, null, label); // no next entries yet...
+                    scriptMap.put(id, node);
                 }
 
                 UUID edgeId = (UUID) rs.getObject(6); // ResponseLogic.id
@@ -602,7 +602,7 @@ public class PostgresPersistenceManager implements PersistenceManager {
 
                 ResponseLogic tempEdge = new ResponseLogic(
                         edgeId, responseText, matchText, scriptMap.get(dstId)
-                ); // NB: the destination script may not exist so we will need to update/replace this edge at the end of the while loop
+                ); // NB: the destination node may not exist so we will need to update/replace this edge at the end of the while loop
                 edgeIdToDstId.put(edgeId, dstId);
 
                 SequencedSet<ResponseLogic> edgesForParentScript = tempEdges.computeIfAbsent(srcId, k -> new LinkedHashSet<>());
@@ -610,21 +610,21 @@ public class PostgresPersistenceManager implements PersistenceManager {
             }
 
             // Now patch all the references for both the edges and the scripts
-            for (Map.Entry<UUID, Script> idAndScript : scriptMap.entrySet()) {
+            for (Map.Entry<UUID, Node> idAndScript : scriptMap.entrySet()) {
                 SequencedSet<ResponseLogic> edgesForScript = tempEdges.get(idAndScript.getKey());
-                Script script = idAndScript.getValue();
+                Node node = idAndScript.getValue();
                 for (ResponseLogic edge : edgesForScript) {
-                    if (edge.script() == null) {
+                    if (edge.node() == null) {
                         UUID destinationScriptID = edgeIdToDstId.get(edge.id());
-                        Script missingScript = scriptMap.get(destinationScriptID);
-                        //LOG.info("Patching edge {} with dst: {}", script.id(), missingScript);
-                        edge = edge.copyReplacing(missingScript);
+                        Node missingNode = scriptMap.get(destinationScriptID);
+                        //LOG.info("Patching edge {} with dst: {}", node.id(), missingNode);
+                        edge = edge.copyReplacing(missingNode);
                     } else {
-                        //LOG.info("Edge {} already points to {}", edge.id(), edge.script());
+                        //LOG.info("Edge {} already points to {}", edge.id(), edge.node());
                     }
-                    // else the script was already available when we created the ResponseLogic from the ResultSet
+                    // else the node was already available when we created the ResponseLogic from the ResultSet
 
-                    script.edges().add(edge);
+                    node.edges().add(edge);
                 }
             }
 
@@ -800,11 +800,11 @@ public class PostgresPersistenceManager implements PersistenceManager {
         //    LOG.info("Messages inserted: {}", insertsOk);
         //    LOG.info("New Message id: {}", uuid);
 //
-        //    final Script script = new Script("blah", ScriptType.PresentMulti, null, "blahLabel");
-        //    final Script previousScript = new Script("response to blah", ScriptType.PresentMulti, null, "blahResponseLabel");
+        //    final Node node = new Node("blah", NodeType.PresentMulti, null, "blahLabel");
+        //    final Node previousScript = new Node("response to blah", NodeType.PresentMulti, null, "blahResponseLabel");
         //    final User user = new User(UUID.randomUUID(), Map.of(Platform.SMS, "17815551234"), "MX", List.of("spa", "eng"));
         //    final InMemoryQueueProducer queueProducer = new InMemoryQueueProducer();
-        //    Session session = new Session(UUID.randomUUID(), script, user, queueProducer, null);
+        //    Session session = new Session(UUID.randomUUID(), node, user, queueProducer, null);
         //    session.addEvaluated(previousScript);
         //    boolean procdMessageOk = insertProcessedMO(moMessage, session);
         //    LOG.info("processedMessage inserted: {}", procdMessageOk);
@@ -822,11 +822,11 @@ public class PostgresPersistenceManager implements PersistenceManager {
     public static void main(String[] args) throws InterruptedException, IOException, PersistenceManagerException {
         PostgresPersistenceManager pm = new PostgresPersistenceManager(ConfigLoader.readConfig("persistence_manager_test.properties"));
 
-        Script script = pm.getScript(UUID.fromString("89eddcb8-7fe5-4cd1-b18b-78858f0789fb"));
+        Node node = pm.getScript(UUID.fromString("89eddcb8-7fe5-4cd1-b18b-78858f0789fb"));
         System.out.println("\n\n\n\n\n\n");
-        Script.printGraph(script, script, 0);
+        Node.printGraph(node, node, 0);
 
-//      Script script2 = pm.getScript(UUID.fromString("525028ae-0a33-4c80-a22f-868f77bb9531"));
+//      Node script2 = pm.getScript(UUID.fromString("525028ae-0a33-4c80-a22f-868f77bb9531"));
 
 //        LOG.info("Calling getKeywords...");
 //        final Map<String, Keyword> keywords = pm.getKeywords();

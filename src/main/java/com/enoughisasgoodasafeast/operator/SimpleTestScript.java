@@ -14,11 +14,11 @@ public class SimpleTestScript {
 
     private static final Logger LOG = LoggerFactory.getLogger(SimpleTestScript.class);
 
-    static Script computeNextScript(ScriptContext session) {
+    static Node computeNextScript(ScriptContext session) {
         if (session.getCurrentScript().edges().isEmpty()) {
             return null;
         } else {
-            return session.getCurrentScript().edges().getFirst().script();
+            return session.getCurrentScript().edges().getFirst().node();
         }
 //        if (!n.await()) {
 //            return n.evaluate(session, moMessage);
@@ -31,7 +31,7 @@ public class SimpleTestScript {
      * Sends
      */
     public static class SimpleEchoResponseScript {
-        public static Script evaluate(ScriptContext session, Message moMessage) throws IOException {
+        public static Node evaluate(ScriptContext session, Message moMessage) throws IOException {
             String mtText = String.format("%s: %s", session.getCurrentScript().text(), moMessage.text());
             // Remember the from and to fields of the MT must be the reverse of the MO
             Message mt = newMT(moMessage.to(), moMessage.from(), mtText);
@@ -48,7 +48,7 @@ public class SimpleTestScript {
     }
 
     public static class ReverseTextResponseScript {
-        public static Script evaluate(ScriptContext session, Message moMessage) throws IOException {
+        public static Node evaluate(ScriptContext session, Message moMessage) throws IOException {
             String mtText = new StringBuilder(moMessage.text()).reverse().toString();
             Message mt = newMT(moMessage.to(), moMessage.from(), mtText);
             session.registerOutput(mt);
@@ -68,7 +68,7 @@ public class SimpleTestScript {
      * and will send a response: '<num> goodbye'
      */
     public static class HelloGoodbyeResponseScript {
-        public static Script evaluate(ScriptContext session, Message moMessage) throws IOException {
+        public static Node evaluate(ScriptContext session, Message moMessage) throws IOException {
             String[] moText = moMessage.text().split(SharedConstants.TEST_SPACE_TOKEN, 2);
             Message mt = null;
             if (moText[1].equals("hello")) {

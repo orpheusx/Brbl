@@ -6,15 +6,12 @@ import io.jenetics.util.NanoClock;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
-import java.io.IO;
 import java.io.IOException;
 import java.util.*;
-import java.util.function.Predicate;
-import java.util.stream.Collectors;
 
 /**
  * The Session tracks and persists state for a single User
- * Won't work as a Record since we need to update the currentScript field
+ * Won't work as a Record since we need to update the currentNode field
  * and maintain state
  */
 public class Session implements ScriptContext {
@@ -27,7 +24,7 @@ public class Session implements ScriptContext {
     final QueueProducer producer;
     final PersistenceManager persistenceManager;
 
-    Script currentScript;
+    Node currentNode;
 
     private final Queue<Message> outputBuffer = new LinkedList<>();
     private final SequencedSet<Message> inputs = new LinkedHashSet<>();
@@ -40,20 +37,20 @@ public class Session implements ScriptContext {
             super.addLast(message);
         }
     };
-    private final List<Script> evaluatedScripts = new ArrayList<>(); // TODO make this a stack instead?
+    private final List<Node> evaluatedNodes = new ArrayList<>(); // TODO make this a stack instead?
 
     /**
      * Creates a new, fully configured Session object.
      * @param id the unique identifier
-     * @param currentScript the starting Script in the graph
+     * @param currentNode the starting Node in the graph
      * @param user the unique User
      * @param producer the sink for messages created on behalf of this Session
      * @param persistenceManager the object that writes artifacts created for this Session
      */
-    public Session(UUID id, Script currentScript, User user, QueueProducer producer, PersistenceManager persistenceManager) {
+    public Session(UUID id, Node currentNode, User user, QueueProducer producer, PersistenceManager persistenceManager) {
         startTimeNanos = NanoClock.systemUTC().nanos();
         this.id = Objects.requireNonNull(id);
-        this.currentScript = Objects.requireNonNull(currentScript);
+        this.currentNode = Objects.requireNonNull(currentNode);
         this.user = Objects.requireNonNull(user);
         this.producer = Objects.requireNonNull(producer);
         this.persistenceManager = persistenceManager;
@@ -76,13 +73,13 @@ public class Session implements ScriptContext {
         return outputBuffer;
     }
 
-    public Script previousScript() {
-        return evaluatedScripts.getLast();
+    public Node previousScript() {
+        return evaluatedNodes.getLast();
     }
 
     @Override
-    public List<Script> getEvaluatedScripts() {
-        return evaluatedScripts;
+    public List<Node> getEvaluatedScripts() {
+        return evaluatedNodes;
     }
 
     public void registerInput(Message moMessage) {
@@ -96,31 +93,31 @@ public class Session implements ScriptContext {
         LOG.info("Registered output message {}", mtMessage);
     }
     
-    public void registerEvaluated(Script script) {
-        evaluatedScripts.addLast(script);
-        LOG.info("Registered evaluated script {}", script.id());
+    public void registerEvaluated(Node node) {
+        evaluatedNodes.addLast(node);
+        LOG.info("Registered evaluated node {}", node.id());
     }
 
     /**
      * Since multiple Scripts may be evaluated in response to a single MO we need a way of
      * finding the one that prompted it. Used when logging the processed MO.
-     * @return the Script that prompted the User's latest MO.
+     * @return the Node that prompted the User's latest MO.
      */
 
-    public Script getScriptForProcessedMO() {
+    public Node getScriptForProcessedMO() {
 
-        if (currentScript != null) { // FIXME should
-            return currentScript;
+        if (currentNode != null) { // FIXME should
+            return currentNode;
         }
 
-        for (int i = evaluatedScripts.size() - 1; i >= 0; i--) {
-            Script evaluated = evaluatedScripts.get(i);
+        for (int i = evaluatedNodes.size() - 1; i >= 0; i--) {
+            Node evaluated = evaluatedNodes.get(i);
             if (evaluated.type().isAwaitInput()) {
                 return evaluated;
             }
         }
 
-        return evaluatedScripts.getFirst();
+        return evaluatedNodes.getFirst();
     }
 
     public void flush() throws IOException {
@@ -144,11 +141,11 @@ public class Session implements ScriptContext {
     }
 
     @Override
-    public Script getCurrentScript() {
-        return currentScript;
+    public Node getCurrentScript() {
+        return currentNode;
     }
 
-    public void setCurrentScript(Script script) {
-        currentScript = script;
+    public void setCurrentScript(Node node) {
+        currentNode = node;
     }
 }

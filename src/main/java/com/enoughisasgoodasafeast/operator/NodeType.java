@@ -3,7 +3,7 @@ package com.enoughisasgoodasafeast.operator;
 /**
  * An enumeration used to define the type of logic applied to the processing of a message.
  */
-public enum ScriptType {
+public enum NodeType {
     EchoWithPrefix  (1, false), // FIXME get rid of these
     ReverseText     (2, false), // FIXME get rid of these
     HelloGoodbye    (3, false), // FIXME get rid of these
@@ -21,7 +21,7 @@ public enum ScriptType {
     private final int value;
     private final boolean awaitInput;
 
-    ScriptType(int value, boolean awaitInput) {
+    NodeType(int value, boolean awaitInput) {
         this.value = value;
         this.awaitInput = awaitInput;
     }
@@ -34,8 +34,8 @@ public enum ScriptType {
         return awaitInput;
     }
 
-    public static ScriptType forValue(int value) {
-        for (ScriptType t : values()) {
+    public static NodeType forValue(int value) {
+        for (NodeType t : values()) {
             if (t.value == value) {
                 return t;
             }

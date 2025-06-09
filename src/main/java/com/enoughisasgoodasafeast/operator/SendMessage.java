@@ -12,7 +12,7 @@ public class SendMessage {
 
     private static final Logger LOG = LoggerFactory.getLogger(SendMessage.class);
 
-    static Script evaluate(ScriptContext context, Message moMessage) {
+    static Node evaluate(ScriptContext context, Message moMessage) {
         LOG.info("SendMessage evaluating '{}'", moMessage.text()); // we're not really evaluating the message but...
         context.registerOutput(
                 newMTfromMO(moMessage,

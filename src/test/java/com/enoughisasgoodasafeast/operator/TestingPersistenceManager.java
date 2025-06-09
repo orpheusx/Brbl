@@ -47,12 +47,12 @@ class TestingPersistenceManager implements PersistenceManager {
     }
 
     @Override
-    public Script getScript(UUID scriptId) {
+    public Node getScript(UUID scriptId) {
         return null;
     }
 
     @Override
-    public Script getScriptForKeyword(Platform platform, String keyword) {
+    public Node getScriptForKeyword(Platform platform, String keyword) {
         return null;
     }
 

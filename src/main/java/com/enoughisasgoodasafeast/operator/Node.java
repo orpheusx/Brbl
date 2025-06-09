@@ -17,11 +17,11 @@ import java.util.*;
  * @param edges
  * @param label
  */
-public record Script(UUID id, String text, ScriptType type, SequencedSet<ResponseLogic> edges/*, Script previous*/, String label) {
+public record Node(UUID id, String text, NodeType type, SequencedSet<ResponseLogic> edges/*, Node previous*/, String label) {
 
-    private static final Logger LOG = LoggerFactory.getLogger(Script.class);
+    private static final Logger LOG = LoggerFactory.getLogger(Node.class);
 
-    public Script {
+    public Node {
         if (id == null) {
             id = UUID.randomUUID();
         }
@@ -32,21 +32,21 @@ public record Script(UUID id, String text, ScriptType type, SequencedSet<Respons
             edges = new LinkedHashSet<>();
         }
         if (label == null) {
-            LOG.info("Created Script (type:{}, id:{}", type, id);
+            LOG.info("Created Node (type:{}, id:{}", type, id);
         } else {
-            LOG.info("Created Script (type:{}, label:'{}', id:{}", type, label, id);
+            LOG.info("Created Node (type:{}, label:'{}', id:{}", type, label, id);
         }
     }
 
-    public Script(UUID id, String text, ScriptType type) {
+    public Node(UUID id, String text, NodeType type) {
         this(id, text, type, null, null);
     }
 
-    public Script(String text, ScriptType type) {
+    public Node(String text, NodeType type) {
         this(null, text, type, null, null);
     }
 
-    public Script(String text, ScriptType type, String label) {
+    public Node(String text, NodeType type, String label) {
         this(null, text, type, null, label);
     }
 
@@ -60,7 +60,7 @@ public record Script(UUID id, String text, ScriptType type, SequencedSet<Respons
     }
 
     /**
-     * Execute the script in the context of the given session and message.
+     * Execute the node in the context of the given session and message.
      * Most simply this can result in the creation of one more MTMessages.
      * There are a variety of possible side effects including:
      *  - inserts/updates to the database
@@ -68,10 +68,10 @@ public record Script(UUID id, String text, ScriptType type, SequencedSet<Respons
      *  - invoke an ML operation
      * @param session the user context
      * @param moMessage the MO message being processed
-     * @return the next Script in the conversation (or null if the conversation is complete?)
-     * FIXME Maybe instead of null we return a symbolic Script that indicates the end of Script?
+     * @return the next Node in the conversation (or null if the conversation is complete?)
+     * FIXME Maybe instead of null we return a symbolic Node that indicates the end of Node?
      */
-    public Script evaluate(/*Session*/ ScriptContext session, Message moMessage) throws IOException {
+    public Node evaluate(/*Session*/ ScriptContext session, Message moMessage) throws IOException {
         return switch (session.getCurrentScript().type) {
             case EchoWithPrefix ->
                 SimpleTestScript.SimpleEchoResponseScript.evaluate(session, moMessage);
@@ -91,7 +91,7 @@ public record Script(UUID id, String text, ScriptType type, SequencedSet<Respons
             case ProcessMulti ->
                     Multi.Process.evaluate(session, moMessage);
 
-            // TODO Behaves like a SendMessage albeit with the expectation that there's no "next" script so we could replace impl
+            // TODO Behaves like a SendMessage albeit with the expectation that there's no "next" node so we could replace impl
             case EndOfChat -> SendMessage.evaluate(session, moMessage); //EndOfSession? 'request' that the session be cleared?
 
             // TODO Even easier to replace with SendMessage.evaluate(). The Editor will always pair it with an Input.Process
@@ -106,7 +106,7 @@ public record Script(UUID id, String text, ScriptType type, SequencedSet<Respons
 
         };
 
-        // If we didn't advance to a different script then we're not done evaluating this one.
+        // If we didn't advance to a different node then we're not done evaluating this one.
         //        if (!this.equals(next)) {
         //            session.registerEvaluated(this);
         //        }
@@ -115,20 +115,20 @@ public record Script(UUID id, String text, ScriptType type, SequencedSet<Respons
     }
 
     /**
-     * A convenience function that displays the structure of a script graph
-     * @param startScript the origin of the graph
-     * @param script the "current" script in the recursive call
+     * A convenience function that displays the structure of a node graph
+     * @param startNode the origin of the graph
+     * @param node the "current" node in the recursive call
      * @param indent the current level of recursion
      */
-    public static void printGraph(Script startScript, Script script, int indent) {
-        printIndent(script, indent);
+    public static void printGraph(Node startNode, Node node, int indent) {
+        printIndent(node, indent);
         int level = indent + 1;
-        for (ResponseLogic edge : script.edges()) {
+        for (ResponseLogic edge : node.edges()) {
             printIndent(edge, level);
-            Script childScript = edge.script();
+            Node childNode = edge.node();
 
-            if (startScript != childScript) {
-                printGraph(startScript, childScript, level + 1);
+            if (startNode != childNode) {
+                printGraph(startNode, childNode, level + 1);
             }
         }
     }

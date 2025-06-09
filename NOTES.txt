@@ -281,7 +281,7 @@ curl: (52) Empty reply from server
 ===== 2024-12-28 ======
 Ran the jvm  version of the containers and no longer get the weird HTTP problem. Were the binaries not working?
 
-I re-ran the build_linux.sh script to make sure the executable is what we want.
+I re-ran the build_linux.sh node to make sure the executable is what we want.
 
 mark@YA-T7RX9LX2PL sndrRcvr % file target/burble
 target/burble: ELF 64-bit LSB pie executable, ARM aarch64, version 1 (SYSV), dynamically linked, interpreter /lib/ld-linux-aarch64.so.1, BuildID[sha1]=0c26671ef34dfacfcaaea9595bc5e32e0417980a, for GNU/Linux 3.7.0, not stripped
@@ -558,7 +558,7 @@ While researching the topic I came across:
 
  If a message to a given user is rejected/nacked for gateway availability reasons we want all subsequent messages to be held (not sent) until the first message has been delivered. This consideration is only for individual sessions. Other messages behave according to their sessions.
 
-Side-note: tried integrating spotify's dockerfile-maven-plugin (https://github.com/spotify/dockerfile-maven/blob/master/docs/usage.md) into our pom.xml. Didn't work. Will need to circle around later. It's too simple to write a shell script that does it to spend the time now.
+Side-note: tried integrating spotify's dockerfile-maven-plugin (https://github.com/spotify/dockerfile-maven/blob/master/docs/usage.md) into our pom.xml. Didn't work. Will need to circle around later. It's too simple to write a shell node that does it to spend the time now.
 
 
 ===== 2025-01-24 ======
@@ -633,7 +633,7 @@ Customer---hasMany--->User
 
 Both Customer and User have the same properties: countryCode, languageCode, brblId, platformId*
 A Script is an interface with properties: id, next[] (returns a list of Script ids).
-A Session is an interface with properties: id, currentScript, user (User)
+A Session is an interface with properties: id, currentNode, user (User)
 
 An MT is an output from the execution of a Script in the context of a Session.
 An MO is an input to the execution of a Script in the context of a Session.
@@ -711,7 +711,7 @@ Question: do we need more functionality? I don't think so. At least not for the 
 
 ===== 2025-02-08 =====
 
-Thinking about the more complex logic processing needs, I think the Script record will need some additional data (e.g. the list of choices displayed in the previous script) as well as specialized logic. This could be done as a single object or the data and logic could be a separated into a structured string (as a new field to Script) and a static function that mapped to the Script's type.
+Thinking about the more complex logic processing needs, I think the Script record will need some additional data (e.g. the list of choices displayed in the previous node) as well as specialized logic. This could be done as a single object or the data and logic could be a separated into a structured string (as a new field to Script) and a static function that mapped to the Script's type.
 
 If a single object the data would still need to be parsed at initialization time.
 
@@ -792,7 +792,7 @@ Sndr is next...
 
 As I started work on the Sndr, I realized there wasn't a compelling reason to make MOMessage and MTMessage different classes. These have been merged.
 
-Continue to explore how we want the script logic to work. Pivot and TopicSelection represent common cases we know from our previous experience.
+Continue to explore how we want the node logic to work. Pivot and TopicSelection represent common cases we know from our previous experience.
 
 Do we need the 'previous' field in the Script class? We could instead track previously executed Scripts (and navigate back to them) via a list on the Session. Removing previous would make constructing graphs of Scripts easier and less brittle. Detours and deviations from the initial chain of Scripts (because the User wants to talk about something else or asks to go to the top of the conversational tree) could then also be handled dynamically. In any case, we'll want to keep a history of a User's actual path through a conversation (the nodes they visited vs the Script graph that was constructed.)
 
@@ -824,7 +824,7 @@ Actually..."NOTE: Currently, the Fluentd logging driver doesn't support sub-seco
 ===== 2025-03-21 =====
 TODO
 _ Update OperatorMessageFlowIT to use testcontainers instead of assuming a running instance of RabbitMQ.
-X Figure out how to structure the replacement for the generation of the top level topic script chain.
+X Figure out how to structure the replacement for the generation of the top level topic node chain.
     --> just static functions in a class namespace?
 X Update the docker files to point at jar's on the host filesystem.
 _ Add build section to our docker-compose.
@@ -989,7 +989,7 @@ Take a param (-l) to signal desire to load any serialized files found in a speci
 
 ===== 2025-04-16 =====
 
-brblcli is working w/r/t to sending messages and triggering script chains. The hardcoded script for short code "45678" will correctly
+brblcli is working w/r/t to sending messages and triggering node chains. The hardcoded node for short code "45678" will correctly
 track the state for the user.
 
 Lots of work yet to make the CLI easy to use but a good start.
@@ -1217,7 +1217,7 @@ For each incoming Message:
                 _to         VARCHAR(15) NOT NULL,   --> how long are non-SMS (WhatsApp, FB Messenger, etc) identifiers?
                 _text       VARCHAR(2000) NOT NULL  --> should match the MT length
             );
-    - Operator writes an abbreviated row with just the UUID of the Message, the Session UUID, and the UUID of the handling script.
+    - Operator writes an abbreviated row with just the UUID of the Message, the Session UUID, and the UUID of the handling node.
             CREATE TABLE brbl_logs.messages_mo_prcd (
                 id          UUID NOT NULL,
                 prcd_at     TIMESTAMP WITH TIME ZONE NOT NULL,
@@ -1439,13 +1439,13 @@ CREATE TABLE brbl_logic.scripts (
     created_at  TIMESTAMP WITH TIME ZONE NOT NULL,
     text        VARCHAR(255),       --> SMS is limited to 160 chars but other platform have higher limits.
     type        SMALLINT NOT NULL,  --> see ScriptType enum for meaning.
-    label       VARCHAR(32)         --> the name given to the script element in a UI
+    label       VARCHAR(32)         --> the name given to the node element in a UI
 );
 
 CREATE TABLE brbl_logic.edges (
     id              UUID PRIMARY KEY,
     created_at      TIMESTAMP WITH TIME ZONE NOT NULL,
-    match_text      VARCHAR(128),       --> the text that must be matched to direct the conversation to the dst script
+    match_text      VARCHAR(128),       --> the text that must be matched to direct the conversation to the dst node
     response_text   VARCHAR(255),       --> the text emitted when the edge is selected.
     src             UUID NOT NULL,      --> FK to scripts table
     dst             UUID NOT NULL      --> FK to scripts table
@@ -1484,7 +1484,7 @@ Some leads on low-cost SMS here: https://www.reddit.com/r/rails/comments/175e0fk
 Remember to learn more about the differences between GSM-7 and UCS-2 character sets since we'd like to support non-English languages.
 Climbing out before it drives me mad...
 
-Work on script-related schema moved to dev.ddl.
+Work on node-related schema moved to dev.ddl.
 
 The design seems plausible for basic interactions. Will it be open enough to support other things? What are those other things?
 
@@ -1493,7 +1493,7 @@ Useful queries:
     SELECT created_at, match_text,response_text, src, dst FROM brbl_logic.edges ORDER BY src;
 
 Keyword mapping:
-To find the initial script node for a new session...
+To find the initial node node for a new session...
 
 CREATE TABLE brbl_logic.keywords (
     id          UUID NOT NULL UNIQUE,
@@ -1508,7 +1508,7 @@ CREATE TABLE brbl_logic.keywords (
         UNIQUE(pattern, platform)_
 );
 
-https://www.postgresql.org/docs/current/sql-createtable.html has some interesting notes about column storage and compression options which might be useful if script text gets large.
+https://www.postgresql.org/docs/current/sql-createtable.html has some interesting notes about column storage and compression options which might be useful if node text gets large.
 
 ===== 2025-05-16 ====
 
@@ -1536,11 +1536,11 @@ The use of the recursive "common table expression" to pull all the data we're lo
 
 http://explain.dalibo.com offers an interesting Postgres EXPLAIN plan analyzer. Might be useful for performance tuning.
 
-The "only" trouble with our recursive query (above) is that the terminal script node doesn't get included (because there are no edges that reference it as the src. The code written to turn the ResultSet into a graph can patch up the temporarily missing references but not that one.
+The "only" trouble with our recursive query (above) is that the terminal node node doesn't get included (because there are no edges that reference it as the src. The code written to turn the ResultSet into a graph can patch up the temporarily missing references but not that one.
 
 Do we want to support terminating scripts? I think so. The query results won't include the final node because it doesn't have any edges.
 
-To address that problem maybe define a single edge that itself has a null dst? This works to include the final script in the result. But this makes me think...
+To address that problem maybe define a single edge that itself has a null dst? This works to include the final node in the result. But this makes me think...
 
 To support cycles in the conversational graph--to allow loops--we need a different solution unless we can do it programmatically with the same data. The problem is that cycles will blow up the (now endless) recursive CTE graph query (taking the database along with it.)
 
@@ -1601,9 +1601,9 @@ Interesting linear time performance regex lib for Java:
 
 
 Interesting realization about the recursive query and our current data set:
-Do a query for any of the script id's and you get all the scripts in the results. Since it's a cycle this is actually correct but, for a moment, I thought the query was wrong (because changing the script_id parameter didn't alter the results.) Doh!
+Do a query for any of the node id's and you get all the scripts in the results. Since it's a cycle this is actually correct but, for a moment, I thought the query was wrong (because changing the script_id parameter didn't alter the results.) Doh!
 
-Let's create a script chain that is separate and doesn't cycle:
+Let's create a node chain that is separate and doesn't cycle:
 
     --> starting and ending scripts
     INSERT INTO brbl_logic.scripts VALUES('525028ae-0a33-4c80-a22f-868f77bb9531', NOW(),
@@ -1620,7 +1620,7 @@ Let's create a script chain that is separate and doesn't cycle:
     INSERT INTO brbl_logic.edges VALUES('053c7425-dfd9-4c32-b305-a15b50453274', NOW(), 'NOOP', 'NOOP',
         'cf72ce06-50fc-4bf1-852b-dbdbd9f97f66', NULL) RETURNING *;
 
-Verified. The recursive script query only returns elements that are linked.
+Verified. The recursive node query only returns elements that are linked.
 Asking for the graph starting with the BadPeople element yields:
                  id                   |    label    |                 src                  | match_text |                 dst
 --------------------------------------+-------------+--------------------------------------+------------+-------------------------------------
@@ -1634,7 +1634,7 @@ Asking for the graph starting with the BadPeople element yields:
 ===== 2025-05-26 ====
 
 Got the keywords table/query logic working. This won't be a simple, fast cache using Caffeine since we want/need to support
-some amount of regular expressions. Explored embedding the keyword query inside the recursive script/edge query but dropped
+some amount of regular expressions. Explored embedding the keyword query inside the recursive node/edge query but dropped
 it because it would require doing the pattern match in sql (not necessarily bad but possibly unwieldy) and it was hard to determine
 from the result set where the graph "started."
 
@@ -1642,7 +1642,7 @@ from the result set where the graph "started."
 
 ===== 2025-05-28 ====
 
-Trying out the combined keyword/script/edge logic in a full running system...
+Trying out the combined keyword/node/edge logic in a full running system...
 
 Using PlatformGateway + curl scripts make evaluating this difficult.
 
@@ -1651,8 +1651,8 @@ Let's bust out the BrblCli hack to see if it helps...
     java -cp target/sndrRcvr-1.0-SNAPSHOT-jar-with-dependencies.jar com.enoughisasgoodasafeast.cli.BrblCli -l
 
 Actually working reasonably well although...
-It shows an issue where the penultimate message in the script graph doesn't send the edge response before moving to the
-end script. i.e. sending 'Iggy' as our choice of best third Stooge doesn't trigger the "Oops, wrong Stooges!" message.
+It shows an issue where the penultimate message in the node graph doesn't send the edge response before moving to the
+end node. i.e. sending 'Iggy' as our choice of best third Stooge doesn't trigger the "Oops, wrong Stooges!" message.
 Instead it just replies with the EchoWithPrefix response "That is all. Bye.: Iggy"
 
 The current data in the scripts and edges table *looks* correct so maybe the Multi.Process logic preceded the node/edge model...
@@ -1664,11 +1664,11 @@ ALTER ROLE <your_login_role> SET search_path TO a,b,c;
 Idea: Leverage the evaluatedScripts list in the Multi.Process.evaluate() method to access the previous Script (the Multi.Present) to reference ResponseLogic elements to process the current input and route the conversation to the next Script.
 
 Implemented a printGraph function for the Script class to better visualize the graph we're producing.
-The terminal script node for each branch ends up with three redundant ResponseLogic elements (the 'NOOP' edges.)
+The terminal node node for each branch ends up with three redundant ResponseLogic elements (the 'NOOP' edges.)
 This could be a problem with the query or the way we're assembling the graph from the query results.
 Otherwise, the structure looks like what we intended.
 
-Which means the behavior we see walking through it via the BrblCli is a problem with the script processing.
+Which means the behavior we see walking through it via the BrblCli is a problem with the node processing.
 
 Realized that the Multi.Present -> Process combo is supposed to have the former pointing (only) at the latter.
 Also that its the latter that contains the references to the choices. So we need to fix the data in brbl_logic.scripts/edges.
@@ -1723,7 +1723,7 @@ ed53f6d3-3e66-4321-9ba7-ad3c36e79eb4
 83408cce-85a9-4824-b622-651c6839f399
 4aaf8877-f0dc-4182-94f9-86f05e87de3a
 
-Hmm, what is the "current" script at the end of the chain?
+Hmm, what is the "current" node at the end of the chain?
 
 
 ===== 2025-06-01 ====
@@ -1746,12 +1746,12 @@ Of these, only the first, fourth and fifth are being used and can be said to be 
 Let's clear the deck and only consider the *Multi types to be in play.
 What additional scenarios do we want/need to support in addition to these two?
 
-A) A notification. Just a one and done message (possibly split into multiple text messages.) This could include instructions on how to start new conversations. No response expected. It chains to a EndOfChat script.
+A) A notification. Just a one and done message (possibly split into multiple text messages.) This could include instructions on how to start new conversations. No response expected. It chains to a EndOfChat node.
 B) Ask a question that invites a free text input and reply with something canned e.g. "Thanks for the feedback" **
-C) Same thing but apply sentiment or other textual analysis to the input and, based on the result, select the response sent back. For example, if the response was negative reply with "Uh oh. We're sorry you weren't happy with X..." The selection of next script would be determined by this evaluation, meaning that we require a bounded set of possibilities. In practice, this only requires that there be a default response. The sentiment analysis done by Vader and NLTK both return a value within a bounded range (-1..1 or some variation.)
-D) The TopicSelection type is meant to provide an entry point if the user doesn't arrive by keyword (or they continue after completing their original script.) This function could be implemented with either Present/ProcessMulti or the free form option.
-E) The Pivot is meant to be used when the user wants to break out of the current script either by using the "change topic" input or by repeatedly failing input validation. "If you want to talk about something else (enter "1" or continue with the current chat (enter "2")" This would chain the 1 response to a TopicSelection script and the 2 response back to the previous script requiring input (found using the Session.evaluated stack.) The implementation of a Pivot could be done simply with a *.Multi pair. The big difference is that Pivot isn't part of the graph. They are injected dynamically to deal with user requested breaks in the flow. Q: How do we reference the Pivot that should be used for a given graph? By Customer?
-F) EndOfChat is a terminal node. It is used to avoid overloading null with the same meaning. Null should only indicate an error. An existing  Session where the currentScript is EndOfChat would trigger a call to the same findStartingScript method used when creating a new Session.
+C) Same thing but apply sentiment or other textual analysis to the input and, based on the result, select the response sent back. For example, if the response was negative reply with "Uh oh. We're sorry you weren't happy with X..." The selection of next node would be determined by this evaluation, meaning that we require a bounded set of possibilities. In practice, this only requires that there be a default response. The sentiment analysis done by Vader and NLTK both return a value within a bounded range (-1..1 or some variation.)
+D) The TopicSelection type is meant to provide an entry point if the user doesn't arrive by keyword (or they continue after completing their original node.) This function could be implemented with either Present/ProcessMulti or the free form option.
+E) The Pivot is meant to be used when the user wants to break out of the current node either by using the "change topic" input or by repeatedly failing input validation. "If you want to talk about something else (enter "1" or continue with the current chat (enter "2")" This would chain the 1 response to a TopicSelection node and the 2 response back to the previous node requiring input (found using the Session.evaluated stack.) The implementation of a Pivot could be done simply with a *.Multi pair. The big difference is that Pivot isn't part of the graph. They are injected dynamically to deal with user requested breaks in the flow. Q: How do we reference the Pivot that should be used for a given graph? By Customer?
+F) EndOfChat is a terminal node. It is used to avoid overloading null with the same meaning. Null should only indicate an error. An existing  Session where the currentNode is EndOfChat would trigger a call to the same findStartingScript method used when creating a new Session.
 
 ** We will have the raw text of the MO recorded in the brbl_logs.message_mo table but it might be useful to have a dedicated "user_poll" table that contains the evaluated response. For example, if the question was "Did you like our cupcakes?" and the MO response was "yup" then the user_poll table might be set with a value from a fixed set (e.g. YES, NO, UNKNOWN) presumably using some kind of sentiment or textual analysis.
 
@@ -1773,19 +1773,19 @@ Scripts may queue MTs
 Scripts may, e.g. Pivots, may access the stack of previously evaluated Scripts.
     -> Session.getEvaluatedScripts()
 
-Operator may retrieve the Session's currentScript.
+Operator may retrieve the Session's currentNode.
     -> Session.getCurrentScript()
 Operator calls a Script's evaluate method.
-Operator may update the Session's currentScript
+Operator may update the Session's currentNode
     -> Session.setCurrentScript(Script)
 Operator calls Session.flush().
 
-Defined ScriptContext to constrain the functionality needed by script functions.
-Using this class in the various script functions changes help mitigate the problem, I think.
+Defined ScriptContext to constrain the functionality needed by node functions.
+Using this class in the various node functions changes help mitigate the problem, I think.
 
 Testing with the brblcli, changes don't appear to have caused any regressions.
 
-Note: discovered an issue where we get into an unusable state if the keyword->script lookup doesn't find anything. Need to setup a default script to address this.
+Note: discovered an issue where we get into an unusable state if the keyword->node lookup doesn't find anything. Need to setup a default node to address this.
 
 
 ===== 2025-06-05 ====
@@ -1814,7 +1814,7 @@ INSERT INTO brbl_logic.edges VALUES ('c6e395ed-eb0e-4954-bf51-da80242da49a', now
 INSERT INTO brbl_logic.edges VALUES (gen_random_uuid(),now(),'n/a','n/a',
         '23b09d2a-18f7-46ac-bff2-3968bd3a4dbe','669eea27-2dc1-4dff-bd0f-bc7d029bf714') returning id ;
 
---finally link to null required to have the script node included in the graph
+--finally link to null required to have the node node included in the graph
 INSERT INTO brbl_logic.edges VALUES ('5e57ede3-0f45-4fc5-b7cb-80de35c94f71',now(),'n/a','n/a',
         '669eea27-2dc1-4dff-bd0f-bc7d029bf714', null) returning id ;
 
