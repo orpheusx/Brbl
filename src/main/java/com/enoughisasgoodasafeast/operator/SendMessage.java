@@ -16,7 +16,7 @@ public class SendMessage {
         LOG.info("SendMessage evaluating '{}'", moMessage.text()); // we're not really evaluating the message but...
         context.registerOutput(
                 newMTfromMO(moMessage,
-                        renderForPlatform(moMessage.platform(), context.getCurrentScript().text())
+                        renderForPlatform(moMessage.platform(), context.getCurrentNode().text())
                 )
         );
         return advanceToFirstAndOnly(context);

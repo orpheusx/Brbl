@@ -24,7 +24,7 @@ public class Multi {
         public static Node evaluate(ScriptContext context, Message moMessage) {
             LOG.info("Multi.Present evaluating '{}'", moMessage.text());
             // Is this the right place to handle platform-dependent message text formatting?
-            String mtText = Functions.renderForPlatform(moMessage.platform(), context.getCurrentScript().text());
+            String mtText = Functions.renderForPlatform(moMessage.platform(), context.getCurrentNode().text());
             Message mt = newMTfromMO(moMessage, mtText); // FIXME Move the renderForPlatform into Message's static methods?
             context.registerOutput(mt);
             return advance(context);
@@ -32,12 +32,12 @@ public class Multi {
 
         // TODO move this into a ScriptManager type of class that other Node impls can use?
         static Node advance(ScriptContext session) {
-            if (session.getCurrentScript().edges().isEmpty()) {
-                LOG.info("End of node, '{}', reached.", session.getCurrentScript().label());
+            if (session.getCurrentNode().edges().isEmpty()) {
+                LOG.info("End of node, '{}', reached.", session.getCurrentNode().label());
                 return null;
             } else {
-                final Node nextNode = session.getCurrentScript().edges().getFirst().node(); // only one Edge available
-                LOG.info("Multi.Present {} dispatching to {}", session.getCurrentScript().label(), nextNode);
+                final Node nextNode = session.getCurrentNode().edges().getFirst().node(); // only one Edge available
+                LOG.info("Multi.Present {} dispatching to {}", session.getCurrentNode().label(), nextNode);
                 return nextNode;
             }
         }
@@ -54,12 +54,12 @@ public class Multi {
         public static Node evaluate(ScriptContext context, Message moMessage) throws IOException {
             LOG.info("Multi.Process evaluating '{}'", moMessage.text());
 
-            Node current = context.getCurrentScript();
+            Node current = context.getCurrentNode();
 
             final String noMatchText = current.text(); //overloading the use of the text field feels bad. Add an errorText field to Node?
             final String userText = moMessage.text().trim().toLowerCase();
 
-            LOG.info("Present currentNode: {}", context.getCurrentScript());
+            LOG.info("Present currentNode: {}", context.getCurrentNode());
 
             for (Edge option : current.edges()) {
                 LOG.info("Checking option for match {} -> {}", userText, option.matchText());

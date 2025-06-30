@@ -219,11 +219,11 @@ public class OperatorTest {
             var session = operator.sessionCache.get(SessionKey.newSessionKey(mo4));
             final List<Message> queuedMessages = producer.getQueuedMessages();
             assertTrue(requireNonNull(queuedMessages.getFirst()).text().contains("favorite color"));
-            assertEquals(NodeType.ProcessMulti, session.getCurrentScript().type());
+            assertEquals(NodeType.ProcessMulti, session.getCurrentNode().type());
 
             assertTrue(operator.process(mo5));
             assertTrue(requireNonNull(queuedMessages.get(1)).text().contains("cool kids"));
-            assertEquals(NodeType.EchoWithPrefix, session.getCurrentScript().type());
+            assertEquals(NodeType.EchoWithPrefix, session.getCurrentNode().type());
 
         });
     }
@@ -243,7 +243,7 @@ public class OperatorTest {
             assertTrue(requireNonNull(queuedMessages.getFirst()).text().contains("favorite color"));
             queuedMessages.clear();
 
-            Node faveColorNode = session.getCurrentScript();
+            Node faveColorNode = session.getCurrentNode();
             assertEquals(NodeType.ProcessMulti, faveColorNode.type());
 
             assertTrue(operator.process(unexpected));
@@ -251,7 +251,7 @@ public class OperatorTest {
             assertTrue(requireNonNull(queuedMessages.getFirst()).text().contains("Oops"));
             queuedMessages.clear();
 
-            Node stillFaveColorNode = session.getCurrentScript();
+            Node stillFaveColorNode = session.getCurrentNode();
             assertEquals(NodeType.ProcessMulti, faveColorNode.type());
             assertEquals(faveColorNode, stillFaveColorNode);
 
@@ -259,7 +259,7 @@ public class OperatorTest {
 
             assertTrue(operator.process(changeTopic)); // will emit a notice message and the topic display message
             assertEquals(2, queuedMessages.size());
-            Node changeTopicNode = session.getCurrentScript();
+            Node changeTopicNode = session.getCurrentNode();
             assertEquals(NodeType.ProcessMulti, changeTopicNode.type());
 
             assertTrue(requireNonNull(queuedMessages.getFirst()).text().contains("something else"));
@@ -267,7 +267,7 @@ public class OperatorTest {
             queuedMessages.clear();
 
             assertTrue(operator.process(wolverine));
-            assertEquals(NodeType.ProcessMulti, session.getCurrentScript().type());
+            assertEquals(NodeType.ProcessMulti, session.getCurrentNode().type());
             assertEquals(1, queuedMessages.size());
             assertTrue(requireNonNull(queuedMessages.getFirst()).text().contains("pointy teeth"));
         });

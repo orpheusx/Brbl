@@ -6,10 +6,10 @@ import java.util.List;
 
 public interface ScriptContext {
 
-    Node getCurrentScript();
+    Node getCurrentNode();
 
     void registerOutput(Message moMessage);
 
-    List<Node> getEvaluatedScripts();
+    List<Node> getEvaluatedNodes();
 
 }

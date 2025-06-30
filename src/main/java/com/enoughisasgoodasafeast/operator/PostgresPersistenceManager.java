@@ -153,13 +153,16 @@ public class PostgresPersistenceManager implements PersistenceManager {
     public static String SELECT_SCRIPT_GRAPH_RECURSIVE =
             """
                     WITH RECURSIVE rgraph AS (
-                            SELECT ? AS script_id
-                        UNION
-                        SELECT e.dst
-                        FROM brbl_logic.edges AS e
-                        JOIN rgraph ON
-                            rgraph.script_id = e.src
-                    ) CYCLE script_id SET is_cycle USING path
+                            SELECT ? AS node_id
+                            UNION
+                            SELECT
+                                e.dst
+                            FROM
+                                brbl_logic.edges AS e
+                            JOIN
+                                rgraph ON rgraph.node_id = e.src
+                    
+                    ) CYCLE node_id SET is_cycle USING path
                     SELECT
                         s.id, s.created_at, s.text, s.type, s.label,
                         e.id, e.created_at, e.match_text, e.response_text, e.src, e.dst
@@ -168,13 +171,13 @@ public class PostgresPersistenceManager implements PersistenceManager {
                     INNER JOIN
                         brbl_logic.edges e ON s.id = e.src
                     INNER JOIN
-                        rgraph ON s.id = rgraph.script_id
+                        rgraph ON s.id = rgraph.node_id
                     WHERE
-                        s.id = rgraph.script_id
+                        s.id = rgraph.node_id
                         AND
                         rgraph.is_cycle IS FALSE
                         ORDER BY s.id ;
-                    """;
+                    """; // FIXME redundant to have both the part of the where clause and inner join include 's.id = rgraph.node_id'
 
     public static String SELECT_SCRIPT_GRAPH_RECURSIVE_FOR_KEYWORD =
             """
@@ -557,10 +560,10 @@ public class PostgresPersistenceManager implements PersistenceManager {
         }
     }
 
-    public Node getScript(Connection connection, UUID scriptId) {
+    public Node getScript(Connection connection, UUID nodeId) {
         Map<UUID, Node> scriptMap = new HashMap<>(); // FIXME does the ordering matter?
         try (PreparedStatement ps = connection.prepareStatement(SELECT_SCRIPT_GRAPH_RECURSIVE)) {
-            ps.setObject(1, scriptId);
+            ps.setObject(1, nodeId);
 
             // s.id, s.created_at, s.text, s.type, s.label,
             // e.id, e.created_at, e.match_text, e.response_text, e.src, e.dst
@@ -573,6 +576,7 @@ public class PostgresPersistenceManager implements PersistenceManager {
                 UUID id = (UUID) rs.getObject(1); // id
 
                 Node node = scriptMap.get(id);
+
                 if (node == null) {
                     // columnIndex 2, // createdAt
                     String text = rs.getString(3);  // text
@@ -628,7 +632,7 @@ public class PostgresPersistenceManager implements PersistenceManager {
             LOG.info(v.toString());
         });
 
-        return scriptMap.get(scriptId);
+        return scriptMap.get(nodeId);
     }
 
     @Override

@@ -16,10 +16,10 @@ public class Input {
 
         // NOTE: This is nearly identical to SendMessage.evaluate. // TODO DRY opportunity here
         public static Node evaluate(ScriptContext context, Message moMessage) {
-            LOG.info("Input.Request evaluating '{}'", context.getCurrentScript());
+            LOG.info("Input.Request evaluating '{}'", context.getCurrentNode());
             context.registerOutput(
                     newMTfromMO(moMessage,
-                            renderForPlatform(moMessage.platform(), context.getCurrentScript().text())
+                            renderForPlatform(moMessage.platform(), context.getCurrentNode().text())
                     )
             );
             return advanceToFirstAndOnly(context);
@@ -35,7 +35,7 @@ public class Input {
             // TODO Run a sentiment analysis and compute an appropriate response?
             // TODO Persist the response + user to a Poll record?
 
-            String responseText = context.getCurrentScript().text();
+            String responseText = context.getCurrentNode().text();
             final Message mt = newMTfromMO(moMessage, responseText);
 
             context.registerOutput(mt);

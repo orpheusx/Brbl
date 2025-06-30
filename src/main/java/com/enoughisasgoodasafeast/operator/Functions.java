@@ -20,13 +20,13 @@ public class Functions {
      * Usable by Scripts that only have/expect a single edge
      */
     public static Node advanceToFirstAndOnly(ScriptContext context) {
-        if (context.getCurrentScript().edges().isEmpty()) {
-            LOG.info("End of node, '{}', reached.", context.getCurrentScript().label());
+        if (context.getCurrentNode().edges().isEmpty()) {
+            LOG.info("End of node, '{}', reached.", context.getCurrentNode().label());
             return null;
         } else {
-            assert context.getCurrentScript().edges().size() == 1;
-            final Node nextNode = context.getCurrentScript().edges().getFirst().node(); // only one Edge available
-            LOG.info("Advancing from {} dispatching to {}", context.getCurrentScript().label(), nextNode);
+            assert context.getCurrentNode().edges().size() == 1;
+            final Node nextNode = context.getCurrentNode().edges().getFirst().node(); // only one Edge available
+            LOG.info("Advancing from {} dispatching to {}", context.getCurrentNode().label(), nextNode);
             return nextNode;
         }
     }

@@ -140,7 +140,7 @@ public class Operator implements MessageProcessor {
 
                 // FIXME Session.evaluate handles appending the node to the evaluatedScript list
                 // FIXME why split the logic for handling currentNode? Move it into Session? Or move both here?
-                Node next = session.currentNode.evaluate(session, message);
+                Node next = session.currentNode.evaluate(session, message); // FIXME session.evaluateCurrentNode()?
                 session.registerEvaluated(session.currentNode); //FIXME what if this is null?
                 LOG.info("Next node is {}", next);
                 session.currentNode = next;

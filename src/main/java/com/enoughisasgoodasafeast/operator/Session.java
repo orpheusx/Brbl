@@ -78,7 +78,7 @@ public class Session implements ScriptContext {
     }
 
     @Override
-    public List<Node> getEvaluatedScripts() {
+    public List<Node> getEvaluatedNodes() {
         return evaluatedNodes;
     }
 
@@ -141,11 +141,11 @@ public class Session implements ScriptContext {
     }
 
     @Override
-    public Node getCurrentScript() {
+    public Node getCurrentNode() {
         return currentNode;
     }
 
-    public void setCurrentScript(Node node) {
+    public void setCurrentNode(Node node) {
         currentNode = node;
     }
 }

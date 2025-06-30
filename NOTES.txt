@@ -1798,6 +1798,10 @@ Ahead of Time Method Profiling is supposed to make programs running in standard 
 Project Lilliput has been working on making object headers more compact. Looks easy to try out:
 java -XX:+UseCompactObjectHeaders
 
+Cool stuff!
+
+
+
 INSERT INTO brbl_logic.nodes VALUES('abfd6e3c-b71d-445d-87fd-89744e66e5d1', now(), 'Thanks for dropping by our bakery!', 9, 'ThanksForVisit') RETURNING id;
 INSERT INTO brbl_logic.nodes VALUES('35ab8b42-fbdf-47e1-ac62-bae86c3c7178', now(), 'How did you like our new matcha cupcake?', 7, 'AskCupcakePoll') RETURNING id;
 INSERT INTO brbl_logic.nodes VALUES('23b09d2a-18f7-46ac-bff2-3968bd3a4dbe', now(), 'n/a', 8, 'ProcessCupcakePoll') RETURNING id;
@@ -1841,24 +1845,94 @@ inner join brbl_logs.messages_mo_prcd prcd on mos.id=prcd.id
 where rcvd_at >= '2025-06-09 17:00:00';
 
 
+===== 2025-06-09 ====
+BrblEdit progress...
+Got the basic domain models for the record-based models used in our runtime working in Hibernate.
+Note, I'm using the direct Hibernate interfaces/classes rather than the Jakarta Persistence API.
+
+===== 2025-06-10 ====
+
+In testing the script graphs produced by BrblEdit I once again realized how brittle the Operator is to exploding when a session attempts to continue talking after the end of the graph is reached. The resulting NPE will put it into a state in which newly arriving messages are not processed. (Rcvr puts them on the queue but Operator won't get called because the BrblConsumer has shutdown:
+    operator-1  | java.lang.NullPointerException: Cannot invoke "com.enoughisasgoodasafeast.operator.Node.evaluate(com.enoughisasgoodasafeast.operator.ScriptContext, com.enoughisasgoodasafeast.Message)" because "session.currentNode" is null
+    operator-1  |   at com.enoughisasgoodasafeast.operator.Operator.process(Operator.java:143)
+    operator-1  |   at com.enoughisasgoodasafeast.operator.Operator.process(Operator.java:112)
+    operator-1  |   at com.enoughisasgoodasafeast.OperatorConsumer.handleDelivery(OperatorConsumer.java:41)
+    operator-1  |   at com.rabbitmq.client.impl.ConsumerDispatcher$5.run(ConsumerDispatcher.java:149)
+    operator-1  |   at com.rabbitmq.client.impl.ConsumerWorkService$WorkPoolRunnable.run(ConsumerWorkService.java:111)
+    operator-1  |   at java.base/java.util.concurrent.ThreadPoolExecutor.runWorker(Unknown Source)
+    operator-1  |   at java.base/java.util.concurrent.ThreadPoolExecutor$Worker.run(Unknown Source)
+    operator-1  |   at java.base/java.lang.Thread.run(Unknown Source)
+    operator-1  | 2025-06-11 09:47:50,000 WARN  [] [pool-1-thread-10] c.e.BrblConsumer - handleShutdownSignal called with consumerTag amq.ctag-uXoJ6yAukegn-3FMeh5NFQ and exception: com.rabbitmq.client.ShutdownSignalException: clean channel shutdown; protocol method: #method<channel.close>(reply-code=200, reply-text=Closed due to exception from Consumer (amq.ctag-uXoJ6yAukegn-3FMeh5NFQ) method handleDelivery for channel AMQChannel(amqp://guest@192.168.1.155:5672/,1), class-id=0, method-id=0)
+
+The same problem exists if the keyword sent doesn't find a match: NPEs and death of the queue consumer.
+
+
+===== 2025-06-14 ====
+
+While trying to figure out a Hibernate equivalent to our PersistentPostgresManager.getScriptForKeyword() method of retrieval (pulling the graph of nodes and edges in a single query) I started to consider whether we could simplify the script model by merging the node and edge and using the more common single table approach. This is how the Hibernate docs and many relevant blogs assume you're doing it.
+
+We need to support the ability to branch at any point based on the node type (e.g. Multi.Process or Input.Process.)
+Initially, I was concerned about overloading the use of the match_text or response_text columns if we only had a single type of object and I wanted to be able to create cycles, reusing nodes across different scripts.
+
+A -----> B -----> C
+          \
+           * --> D
+
+X -----> Y -----> C
+
+table Node
+id       parent_id
+======|==========
+A     | null
+B     |  A
+D     |  B
+X     |  null
+Y     |  X
+
+To find the branches for B we query for rows where parent_id = B
+Q: How is C reached from either B or Y?
+A: It cannot be reached from both if id is the primary key
+
+The latter concern (reusing nodes/creating cycles) CANNOT be addressed with the merged model while still supporting the former (branch from a node.)
+Best case we can copy the properties of C and set them on a separate node.
+Is there a way to signal/hint that C and clone of C should be equivalent?
+Or a way to separate the mappings from the nodes' other properties?
+For example...
+
+table NodeMappings
+id    |  parent_id
+===================
+C     |  B
+C     |  Y
+
+table Node
+id    | type  | match_text | response_text | label   | etc.
+==========================================================
+C     |  3    | "foo"      | "Welcome"     | "Intro" | ...
+
+This might work but leads us back to the implementation challenge using Hibernate.
+
+But what if we decided that scripts couldn't be cyclic? That they always have an end point and continuing past the point would trigger some special logic that interpreted the user input (in the absence of a scripted multiple choice element) and routed them to a new script graph.
+It seems like we have to solve that problem anyway since we know we won't always be responding to keywords. (A simple implementation would simply provide a default script without attempting to understand the user's context.) As well, we want the user to be able to ask, at any point, "change topic," breaking out of the current script and switching to a different one.
+
+So I guess it comes down to either keeping the Node uncluttered with special case columns that are only used for certain NodeTypes (storing them on the Edge table instead) or simplifying the code for fetching script graphs.
 
 
 
 
+===== 2025-06-16 ====
 
+Let's try a native query with a entity class that combines the Node and Edge types. Maybe it's really not that complicated.
+Hmm...the native query used with simple bean that merges the fields of the two types is all but a JDBC query; it doesn't recognize any object references. If we have to use just their id (an UUID instead of a Node, for example,) then we'll have to query again for each object to resolve them. Not what we want.
 
+===== 2025-06-17 ====
 
+Watched an interesting video talking about using a bunch of the newest java features together. One that I hadn't recognized as being useful is sealed classes used with records and the enhanced switch. The idea that now occurs to me is to use them to replace the null case when a script has no next elements. Instead of a value or null define records that represent the two. The record class of the value and the null surrogate would both implement a marker interface. We could also use something similar to enrich the Operator methods that currently return boolean.
 
+We should also take a look at Stream Gatherers that are introduced in JDK 24. (We should also migrate our project though there were changes to the Structured concurrency API that we may have to adapt to.)
 
+...wrote a version of the code that uses the Gatherer API to convert the result set returned by the recursive CTE into a connected graph. Maybe not a great use case; the non-functional code is simpler.
 
+===== 2025-06-29 ====
 
-
-
-
-
-
-
-
-
-
-
+Mostly working on BrblEdit these days.mvn

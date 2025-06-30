@@ -15,10 +15,10 @@ public class SimpleTestScript {
     private static final Logger LOG = LoggerFactory.getLogger(SimpleTestScript.class);
 
     static Node computeNextScript(ScriptContext session) {
-        if (session.getCurrentScript().edges().isEmpty()) {
+        if (session.getCurrentNode().edges().isEmpty()) {
             return null;
         } else {
-            return session.getCurrentScript().edges().getFirst().node();
+            return session.getCurrentNode().edges().getFirst().node();
         }
 //        if (!n.await()) {
 //            return n.evaluate(session, moMessage);
@@ -32,7 +32,7 @@ public class SimpleTestScript {
      */
     public static class SimpleEchoResponseScript {
         public static Node evaluate(ScriptContext session, Message moMessage) throws IOException {
-            String mtText = String.format("%s: %s", session.getCurrentScript().text(), moMessage.text());
+            String mtText = String.format("%s: %s", session.getCurrentNode().text(), moMessage.text());
             // Remember the from and to fields of the MT must be the reverse of the MO
             Message mt = newMT(moMessage.to(), moMessage.from(), mtText);
             session.registerOutput(mt);
