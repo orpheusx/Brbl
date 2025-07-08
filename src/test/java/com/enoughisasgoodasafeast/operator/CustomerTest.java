@@ -2,7 +2,6 @@ package com.enoughisasgoodasafeast.operator;
 
 import com.enoughisasgoodasafeast.SharedConstants;
 import io.jenetics.util.NanoClock;
-import org.junit.jupiter.api.Assertions;
 import org.junit.jupiter.api.Test;
 
 import java.time.Instant;
@@ -25,13 +24,13 @@ public class CustomerTest {
 
     @Test
     public void createOk() {
-        assertDoesNotThrow(() -> new Customer(user, firstName, surname, companyName));
+        assertDoesNotThrow(() -> new Customer(null, user, firstName, surname, companyName));
     }
 
     @Test
     public void createOkNoCompanyName() {
         assertDoesNotThrow(() -> {
-            Customer c = new Customer(user, firstName, surname, null);
+            Customer c = new Customer(null, user, firstName, surname, null);
             assertEquals(SharedConstants.NO_COMPANY, c.companyName());
         });
     }
@@ -39,7 +38,7 @@ public class CustomerTest {
     @Test
     public void userNull() {
         Exception exception = assertThrows(IllegalArgumentException.class, () -> {
-            new Customer(null, firstName, surname, companyName);
+            new Customer(null, null, firstName, surname, companyName);
         });
         assertTrue(exception.getMessage().contains("user"));
     }
@@ -47,7 +46,7 @@ public class CustomerTest {
     @Test
     public void firstNameNull() {
         Exception exception = assertThrows(IllegalArgumentException.class, () ->
-            new Customer(user, null, "Flintstone", companyName)
+            new Customer(null, user, null, "Flintstone", companyName)
         );
         assertTrue(exception.getMessage().contains("firstName"));
     }
@@ -55,7 +54,7 @@ public class CustomerTest {
     @Test
     public void surnameNull() {
         Exception exception = assertThrows(IllegalArgumentException.class, () ->
-            new Customer(user, firstName, null, companyName)
+            new Customer(null, user, firstName, null, companyName)
         );
         assertTrue(exception.getMessage().contains("surname"));
     }

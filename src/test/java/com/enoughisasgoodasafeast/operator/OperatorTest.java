@@ -111,7 +111,7 @@ public class OperatorTest {
             var mo4SessionKey = SessionKey.newSessionKey(mo4);
             var session = operator.sessionCache.get(mo4SessionKey);
 
-            Node firstNode = operator.findStartingScript(mo4SessionKey);
+            Node firstNode = operator.findScriptForKeywordShortCode(KeywordCacheKey.newKey(mo4SessionKey));
             assertNotNull(firstNode, "Failed to return first Node.");
             assertEquals(NodeType.PresentMulti, firstNode.type());
             assertEquals("ColorQuiz", firstNode.label());
@@ -137,7 +137,7 @@ public class OperatorTest {
             var session = operator.sessionCache.get(SessionKey.newSessionKey(mo4));
 
             SessionKey mo4SessionKey = SessionKey.newSessionKey(mo4);
-            Node firstNode = operator.findStartingScript(mo4SessionKey);
+            Node firstNode = operator.findScriptForKeywordShortCode(KeywordCacheKey.newKey(mo4SessionKey));
 
             assertNotNull(firstNode, "Failed to return first Node.");
             assertEquals(NodeType.PresentMulti, firstNode.type());
@@ -168,7 +168,7 @@ public class OperatorTest {
             var session = operator.sessionCache.get(mo4SessionKey);
             assertNotNull(session);
 
-            Node firstNode = operator.findStartingScript(mo4SessionKey);
+            Node firstNode = operator.findScriptForKeywordShortCode(KeywordCacheKey.newKey(mo4SessionKey));
             assertNotNull(firstNode, "Failed to return first Node.");
             assertEquals(NodeType.PresentMulti, firstNode.type());
             assertEquals("ColorQuiz", firstNode.label());

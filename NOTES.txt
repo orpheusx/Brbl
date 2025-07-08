@@ -1935,4 +1935,86 @@ We should also take a look at Stream Gatherers that are introduced in JDK 24. (W
 
 ===== 2025-06-29 ====
 
-Mostly working on BrblEdit these days.mvn
+Mostly working on BrblEdit these days.
+
+Some shared changes need to be done however.
+_ Customer table with integration into keywords.
+X Adding updatedAt columns to Node and Edge.
+
+We'd been using a composite primary key for the USERS table combining platform_id and platform_code. We knew this was likely overkill given that the platform_id is unique (it's a phone number or WhatsApp number or our own Brbl ID.) And, it creates a problem linking to customer.
+
+The better alternative, I think, is to link Customer to Profile. The latter's primary key references the User's group_id.
+
+
+===== 2025-07-03 ====
+
+As part of the work to support script authoring (BrblEdit) we need to clean up our organization of keywords and create a means to track scripts.
+
+Currently keywords requires an exact match of the Message.text. It doesn't even trim the input.
+
+If we scope keywords by the short/long code that receives the message the subset could be small enough to use regexes to signal a match.
+
+- Exact match must support case insensitivity, of course
+- With or without spaces (if multiword)
+- Misspellings
+- Common abbreviations
+- Common homophones (possibly indistinct from the previous two)
+
+Easy to deal with casing issues (just trim and lower case both the patterns and the input)
+
+    String pattern = "(color|colour|colr).*(quiz|q|kwiz).*";
+    Pattern compiledPattern = Pattern.compile(pattern);
+    ...
+    String mutatedInput = input.trim().toLowerCase();
+    return compiledPattern.matcher(mutatedInput).matches();
+
+Other thoughts: matching on homophones of the keyword. Lucene has functionality to support this but dragging all that seems like pretty massive feature creep. Using Lucene via Hibernate Search might be possible but still a big increment and I'm not sure how much flexibility is really needed.
+
+
+===== 2025-07-04 ====
+
+Realized that I'd really been conflating the keyword and script fetching functionality in my mind. How I'm thinking it should work now:
+
+- the keyword cache population method should pull all the entries in the database.
+- the keyword get operation will iterate over the subset of keywords (for the given short code.) Any shortcuts we can take?
+
+The return value is simply the final matching id.
+- the corresponding Node would then be pulled from a separate Caffeine cache populated with the graphs provided by PersistenceManager.getScript().
+
+Some thoughts around merging keywords and the new scripts model (see NOTES.md in BrblEdit from 2025-07-01) but since keywords don't make as much sense for non-SMS platforms I think it might be better to keep them separate for now.
+
+We do have to add the notion of short/long codes (aka 10DLC) to keywords.
+
+Adding support for shortcodes and long codes to the keywords table. They allow an additional level of scoping.
+
+    ALTER TABLE brbl_logic.keywords ADD COLUMN short_code VARCHAR(10);
+    COMMENT ON COLUMN brbl_logic.keywords.short_code IS
+        'The short (5-6 digits) or long (10 digit) code for which the keyword is scoped. Global if none is specified.';
+    ALTER TABLE brbl_logic.keywords DROP CONSTRAINT unique_pattern_platform;
+    ALTER TABLE brbl_logic.keywords ADD CONSTRAINT unique_platform_shortcode_pattern UNIQUE(platform, short_code, pattern);
+
+===== 2025-07-06 ====
+
+Also need the combined created_at and updated_at columns to the keywords table:
+
+    ALTER TABLE brbl_logic.keywords ADD COLUMN created_at TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT NOW();
+    ALTER TABLE brbl_logic.keywords ADD COLUMN updated_at TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT NOW();
+
+
+keyword cache: keyed by a record (KeywordCacheKey) composed of the "to" and text fields of the Message with a UUID value of the Node.
+
+script cache: keyed by the UUID of the starting node,  values: being the Node with all its connections.
+
+The trick here is that, we need the full set of patterns (exact matches or regexes) in hand to evaluate the incoming expressions.
+It's the evaluation of the patterns against the incoming message (which we assume to be the keyword) that is cached.  Not sure this will be an actual benefit performance-wise. The value might simply be the UUID of a Node which would then need to be used to pull the connected graph from a separate cache (scriptCache.)
+
+===== 2025-07-08 ====
+
+Ok, for keyword matching evaluation we setup a special, single entry cache. The key is a constant string ("ALL") and the value is a <Pattern,Keyword> map containing the full content of the brbl_logic.keywords table. We evaluate the regexes in the iteration order (whatever it may be) and return the first match, logging misses loudly. The code then uses the returned UUID to pull the connected graph from the scriptCache (also a LoadingCache instance.)
+
+Lightly tested. Seems to be working as designed.
+
+Next up: a means of identifying other types of scripts for specific circumstances per specific customers/short codes. This includes "top level" topic conversations and handlers for when the user asks to "talk about something else."
+
+
+

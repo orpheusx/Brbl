@@ -5,6 +5,7 @@ import io.jenetics.util.NanoClock;
 
 import java.time.Instant;
 import java.util.*;
+import java.util.regex.Pattern;
 
 public
 class TestingPersistenceManager implements PersistenceManager {
@@ -35,13 +36,13 @@ class TestingPersistenceManager implements PersistenceManager {
     }
 
     @Override
-    public Map<String, Keyword> getKeywords() {
-        Map<String, Keyword> keywordMap = new HashMap<>();
+    public Map<Pattern, Keyword> getKeywords() {
+        Map<Pattern, Keyword> keywordMap = new HashMap<>();
 
         Keyword keyword = new Keyword(UUID.randomUUID(), "Color quiz", Platform.SMS,
-                UUID.fromString("89eddcb8-7fe5-4cd1-b18b-78858f0789fb"));
+                UUID.fromString("89eddcb8-7fe5-4cd1-b18b-78858f0789fb"), null);
 
-        keywordMap.put(keyword.wordPattern(), keyword);
+        keywordMap.put(Pattern.compile(keyword.wordPattern()), keyword);
 
         return keywordMap;
     }

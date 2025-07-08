@@ -12,6 +12,7 @@ import java.io.IOException;
 import java.sql.*;
 import java.time.Instant;
 import java.util.*;
+import java.util.regex.Pattern;
 
 import static java.sql.Types.*;
 
@@ -208,7 +209,7 @@ public class PostgresPersistenceManager implements PersistenceManager {
     public static String SELECT_ALL_KEYWORDS =
             """
                     SELECT
-                        k.id, k.pattern, k.platform, k.script_id, k.is_default
+                        k.id, k.pattern, k.platform, k.script_id, k.is_default, k.short_code
                     FROM
                         brbl_logic.keywords k ;
                     """;
@@ -415,7 +416,7 @@ public class PostgresPersistenceManager implements PersistenceManager {
     }
 
     @Override
-    public Map<String, Keyword> getKeywords() {
+    public Map<Pattern, Keyword> getKeywords() {
         LOG.info("(Re)Loading keyword cache...");
         try (Connection connection = fetchConnection()) {
             assert connection != null;
@@ -426,8 +427,8 @@ public class PostgresPersistenceManager implements PersistenceManager {
         }
     }
 
-    public Map<String, Keyword> getKeywords(Connection connection) {
-        Map<String, Keyword> allKeywordMap = new HashMap<>();
+    public Map<Pattern, Keyword> getKeywords(Connection connection) {
+        Map<Pattern, Keyword> allKeywordMap = new HashMap<>();
         try (PreparedStatement ps = connection.prepareStatement(SELECT_ALL_KEYWORDS)) {
             final ResultSet rs = ps.executeQuery();
             while (rs.next()) {
@@ -442,10 +443,13 @@ public class PostgresPersistenceManager implements PersistenceManager {
                 // k.is_default
                 boolean isDefault = rs.getBoolean(5);
 
-                Keyword keyword = new Keyword(id, pattern.trim(), platform, scriptId
-                        /*,new Customer(tempUser
-                                , "givenName", "surname", "companyName")*/);
-                allKeywordMap.put(pattern, keyword); // word may be a regex
+                String shortCode = rs.getString(6);
+
+                Keyword keyword = new Keyword(id, pattern.trim(), platform, scriptId, shortCode);
+
+                Pattern compiledPattern = Pattern.compile(pattern);
+
+                allKeywordMap.put(compiledPattern, keyword); // word may be a regex
             }
 
         } catch (SQLException e) {

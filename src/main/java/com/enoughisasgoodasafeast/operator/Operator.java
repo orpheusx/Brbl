@@ -13,6 +13,7 @@ import java.time.Instant;
 import java.util.*;
 import java.util.concurrent.*;
 import java.util.function.Supplier;
+import java.util.regex.Pattern;
 
 import static com.enoughisasgoodasafeast.operator.Telecom.deriveCountryCodeFromId;
 
@@ -20,6 +21,7 @@ public class Operator implements MessageProcessor {
 
     private static final Logger LOG = LoggerFactory.getLogger(Operator.class);
     private static final int EXPECTED_INPUT_COUNT = 1;
+    private static final String ALL_KEYWORDS = "ALL";
 
     final LoadingCache<SessionKey, Session> sessionCache = Caffeine.newBuilder()
             .expireAfterAccess(20, TimeUnit.MINUTES) // TODO make duration part of the configuration
@@ -29,19 +31,19 @@ public class Operator implements MessageProcessor {
             .expireAfterAccess(20, TimeUnit.MINUTES)
             .build(key -> findOrCreateUser(key));
 
-/*        final LoadingCache<String, Keyword> keywordCache = Caffeine.newBuilder()
- *            .expireAfterAccess(20, TimeUnit.MINUTES)
- *           .build(keyword -> findStartingScript());*/
-
-    // TODO build a two layer cache: 1) regular exact match key map 2) a set of regex patterns that when matched put the matched value into the
-    // exact match map (for efficiency). The regexes would be compiled once.
-    Map<String, Keyword> keywordCache = new ConcurrentHashMap<>();
-
-
-    // Consider async loading cache for this, assuming we preload all scripts
-    final LoadingCache<SessionKey, Node> scriptCache = Caffeine.newBuilder()
+    final LoadingCache<UUID, Node> scriptCache = Caffeine.newBuilder()
             .expireAfterAccess(20, TimeUnit.MINUTES)
-            .build(key -> findStartingScript(key));
+            .build(id -> getScript(id));
+
+    // NB: This is an odd duck because it's intended to contain a single entry with all the keyword data.
+    // We're using a LoadingCache here to benefit from its auto-eviction and thread safety features.
+    final LoadingCache<String, Map<Pattern, Keyword>> allKeywordsByPatternCache = Caffeine.newBuilder()
+            .expireAfterWrite(20, TimeUnit.MINUTES)
+            .build(theOneAndOnlyKey -> loadAllKeywords(theOneAndOnlyKey));
+
+    final LoadingCache<KeywordCacheKey, Node> scriptByKeywordCache = Caffeine.newBuilder()
+            .expireAfterAccess(20, TimeUnit.MINUTES)
+            .build(key -> findScriptForKeywordShortCode(key));
 
     private final Platform defaultPlatform = Platform.BRBL;
 
@@ -168,7 +170,6 @@ public class Operator implements MessageProcessor {
     }
 
 
-
     @Override
     public boolean log(/*Session session, */Message message) {
         return persistenceManager.insertProcessedMO(
@@ -183,13 +184,13 @@ public class Operator implements MessageProcessor {
      * @param sessionKey the key associated with the new Session
      * @return the newly constructed Session added to the sessionCache
      * @throws InterruptedException if any of the involved threads was interrupted
-     * @throws ExecutionException if any of the subtasks failed
+     * @throws ExecutionException   if any of the subtasks failed
      */
     Session createSession(SessionKey sessionKey) throws InterruptedException, ExecutionException {
         try (var scope = new StructuredTaskScope.ShutdownOnFailure()) {
 
             Supplier<User> user = scope.fork(() -> userCache.get(sessionKey));
-            Supplier<Node> script = scope.fork(() -> findStartingScript(sessionKey));
+            Supplier<Node> script = scope.fork(() -> scriptByKeywordCache.get(KeywordCacheKey.newKey(sessionKey)));
             scope.join().throwIfFailed(); // TODO consider using joinUntil() to enforce a collective timeout.
 
             return new Session(
@@ -227,53 +228,50 @@ public class Operator implements MessageProcessor {
         return user;
     }
 
-
-    /*
-     * This is all hard coded for the moment. Obviously it needs to be replaced with something that loads
-     * a Node from a database based on the content of the Message.
-     * When we replace this be sure to convert the scriptCache to be a Caffeine cache with a synchronous callback
-     * doing the work of returning the values.
+    /**
+     * Load the single entry into the map of Keywords
+     * @return a map of all the regex pattern-to-Keyword entries in the system.
      */
-    Node findStartingScript(SessionKey sessionKey) {
-        if (keywordCache.isEmpty()) {
-            keywordCache.putAll(persistenceManager.getKeywords());
+    Map<Pattern, Keyword> loadAllKeywords(String theOneAndOnlyKey) {
+        return persistenceManager.getKeywords();
+    }
+
+    /**
+     * Evaluate the incoming shortcode and keyword against the registered regex patterns.
+     * @param keywordCacheKey that contains the keyword and short/long code or platform specific program identifier.
+     * @return the connected Node assigned to the keyword.
+     */
+    Node findScriptForKeywordShortCode(KeywordCacheKey keywordCacheKey) {
+        final Map<Pattern, Keyword> all = allKeywordsByPatternCache.get(ALL_KEYWORDS);
+        if (all == null || all.isEmpty()) {
+            LOG.error("CRITICAL: No keywords available from system for new session!!!");
+            return null;
         }
-        Keyword keyword = keywordCache.get(sessionKey.keyword()); // TODO loop over the regex patterns represented by the cache keys?
-        LOG.info("Found existing keyword mapping: {}", keyword);
-        return persistenceManager.getScript(keyword.scriptId());
-//        Node startingScript = scriptCache.get(sessionKey.to());
-//        if (startingScript == null) {
-//            // TODO Expand this to look for keyword in message, other logic.
-//            // TODO fetch from Redis/Postgres/file system...
-//            LOG.info("No node found in cache for {}. Using default for platform, {}.", sessionKey.to(), sessionKey.platform());
-//
-//            startingScript = switch (sessionKey.to()) {
-//                case "1234" -> new Node("PrintWithPrefix", NodeType.EchoWithPrefix, "1234");
-//                case "2345" -> new Node("ReverseText", NodeType.ReverseText, "2345");
-//                case "3456" -> new Node("HelloGoodbye", NodeType.HelloGoodbye, "3456");
-//
-//                case "45678" -> { // chain Scripts together using the PresentMulti/ProcessMulti
-//                    Node one = new Node("What's you favorite color? 1) red 2) blue 3) flort", NodeType.PresentMulti, "ColorQuiz");
-//                    Node two = new Node("Oops, that's not one of the options. Try again with one of the listed numbers or say 'change topic' to start talking about something else.",
-//                            NodeType.ProcessMulti, "EvaluateColorAnswer");
-//                    Edge linkOneToTwo = new Edge(null, null, two);
-//                    one.next().add(linkOneToTwo);
-//                    Node tre = new Node("End-of-Conversation", NodeType.EchoWithPrefix, "EndOfConversation");
-//                    Edge twoOption1 = new Edge(List.of("1", "red"), "Red is the color of life.", tre);
-//                    Edge twoOption2 = new Edge(List.of("2", "blue"), "Blue is my fave, as well.", tre);
-//                    Edge twoOption3 = new Edge(List.of("1", "flort"), "Flort is for the cool kids.", tre);
-//                    two.next().add(twoOption1);
-//                    two.next().add(twoOption2);
-//                    two.next().add(twoOption3);
-//
-//                    yield one;
-//                }
-//                default -> defaultScript(sessionKey.platform(), sessionKey.to());
-//            };
-//
-//            scriptCache.put(message.to(), startingScript);
-//        }
-//        return startingScript;
+
+        // The key here is the pattern and the value is the Keyword object.
+        // It is possible for Keywords with different patterns to point at the same Node.
+        for (Map.Entry<Pattern, Keyword> entry : all.entrySet()) {
+            Pattern pattern = entry.getKey();
+            Keyword keyword = entry.getValue();
+            LOG.info("Evaluating pattern {} for {}", pattern, keyword);
+            // If the keyword's shortCode is null this means that its effectively global.
+            if (keywordCacheKey.code().equals(keyword.shortCode()) || keyword.shortCode() == null) { // filter by short code
+                if (pattern.matcher(keywordCacheKey.keyword()).matches()) {
+                    LOG.info("Match found for {}", keywordCacheKey);
+                    return scriptCache.get(keyword.scriptId());
+                }
+            }
+            // Should we be more exhaustive in our search? How to select the right one if more than one matches?
+            // The ordering of the map is non-deterministic.
+            // Our authoring setup tools will need to pre-test the keyword entries to avoid unintended matches.
+        }
+
+        LOG.warn("No keyword found for {}", keywordCacheKey);
+        return null; // no matches!
+    }
+
+    Node getScript(UUID nodeId) {
+        return persistenceManager.getScript(nodeId);
     }
 
     Node defaultScript(Platform platform, String shortCodeOrKeywordOrChannelName) {

@@ -1,5 +1,7 @@
 package com.enoughisasgoodasafeast.operator;
 
+import java.util.UUID;
+
 import static com.enoughisasgoodasafeast.SharedConstants.*;
 
 /**
@@ -12,9 +14,12 @@ import static com.enoughisasgoodasafeast.SharedConstants.*;
  * @param surname
  * @param companyName optional
  */
-public record Customer(User user, String firstName, String surname, String companyName) {
+public record Customer(UUID id, User user, String firstName, String surname, String companyName) {
 
     public Customer {
+        if (id == null) {
+            id = UUID.randomUUID();
+        }
         if (user == null) {
             fail("user cannot be null");
         }

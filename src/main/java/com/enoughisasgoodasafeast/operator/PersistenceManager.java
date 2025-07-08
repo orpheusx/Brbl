@@ -4,6 +4,7 @@ import com.enoughisasgoodasafeast.Message;
 
 import java.util.Map;
 import java.util.UUID;
+import java.util.regex.Pattern;
 
 public interface PersistenceManager {
 
@@ -26,7 +27,7 @@ public interface PersistenceManager {
     boolean insertUser(User user);
 
     // Called by Operator
-    Map<String, Keyword> getKeywords();
+    Map<Pattern, Keyword> getKeywords();
 
     // Called by Operator
     Node getScript(UUID scriptId);
