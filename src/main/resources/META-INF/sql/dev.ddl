@@ -159,7 +159,7 @@ CREATE ROLE brbl_operator LOGIN ENCRYPTED PASSWORD 'brbl_operator';
 GRANT brbl_logs_write_role, brbl_user_rw_role TO brbl_operator;
 
 -- To avoid need to specify the schema when mucking about in psql...
-SET search_path TO brbl_logs, brbl_users, brbl_logic
+SET search_path TO brbl_logs, brbl_users, brbl_logic, brbl_biz
 
 
 
@@ -364,4 +364,60 @@ WITH RECURSIVE cte AS (
 
 --> The CYCLE-SET-USING feature tracks the reference value to check for duplicates, avoiding endless loops.
 
+-- ===============================================================================================
+-- Setting up some of the schema for Customer billing...
+
+CREATE SCHEMA IF NOT EXISTS brbl_biz AUTHORIZATION brbl_admin ;
+
+-- We don't do snail mail so the addresses we collect are for billing purposes only.
+CREATE TABLE brbl_biz.addresses (
+    id              UUID PRIMARY KEY,
+    created_at      TIMESTAMP WITH TIME ZONE NOT NULL,
+    updated_at      TIMESTAMP WITH TIME ZONE NOT NULL,
+    street_1        VARCHAR(48) NOT NULL,
+    street_2        VARCHAR(48),
+    city            VARCHAR(48) NOT NULL,
+    state_province  VARCHAR(48) NOT NULL,
+    postal_code     VARCHAR(24) NOT NULL,
+    country         public.country_code NOT NULL
+);
+
+CREATE TABLE brbl_biz.customer_addresses (
+    customer_id UUID REFERENCES brbl_users.customers(id),
+    address_id  UUID REFERENCES brbl_biz.addresses(id),
+    created_at  TIMESTAMP WITH TIME ZONE NOT NULL,
+    active      BOOLEAN NOT NULL DEFAULT TRUE,
+    PRIMARY KEY (customer_id, address_id)
+);
+
+CREATE TABLE brbl_biz.payment_cc (
+    id          UUID PRIMARY KEY,
+    card_number VARCHAR(20) NOT NULL, --> Generally only 16 digits. TODO Encrypt!
+    name        VARCHAR(73) NOT NULL, --> Encrypt?
+    expiry      DATE NOT NULL,        --> By default the first of the month
+    code        VARCHAR(4),           --> Security code, usually only 3 digits. TODO Encrypt!
+    CONSTRAINT unique_card_number_expiry UNIQUE (card_number, expiry)
+);
+
+--> Remember to connect to brbl_db_dev as 'mark' since the brbl_admin cannot create roles.
+
+CREATE ROLE brbl_biz_read_role ;
+GRANT USAGE ON SCHEMA brbl_biz TO brbl_biz_read_role ;
+GRANT SELECT ON brbl_biz.addresses TO brbl_biz_read_role ;
+GRANT SELECT ON brbl_biz.customer_addresses TO brbl_biz_read_role ;
+GRANT SELECT ON brbl_biz.payment_cc TO brbl_biz_read_role ;
+
+CREATE ROLE brbl_biz_write_role ;
+GRANT USAGE ON SCHEMA brbl_biz TO brbl_biz_write_role ;
+GRANT INSERT, UPDATE ON brbl_biz.addresses TO brbl_biz_write_role ;
+GRANT INSERT, UPDATE ON brbl_biz.customer_addresses TO brbl_biz_write_role ;
+GRANT INSERT, UPDATE ON brbl_biz.payment_cc TO brbl_biz_write_role ;
+
+CREATE ROLE brbl_biz_app_role ;
+GRANT brbl_biz_read_role, brbl_biz_write_role TO brbl_biz_app_role ;
+-- Since some of the tables are in the brbl_users schema we need RW access to them, as well:
+GRANT brbl_user_rw_role TO brbl_biz_app_role ;
+
+CREATE ROLE brbl_biz_app LOGIN ENCRYPTED PASSWORD 'brbl_biz_app';
+GRANT brbl_biz_app_role to brbl_biz_app;
 

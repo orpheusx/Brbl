@@ -100,11 +100,12 @@ public class RabbitQueueProducer implements QueueProducer {
     }
 
     @Override
-    public void enqueue(Message event) throws IOException { //TODO let's please make this only take a Message
+    public void enqueue(Message event) throws IOException {
         boolean ok = internalMessageBuffer.offer(event);
         if (!ok) {
             LOG.error("Unable to add message to internalMessageBuffer: {}", event);
             // TODO write to disk? Do any telcos support retries? Probably not...
+            // FIXME Wait and retry some number of times before failing?
         }
     }
 
@@ -142,8 +143,6 @@ public class RabbitQueueProducer implements QueueProducer {
         channel.basicPublish(this.queueName, this.routingKey, /*deliveryModeProps*/null, payload);
         LOG.info(" [x] Enqueued msg '{}'", message);
     }
-
-
 
     public void shutdown() throws IOException, TimeoutException {
         this.channel.close();

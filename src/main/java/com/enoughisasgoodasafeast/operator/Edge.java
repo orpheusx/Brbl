@@ -28,13 +28,13 @@ public record Edge(UUID id, String text, List<String> matchText, Node node) {
         return new Edge(this.id, this.text, this.matchText, node);
     }
 
-    @Override
-    public String toString() {
-        if (node == null) {
-            return String.format("Edge[id=%s, text='%s', matchText=%s, node=%s]", id, text, matchText(), null);
-        } else {
-            return String.format("Edge[id=%s, text='%s', matchText=%s, node=%s]", id, text, matchText(), node.id());
-        }
-    }
+    // @Override
+    // public String toString() {
+    //     if (node == null) {
+    //         return String.format("Edge[id=%s, text='%s', matchText=%s, node=%s]", id, text, matchText(), null);
+    //     } else {
+    //         return String.format("Edge[id=%s, text='%s', matchText=%s, node=%s]", id, text, matchText(), node.id());
+    //     }
+    // }
 }
 

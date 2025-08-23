@@ -4,7 +4,6 @@ import com.enoughisasgoodasafeast.operator.PersistenceManager;
 import com.enoughisasgoodasafeast.operator.MessageProcessor;
 import com.enoughisasgoodasafeast.operator.PostgresPersistenceManager;
 import com.enoughisasgoodasafeast.operator.PersistenceManager.PersistenceManagerException;
-import com.enoughisasgoodasafeast.operator.Session;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 

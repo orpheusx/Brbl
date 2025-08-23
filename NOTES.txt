@@ -2016,5 +2016,53 @@ Lightly tested. Seems to be working as designed.
 
 Next up: a means of identifying other types of scripts for specific circumstances per specific customers/short codes. This includes "top level" topic conversations and handlers for when the user asks to "talk about something else."
 
+Extend the scripts table to include another enum column that defines its purpose?
+Initial values of the enum might be:
+    TOPICS -> the list of subjects that the customer offers to talk about. Triggered by "change" or "change topic" or "topics."
+    ASK    -> Use an Input.Request/Process element to find a topic. Requires additional processing to interpret the input.
+    END    -> Short cut any conversation to get to a "termination" point. Triggered by the user typing "stop" or "end" or the like.
+
+Add a composite constraint on the customer id plus this column to prevent duplicates?
+
+Let's think on this for a bit but defer building it for now...
+
+RANDOM: Read an interesting post warning against using v4 UUIDs with Postgres. v7 fixes most of the described problems but the author still recommended against using them as primary keys.
+
+===== 2025-07-10 ====
+
+Back to BrblEdit.
+
+
+===== 2025-08-15 ====
+
+The next version of Postgres is looking super sweet with a bunch of amazing features: async i/o (!!!), faster foreign key joins on large tables, UUID v7 (uuidv7, which includes a time component for natural ordering and better btree performance), virtual generated columns (think derived properties that are deferred to query time for space efficiency.) There's even a function for extracting the time info from the uuid (uuid_extract_timestamp(uuidv7()). The RETURNING clause for updates can return both the old and new values. This could be clutch for auditing, logging and implementing saga patterns for transactional undo. An older feature--time ranges aka TSTZRANGE--introduced back in Postgres 9.2 now supports a constraint (WITHOUT OVERLAP) which can be added as part of a composite primary key to prevent, for example, double booking a resource (the thing represented by the other part of the primary key.) This could be super useful for keyword management. Finally, version upgrades no longer require a possibly long running ANALYZE to rebuild database statistics after the upgrade. All fantastic features!
+
+Also of possible interest despite it's dubious legality: browse.ai which claims to scape websites and turn it into structured data.
+
+Also, on the topic of data generation, DataFaker née JavaFaker is a library modelled after Faker, the well-known Python lib for generating random-like data.
+
+
+===== 2025-08-21 ====
+
+Over in brbl-admin we have a basic customer input form working. Time to more fully flesh out the billing address parts of the Company model. It currently only has a single long column for the address. For (snail) mailing purposes this might be fine (assuming we embed the lines breaks) but what are the requirements for submitting a payment request to a credit card processor? We should probably also figure out how to handle changes to billing.
+
+Thinking about billing more broadly...
+ACH via Paypal. D. says this is cheap, at least for non-profits. Recurring payments are possible.
+See https://docs.stripe.com/payments/ach-direct-debit/accept-a-payment for description of Stripe's API.
+
+3-6% fee with credit card.
+
+It may not make sense for us to build our own billing system at all. Stripe and the like have hosted pages that can be integrated. What do we give up business wise? Knowledge of our customers...
+
+re: the relational structure of a customer, found a plausible schema here: https://dbfiddle.uk/V9ohQXLE
+Referenced in https://dba.stackexchange.com/questions/111101/storing-a-billing-address-best-practice-in-orders-table
+
+Separates the Address into it's own table and links it to the Customer via a CustomerAddress table (which includes a flag to denote the type of address--billing or shipping--that applies.)
+It also defines two auditing tables, for the Address and CustomerAddress pairing, to handle changes over time.
+
+It also has an Order table that we might revamp to represent a unit of service (e.g. a month's worth of the Brbl service for which we might keep a message count.)
+
+So far we have three schemas: brbl_logs, brbl_logic, and brbl_users. For the customer data, creating a fourth schema: brbl_biz.
+
 
 

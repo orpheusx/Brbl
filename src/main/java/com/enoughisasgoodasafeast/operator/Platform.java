@@ -29,4 +29,9 @@ public enum Platform {
         }
         return null;
     }
+
+    public static void main(String[] args) {
+        final Platform sms = Enum.valueOf(Platform.class, "S");
+        System.out.println(sms);
+    }
 }

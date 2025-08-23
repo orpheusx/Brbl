@@ -18,19 +18,19 @@ public class CustomerTest {
 
     final static User user = new User(id, platformIds, platformCreatedMap, countryCode, languages);
 
-    final String firstName = "Fred";
-    final String surname = "Flintstone";
-    final String companyName = "Hanna-Barbera";
+    // final String firstName = "Fred";
+    // final String surname = "Flintstone";
+    // final String companyName = "Hanna-Barbera";
 
     @Test
     public void createOk() {
-        assertDoesNotThrow(() -> new Customer(null, user, firstName, surname, companyName));
+        assertDoesNotThrow(() -> new Customer(null, user/*, companyName*/, null, null));
     }
 
     @Test
     public void createOkNoCompanyName() {
         assertDoesNotThrow(() -> {
-            Customer c = new Customer(null, user, firstName, surname, null);
+            Customer c = new Customer(null, user, null, null);
             assertEquals(SharedConstants.NO_COMPANY, c.companyName());
         });
     }
@@ -38,25 +38,25 @@ public class CustomerTest {
     @Test
     public void userNull() {
         Exception exception = assertThrows(IllegalArgumentException.class, () -> {
-            new Customer(null, null, firstName, surname, companyName);
+            new Customer(null, null, /*firstName, surname, companyName*/null, null);
         });
         assertTrue(exception.getMessage().contains("user"));
     }
 
-    @Test
-    public void firstNameNull() {
-        Exception exception = assertThrows(IllegalArgumentException.class, () ->
-            new Customer(null, user, null, "Flintstone", companyName)
-        );
-        assertTrue(exception.getMessage().contains("firstName"));
-    }
+    //@Test
+    //public void firstNameNull() {
+    //    Exception exception = assertThrows(IllegalArgumentException.class, () ->
+    //            new Customer(null, user, null, null)
+    //    );
+    //    assertTrue(exception.getMessage().contains("firstName"));
+    //}
 
-    @Test
-    public void surnameNull() {
-        Exception exception = assertThrows(IllegalArgumentException.class, () ->
-            new Customer(null, user, firstName, null, companyName)
-        );
-        assertTrue(exception.getMessage().contains("surname"));
-    }
+    //@Test
+    //public void surnameNull() {
+    //    Exception exception = assertThrows(IllegalArgumentException.class, () ->
+    //        new Customer(null, user, /*firstName, null, companyName,*/ null, null)
+    //    );
+    //    assertTrue(exception.getMessage().contains("surname"));
+    //}
 
 }

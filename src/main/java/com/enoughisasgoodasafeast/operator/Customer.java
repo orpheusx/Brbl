@@ -10,11 +10,10 @@ import static com.enoughisasgoodasafeast.SharedConstants.*;
  * with the User table, enabling a Customer to seamlessly work like a User.
  *
  * @param user
- * @param firstName
- * @param surname
+ * @param profile
  * @param companyName optional
  */
-public record Customer(UUID id, User user, String firstName, String surname, String companyName) {
+public record Customer(UUID id, User user, Profile profile, /*String firstName, String surname,*/ String companyName) {
 
     public Customer {
         if (id == null) {
@@ -22,12 +21,6 @@ public record Customer(UUID id, User user, String firstName, String surname, Str
         }
         if (user == null) {
             fail("user cannot be null");
-        }
-        if (firstName == null || firstName.isEmpty()) {
-            fail("firstName cannot be null");
-        }
-        if (surname == null || surname.isEmpty()) {
-            fail("surname cannot be null");
         }
         if (companyName == null || companyName.isEmpty()) {
             companyName = NO_COMPANY;

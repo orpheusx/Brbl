@@ -95,9 +95,9 @@ public class Rcvr extends WebService {
             LOG.info("{} requested", BRBL_ENQUEUE_ENDPOINT); // make debug
             String rcvPayload = req.content().as(String.class); // write this to a log?
 
-            Message moMessage = null;
+            //Message moMessage = null;
             try {
-                moMessage = marshall(rcvPayload);
+                Message moMessage = marshall(rcvPayload);
                 LOG.info("{} request content: {}", BRBL_ENQUEUE_ENDPOINT, moMessage); // make debug
 
                 queueProducer.enqueue(moMessage);
