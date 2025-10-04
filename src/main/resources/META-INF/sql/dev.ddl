@@ -421,3 +421,79 @@ GRANT brbl_user_rw_role TO brbl_biz_app_role ;
 CREATE ROLE brbl_biz_app LOGIN ENCRYPTED PASSWORD 'brbl_biz_app';
 GRANT brbl_biz_app_role to brbl_biz_app;
 
+
+-- ===============================================================================================
+-- Adding NOT NULL constraints to brbl_logic.keywords:
+--  platform, short_code, and script_id
+ALTER TABLE brbl_logic.keywords
+    ALTER COLUMN script_id SET NOT NULL,
+    ALTER COLUMN platform SET NOT NULL,
+    ALTER COLUMN short_code SET NOT NULL
+    ;
+
+--> Need to drop and recreate the enum and the table for scripts:
+DROP type brbl_logic.script_status;
+CREATE TYPE brbl_logic.script_status AS ENUM ('DRAFT', 'TEST', 'VALID', 'STAGE', 'PROD', 'INACTIVE');
+COMMENT ON TYPE brbl_logic.script_status IS
+        'The supported states for a script. State changes must be made in declared order except for the last which can be transitioned to from any of the preceding states.'
+    ;
+
+CREATE TABLE brbl_logic.scripts (
+    id                      UUID PRIMARY KEY,
+    name                    VARCHAR(64) NOT NULL,
+    description             VARCHAR(128),
+    customer_id             UUID NOT NULL,
+    node_id                 UUID NOT NULL,
+    status                  script_status NOT NULL,
+    language                public.language_code NOT NULL DEFAULT 'ENG',
+    created_at              TIMESTAMP WITH TIME ZONE NOT NULL,
+    updated_at              TIMESTAMP WITH TIME ZONE NOT NULL,
+    CONSTRAINT fk_customers_id FOREIGN KEY(customer_id)
+        REFERENCES brbl_users.customers(id),
+    CONSTRAINT fk_nodes_id FOREIGN KEY(node_id)
+        REFERENCES brbl_logic.nodes(id)
+);
+COMMENT ON COLUMN brbl_logic.scripts.name IS 'The title of the script. Ideally unique by customer.';
+COMMENT ON COLUMN brbl_logic.scripts.description IS 'An optional description of what the script does.';
+COMMENT ON COLUMN brbl_logic.scripts.customer_id IS 'The creator/owner of the script.';
+COMMENT ON COLUMN brbl_logic.scripts.node_id IS 'The initial node in the script graph.';
+COMMENT ON COLUMN brbl_logic.scripts.status IS 'Describes the stage of readiness of the script. See script_status type';
+
+ brbl_db_dev=> select * from scripts;
+                   id                  |  status   |               node_id                |             customer_id              |          created_at           |          updated_at           |                             description
+ --------------------------------------+-----------+--------------------------------------+--------------------------------------+-------------------------------+-------------------------------+----------------------------------------------------------------------
+  57313fde-4caa-424c-a902-5cae09219153 | PUBLISHED | 89eddcb8-7fe5-4cd1-b18b-78858f0789fb | 4d351c0e-5ce5-456e-8de0-70e04bd5c0fd | 2025-07-04 15:01:30.608137-04 | 2025-07-04 15:01:30.608137-04 | Customer engagement quiz about the kinds of food the like most.
+  ffbcdde8-0e95-497b-9a9e-38934fb2d91f | STAGED    | 23b09d2a-18f7-46ac-bff2-3968bd3a4dbe | 4d351c0e-5ce5-456e-8de0-70e04bd5c0fd | 2025-07-04 14:54:27.294606-04 | 2025-07-04 14:54:27.294606-04 | A simple poll to see how people like our new macha flavored cupcake.
+
+Recreate the two pre-existing entries:
+
+INSERT INTO brbl_logic.scripts
+  (id,status,node_id,customer_id,created_at,updated_at,name, description) values
+    ('57313fde-4caa-424c-a902-5cae09219153'::uuid,'DRAFT','89eddcb8-7fe5-4cd1-b18b-78858f0789fb'::uuid, '4d351c0e-5ce5-456e-8de0-70e04bd5c0fd'::uuid,now(),now(),'Quiz collection','A chained set of quizzes aimed at customer engagement'),
+    ('ffbcdde8-0e95-497b-9a9e-38934fb2d91f'::uuid,'DRAFT','23b09d2a-18f7-46ac-bff2-3968bd3a4dbe'::uuid, '4d351c0e-5ce5-456e-8de0-70e04bd5c0fd'::uuid,now(),now(),'MachaCupcakePoll','A simple poll to see how people like our new macha flavored cupcake.')
+;
+
+
+-- ===============================================================================================
+Updated 9/3/2025:
+
+ALTER TABLE brbl_users.customers ADD CONSTRAINT unique_email UNIQUE(email);
+CREATE TYPE brbl_logic.customer_status AS ENUM ('REQUESTED', 'ACTIVE', 'SUSPENDED', 'LAPSED');
+COMMENT ON TYPE brbl_logic.customer_status IS
+'A customer status is REQUESTED until we get email confirmation then ACTIVE until they are SUSPENDED for cause or non-payment indicates they are LAPSED.';
+ALTER TABLE brbl_users.customers ADD COLUMN status customer_status NOT NULL DEFAULT 'REQUESTED';
+ALTER TABLE brbl_users.customers ADD COLUMN confirmation_code VARCHAR(12) UNIQUE;
+ALTER TABLE brbl_users.customers ALTER COLUMN email SET NOT NULL ;
+ALTER TABLE brbl_users.customers ALTER COLUMN confirmation_code SET NOT NULL ;
+ALTER TABLE brbl_users.customers ADD COLUMN password VARCHAR(72); -- bcrypt hash is ~60 bytes, max password length is 72.
+
+-- ===============================================================================================
+Updated 9/27/2025:
+
+CREATE TYPE brbl_users.user_status AS ENUM ('KNOWN', 'IN', 'OUT');
+COMMENT ON TYPE brbl_users.user_status IS
+    'User is KNOWN until they opt IN. Afterwards, they may opt OUT and thereafter flip between IN and OUT';
+ALTER TABLE brbl_users.users ADD COLUMN status user_status NOT NULL DEFAULT 'KNOWN';
+
+-- ===============================================================================================
+Updated 9/27/2025:

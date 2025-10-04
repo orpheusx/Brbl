@@ -10,7 +10,7 @@ SELECT *
   FROM pg_tables
  WHERE tableowner = 'YOUR_USER';
 
---> Show schema permissions (Note: if a user owns a table or database, no special grant exists as the owner of an object always has full access to that object (without grants)
+--> Show schema permissions (Note: if a user owns a table or database, no special grant exists as the owner of an object always has full access to that object (without grants). Note: if a user only has USAGE access to the schema nothing will be displayed here.
 SELECT r.usename AS grantor,
              e.usename AS grantee,
              nspname,
@@ -31,3 +31,44 @@ Some interesting info that could be useful for pagination over stable result set
 
 --> https://neon.tech/postgresql/postgresql-tutorial/postgresql-merge
 The merge feature handles inserts/updates/deletes in a single statement and the RETURNING clause provides information on which of the operations it performed.
+
+--> https://dev.to/dwd/efficient-insert-multiple-with-postgres-3f06
+Relevant to the hand rolled persistence we do in our runtime...
+To chain related inserts together (e.g. resolving foreign key relationships) in a single network call:
+
+WITH step_one AS (
+  INSERT INTO foo(blah, wibble)
+  VALUES($1, $2)
+  RETURNING id
+),
+WITH step_two AS (
+  INSERT INTO bar(blook)
+  VALUES($3)
+  RETURNING id
+),
+INSERT INTO other(foo_id, floogle, bar_id) SELECT s1.id, $4, s2.id FROM step_one s1, step_two s2
+
+or, more elaborately:
+
+WITH my_data(blah, wibble, blook, floogle) AS (
+  VALUES ($1, $2,$3, $4::BIGINT)
+),
+WITH step_one AS (
+  INSERT INTO foo(blah, wibble)
+  SELECT m.blah, m.wibble FROM my_data m
+  RETURNING id
+),
+WITH step_two AS (
+  INSERT INTO bar(blook)
+  SELECT m.blook FROM my_data m
+  RETURNING id
+),
+INSERT INTO other(foo_id, floogle, bar_id)
+SELECT s1.id, m.floogle, s2.id
+FROM step_one s1, step_two s2, my_data m
+
+Clever :-)
+
+
+
+

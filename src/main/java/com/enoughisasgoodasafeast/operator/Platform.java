@@ -5,8 +5,8 @@ package com.enoughisasgoodasafeast.operator;
  */
 public enum Platform {
     BRBL("B"), // Brbl native
-    SMS ("S"), // Short Message Service
-     WAP("W")  // Whatsapp
+    SMS("S"), // Short Message Service
+    WAP("W")  // Whatsapp
     // FBM('F')  // FB_MESSENGER
     // SLK('S'), // SLACK
     ;

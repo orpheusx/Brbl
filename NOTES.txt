@@ -1746,7 +1746,7 @@ Of these, only the first, fourth and fifth are being used and can be said to be 
 Let's clear the deck and only consider the *Multi types to be in play.
 What additional scenarios do we want/need to support in addition to these two?
 
-A) A notification. Just a one and done message (possibly split into multiple text messages.) This could include instructions on how to start new conversations. No response expected. It chains to a EndOfChat node.
+A) A notification. Just a one and done message (possibly split into multiple text messages.) This could include instructions on how to start new conversations. No response expected. It chains to an EndOfChat node.
 B) Ask a question that invites a free text input and reply with something canned e.g. "Thanks for the feedback" **
 C) Same thing but apply sentiment or other textual analysis to the input and, based on the result, select the response sent back. For example, if the response was negative reply with "Uh oh. We're sorry you weren't happy with X..." The selection of next node would be determined by this evaluation, meaning that we require a bounded set of possibilities. In practice, this only requires that there be a default response. The sentiment analysis done by Vader and NLTK both return a value within a bounded range (-1..1 or some variation.)
 D) The TopicSelection type is meant to provide an entry point if the user doesn't arrive by keyword (or they continue after completing their original node.) This function could be implemented with either Present/ProcessMulti or the free form option.
@@ -2065,4 +2065,10 @@ It also has an Order table that we might revamp to represent a unit of service (
 So far we have three schemas: brbl_logs, brbl_logic, and brbl_users. For the customer data, creating a fourth schema: brbl_biz.
 
 
+===== 2025-08-28 ====
+
+Lost the terminal that was running Postgres. The server continues to run but I can't see the log messages.
+Apparently, we need to turn on the logging_collector in the postgresql.conf file in /opt/homebrew/var/postgresql@17.
+It is currently not running:
+    #logging_collector = off
 
