@@ -3,6 +3,7 @@ package com.enoughisasgoodasafeast.operator;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
+import java.io.Serializable;
 import java.time.Instant;
 import java.util.List;
 import java.util.Map;
@@ -28,7 +29,7 @@ public record User(
         Map<Platform, String> platformIds,
         Map<Platform, Instant> platformCreationTimes,
         String countryCode,
-        List<String> languages)
+        List<String> languages) implements Serializable
 {
     private static final Logger LOG = LoggerFactory.getLogger(User.class);
 
@@ -62,7 +63,7 @@ public record User(
             }
         }
 
-        LOG.info("Created new User (id:{})", id);
+        LOG.debug("Created new User (id:{})", id);
     }
 
     void fail(String message) {

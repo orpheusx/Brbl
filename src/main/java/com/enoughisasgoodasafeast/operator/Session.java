@@ -7,28 +7,38 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import java.io.IOException;
+import java.io.Serial;
+import java.io.Serializable;
+import java.time.Instant;
 import java.util.*;
 
 /**
- * The Session tracks and persists state for a single User
+ * The Session tracks and persists state for a single User interaction with Brbl's runtime.
  * Won't work as a Record since we need to update the currentNode field
  * and maintain state
  */
-public class Session implements ScriptContext {
+public class Session implements ScriptContext, /*org.apache.fory.serializer.Serializer*/ Serializable {
+
     private static final Logger LOG = LoggerFactory.getLogger(Session.class);
+
     public static final int MAX_INPUT_HISTORY = 10;
 
-    final long startTimeNanos;
-    final UUID id;
-    final User user;
-    final QueueProducer producer;
-    final PersistenceManager persistenceManager;
+    @Serial
+    private static final long serialVersionUID = 1L;
+
+    private final Instant startTimeNanos;
+    private final UUID id;
+    private final User user;
+
+    // TODO move these out of the class
+    private final transient QueueProducer producer;
+    private final transient PersistenceManager persistenceManager;
 
     Node currentNode;
 
     private final Queue<Message> outputBuffer = new LinkedList<>();
     private final SequencedSet<Message> inputs = new LinkedHashSet<>();
-    private final SequencedSet<Message> inputHistory = new LinkedHashSet<Message>(MAX_INPUT_HISTORY) {
+    private final SequencedSet<Message> inputHistory = new LinkedHashSet<>(MAX_INPUT_HISTORY) {
         @Override
         public void addLast(Message message) {
             if (1 + this.size() > MAX_INPUT_HISTORY) {
@@ -39,6 +49,8 @@ public class Session implements ScriptContext {
     };
     private final List<Node> evaluatedNodes = new ArrayList<>(); // TODO make this a stack instead?
 
+    private Instant lastUpdatedNanos;
+
     /**
      * Creates a new, fully configured Session object.
      * @param id the unique identifier
@@ -48,13 +60,14 @@ public class Session implements ScriptContext {
      * @param persistenceManager the object that writes artifacts created for this Session
      */
     public Session(UUID id, Node currentNode, User user, QueueProducer producer, PersistenceManager persistenceManager) {
-        startTimeNanos = NanoClock.systemUTC().nanos();
+        this.startTimeNanos = NanoClock.utcInstant();
+        this.lastUpdatedNanos = startTimeNanos;
         this.id = Objects.requireNonNull(id);
         this.currentNode = Objects.requireNonNull(currentNode);
         this.user = Objects.requireNonNull(user);
         this.producer = Objects.requireNonNull(producer);
         this.persistenceManager = persistenceManager;
-        LOG.info("Created Session {} for User {}", id, user.id());
+        LOG.debug("Created Session {} for User {}", id, user.id());
     }
 
     public int currentInputsCount() {
@@ -84,18 +97,18 @@ public class Session implements ScriptContext {
 
     public void registerInput(Message moMessage) {
         inputs.addLast(moMessage);
-        LOG.info("Registered input message {}", moMessage);
+        LOG.debug("Registered input message {}", moMessage);
     }
 
     @Override
     public void registerOutput(Message mtMessage) {
         outputBuffer.add(mtMessage);
-        LOG.info("Registered output message {}", mtMessage);
+        LOG.debug("Registered output message {}", mtMessage);
     }
     
     public void registerEvaluated(Node node) {
         evaluatedNodes.addLast(node);
-        LOG.info("Registered evaluated node {}", node.id());
+        LOG.debug("Registered evaluated node {}", node.id());
     }
 
     /**
@@ -103,10 +116,9 @@ public class Session implements ScriptContext {
      * finding the one that prompted it. Used when logging the processed MO.
      * @return the Node that prompted the User's latest MO.
      */
-
     public Node getScriptForProcessedMO() {
 
-        if (currentNode != null) { // FIXME should
+        if (currentNode != null) { // FIXME shouldn't be needed. See Session constructor.
             return currentNode;
         }
 
@@ -136,6 +148,21 @@ public class Session implements ScriptContext {
         inputs.clear();
     }
 
+    public UUID getId() {
+        return id;
+    }
+
+    public Instant getStartTimeNanos() {
+        return startTimeNanos;
+    }
+
+    public Instant getLastUpdatedNanos() {
+        return lastUpdatedNanos;
+    }
+    public void sessionUpdated() {
+        lastUpdatedNanos = NanoClock.utcInstant();
+    }
+
     public User getUser() {
         return user;
     }
@@ -147,5 +174,22 @@ public class Session implements ScriptContext {
 
     public void setCurrentNode(Node node) {
         currentNode = node;
+    }
+
+    @Override
+    public String toString() {
+        return new StringJoiner(", ", Session.class.getSimpleName() + "[", "]")
+                .add("startTimeNanos=" + startTimeNanos)
+                .add("id=" + id)
+                .add("user=" + user)
+
+                .add("producer=" + producer)
+                .add("persistenceManager=" + persistenceManager)
+                .add("currentNode=" + currentNode)
+                .add("outputBuffer=" + outputBuffer)
+                .add("inputs=" + inputs)
+                .add("inputHistory=" + inputHistory)
+                .add("evaluatedNodes=" + evaluatedNodes)
+                .toString();
     }
 }

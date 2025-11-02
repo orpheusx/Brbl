@@ -2072,3 +2072,32 @@ Apparently, we need to turn on the logging_collector in the postgresql.conf file
 It is currently not running:
     #logging_collector = off
 
+===== 2025-10-22 ====
+Starting design for storing sessions persistently:
+
+    CREATE TABLE brbl_logic.sessions (
+        group_id                UUID PRIMARY KEY,
+        data                    BYTEA NOT NULL,
+        created_at              TIMESTAMP WITH TIME ZONE NOT NULL,
+        updated_at              TIMESTAMP WITH TIME ZONE NOT NULL
+    );
+    COMMENT ON COLUMN brbl_logic.sessions.group_id IS 'Effectively (but not actually) the foreign key to brbl_logic.users.';
+    COMMENT ON COLUMN brbl_logic.sessions.data     IS 'The latest serialized session data for the referenced user.';
+
+Implementation uses Postgres' INSERT INTO ... ON CONFLICT syntax. Verified correct update behavior:
+
+    brbl_db_dev=> select group_id, created_at, updated_at, (updated_at - created_at) as delta from sessions;
+                   group_id               |          created_at           |          updated_at           |      delta
+    --------------------------------------+-------------------------------+-------------------------------+-----------------
+     2c9683b8-3118-4b73-a92c-d7f0d38bc24e | 2025-10-22 12:17:02.553688-04 | 2025-10-22 12:18:18.043024-04 | 00:01:15.489336
+     8d8e3123-b208-497c-b51f-18d517362433 | 2025-10-22 09:51:07.23876-04  | 2025-10-22 12:19:09.070032-04 | 02:28:01.831272
+
+Issues:
+The messages_mt table has a session_id column though it predates our persistenting session here.
+Previously, our notion of sessions were like web sessions. With the link to the group_id, however, sessions could be effectively eternal.
+In some ways this is an improvement. But how do we keep separate the conversations with different Customers?
+Along the same line, should we limit a Customer's interaction with a single User to a single context at a time?
+
+
+
+

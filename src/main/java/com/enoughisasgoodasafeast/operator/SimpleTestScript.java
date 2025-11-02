@@ -18,7 +18,7 @@ public class SimpleTestScript {
         if (session.getCurrentNode().edges().isEmpty()) {
             return null;
         } else {
-            return session.getCurrentNode().edges().getFirst().node();
+            return session.getCurrentNode().edges().getFirst().targetNode();
         }
 //        if (!n.await()) {
 //            return n.evaluate(session, moMessage);

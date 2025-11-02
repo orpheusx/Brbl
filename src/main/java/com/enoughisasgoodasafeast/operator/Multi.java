@@ -12,6 +12,8 @@ public class Multi {
 
     private static final Logger LOG = LoggerFactory.getLogger(Multi.class);
 
+    public static final String CHANGE_TOPIC_RESPONSE = "You want to talk about something else? OK...";
+
     static class Present {
 
         /**
@@ -36,7 +38,7 @@ public class Multi {
                 LOG.info("End of node, '{}', reached.", session.getCurrentNode().label());
                 return null;
             } else {
-                final Node nextNode = session.getCurrentNode().edges().getFirst().node(); // only one Edge available
+                final Node nextNode = session.getCurrentNode().edges().getFirst().targetNode(); // only one Edge available
                 LOG.info("Multi.Present {} dispatching to {}", session.getCurrentNode().label(), nextNode);
                 return nextNode;
             }
@@ -68,21 +70,23 @@ public class Multi {
                     final Message mt = newMTfromMO(moMessage, option.text());
                     context.registerOutput(mt);
                     //LOG.info("Enqueued {}", mt);
-                    return option.node();
+                    return option.targetNode();
                 } else {
-                    LOG.info("No match {} != {}", userText, option.matchText());
+                    LOG.info("No match: {} != {}", userText, option.matchText());
                 }
             }
 
-            // Handle the "I want to talk about something else" case here...Should it be above the Edge loop?
+            // Handle the "I want to talk about something else" case here...Should it happen before the Edge loop?
             if (userText.contains("change topic")) {
                 // Create a new Node graph
                 // TODO this should all be handled in the called methods.
-                Message changeTopicNotification = newMTfromMO(moMessage, "You want to talk about something else? OK...");
+                Message changeTopicNotification = newMTfromMO(moMessage, CHANGE_TOPIC_RESPONSE);
                 context.registerOutput(changeTopicNotification);
 //                return Process.constructTopicScript(context, moMessage);
+                // We need something like the findScriptForKeywordShortCode method from the Operator for this.
                 LOG.error("Unsupported feature: change topic");
-                return null;
+                // Find the Customer's preconfigured topic script.
+                return null; // FIXME return a constant symbolic Node that the Operator handles specially?
             }
 
 
@@ -99,10 +103,8 @@ public class Multi {
         /*
          * FIXME This should really be fetched from a database per shortcode and not handled by this
          */
-        public static Node constructTopicScript(ScriptContext session, Message moMessage) throws IOException {
-
-//            session.currentNode = Functions.findTopicScript(session, moMessage);
-
+        public static Node constructTopicScript(ScriptContext session, Message moMessage) {
+            // session.currentNode = Functions.findTopicScript(session, moMessage);
             return Present.evaluate(session, moMessage);
         }
     }

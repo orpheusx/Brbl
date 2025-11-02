@@ -458,6 +458,7 @@ COMMENT ON COLUMN brbl_logic.scripts.description IS 'An optional description of 
 COMMENT ON COLUMN brbl_logic.scripts.customer_id IS 'The creator/owner of the script.';
 COMMENT ON COLUMN brbl_logic.scripts.node_id IS 'The initial node in the script graph.';
 COMMENT ON COLUMN brbl_logic.scripts.status IS 'Describes the stage of readiness of the script. See script_status type';
+COMMENT ON COLUMN brbl_logic.scripts.language IS 'The language in which the script is written. See language_code type.';
 
  brbl_db_dev=> select * from scripts;
                    id                  |  status   |               node_id                |             customer_id              |          created_at           |          updated_at           |                             description
@@ -496,4 +497,45 @@ COMMENT ON TYPE brbl_users.user_status IS
 ALTER TABLE brbl_users.users ADD COLUMN status user_status NOT NULL DEFAULT 'KNOWN';
 
 -- ===============================================================================================
-Updated 9/27/2025:
+Updated 10/7/2025:
+
+CREATE TABLE brbl_logic.schedule (
+    id                      UUID PRIMARY KEY,
+    expression              VARCHAR(24) NOT NULL,
+    is_recurring            boolean NOT NULL DEFAULT FALSE, -- convenience flag to distinguish one time and recurring schedules.
+    script_id               UUID NOT NULL,
+    created_at              TIMESTAMP WITH TIME ZONE NOT NULL,
+    updated_at              TIMESTAMP WITH TIME ZONE NOT NULL,
+    CONSTRAINT fk_scripts_id FOREIGN KEY(script_id)
+        REFERENCES brbl_logic.scripts(id)
+);
+COMMENT ON COLUMN brbl_logic.schedule.expression   IS 'The cron string describing the schedule.';
+COMMENT ON COLUMN brbl_logic.schedule.is_recurring IS 'TRUE is recurring, FALSE is one-time execution';
+COMMENT ON COLUMN brbl_logic.schedule.script_id    IS 'The script to be processed.';
+
+Temporarily removed NOT NULL constraints:
+    ALTER TABLE brbl_logic.scripts
+        ALTER COLUMN node_id DROP NOT NULL,
+        ALTER COLUMN customer_id DROP NOT NULL;
+
+-- ===============================================================================================
+Updated 10/14/2025:
+
+ALTER TABLE brbl_users.profiles
+    ADD COLUMN roles VARCHAR(64); -- just an comma-delimited array of strings.
+
+-- We could use Hibernate extensions to support an array of enums but it's more complicated.
+-- Postgres natively supports enum arrays but the use-case seems somewhat limited. We should limit how many roles
+-- we need to implement.
+
+-- ===============================================================================================
+Updated 10/20/2025:
+
+CREATE TABLE brbl_logic.sessions (
+    group_id                UUID PRIMARY KEY,
+    data                    BYTEA NOT NULL,
+    created_at              TIMESTAMP WITH TIME ZONE NOT NULL,
+    updated_at              TIMESTAMP WITH TIME ZONE NOT NULL
+);
+COMMENT ON COLUMN brbl_logic.sessions.group_id IS 'Effectively (but not actually) the foreign key to brbl_logic.users.';
+COMMENT ON COLUMN brbl_logic.sessions.data     IS 'The latest serialized session data for the referenced user.';

@@ -25,7 +25,7 @@ public class Functions {
             return null;
         } else {
             assert context.getCurrentNode().edges().size() == 1;
-            final Node nextNode = context.getCurrentNode().edges().getFirst().node(); // only one Edge available
+            final Node nextNode = context.getCurrentNode().edges().getFirst().targetNode(); // only one Edge available
             LOG.info("Advancing from {} dispatching to {}", context.getCurrentNode().label(), nextNode);
             return nextNode;
         }

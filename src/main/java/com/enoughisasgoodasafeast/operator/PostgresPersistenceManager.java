@@ -8,7 +8,7 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import java.beans.PropertyVetoException;
-import java.io.IOException;
+import java.io.*;
 import java.sql.*;
 import java.time.Instant;
 import java.util.*;
@@ -50,7 +50,7 @@ public class PostgresPersistenceManager implements PersistenceManager {
         }
     }
 
-    public static String MO_MESSAGE_INSERT =
+    public static final String MO_MESSAGE_INSERT =
             """
                     INSERT INTO brbl_logs.messages_mo
                         (id, rcvd_at, _from, _to, _text)
@@ -58,7 +58,7 @@ public class PostgresPersistenceManager implements PersistenceManager {
                         (?, ?, ?, ?, ?);
                     """;
 
-    public static String MO_MESSAGE_PRCD =
+    public static final String MO_MESSAGE_PRCD =
             """
                     INSERT INTO brbl_logs.messages_mo_prcd 
                         (id, prcd_at, session_id, script_id)
@@ -66,7 +66,7 @@ public class PostgresPersistenceManager implements PersistenceManager {
                         (?, ?, ?, ?);
                     """;
 
-    public static String MT_MESSAGE_INSERT =
+    public static final String MT_MESSAGE_INSERT =
             """
                     INSERT INTO brbl_logs.messages_mt
                         (id, sent_at, _from, _to, _text, session_id, script_id)
@@ -74,7 +74,7 @@ public class PostgresPersistenceManager implements PersistenceManager {
                         (?, ?, ?, ?, ?, ?, ?);
                     """;
 
-    public static String MT_MESSAGE_DLVR =
+    public static final String MT_MESSAGE_DLVR =
             """
                     INSERT INTO brbl_logs.messages_mt_dlvr
                         (id, dlvr_at)
@@ -82,7 +82,7 @@ public class PostgresPersistenceManager implements PersistenceManager {
                         (?, ?);
                     """;
 
-    public static String USER_PROFILE_BY_PLATFORM_ID_AND_CODE =
+    public static final String USER_PROFILE_BY_PLATFORM_ID_AND_CODE =
             """
                     SELECT
                     	u.group_id, u.platform_id, u.platform_code,
@@ -102,7 +102,7 @@ public class PostgresPersistenceManager implements PersistenceManager {
                     	)
                     """; // FIXME figure out if a LATERAL JOIN might replace the sub-select part of this query
 
-    public static String USER_INSERT =
+    public static final String USER_INSERT =
             """
                     INSERT INTO brbl_users.users
                         (group_id, platform_id, platform_code, country, language, nickname, created_at)
@@ -110,7 +110,7 @@ public class PostgresPersistenceManager implements PersistenceManager {
                         (?, ?, ?, ?, ?, ?, ?)
                     """;
 
-    public static String PROFILE_INSERT =
+    public static final String PROFILE_INSERT =
             """
                     INSERT INTO brbl_users.profiles
                         (group_id, surname, given_name, other_languages, created_at)
@@ -118,7 +118,29 @@ public class PostgresPersistenceManager implements PersistenceManager {
                         (?, ?, ?, ?, ?)
                     """;
 
-    public static String SELECT_SCRIPT_GRAPH =
+    public static final String SESSION_UPSERT =
+            """
+                    INSERT INTO brbl_logic.sessions
+                        (group_id, data, created_at, updated_at)
+                    VALUES
+                        (?, ?, ?, ?)
+                    ON CONFLICT(group_id)
+                    DO UPDATE SET
+                        data = EXCLUDED.data,
+                        updated_at = EXCLUDED.updated_at
+                    """;
+
+    public static final String SELECT_SESSION =
+            """
+                    SELECT
+                        s.group_id, s.data, s.created_at, s.updated_at
+                    FROM
+                        brbl_logic.sessions s
+                    WHERE
+                        s.group_id = ?;
+                    """;
+
+    public static final String SELECT_SCRIPT_GRAPH =
             """
                     SELECT
                         s.id, s.label, s.text,
@@ -131,7 +153,7 @@ public class PostgresPersistenceManager implements PersistenceManager {
                         s.id = ?;
                     """;
 
-//    public static String SELECT_SCRIPT_GRAPH_FULL =
+//    public static final String SELECT_SCRIPT_GRAPH_FULL =
 //            """
 //                    WITH RECURSIVE cte AS (
 //                            SELECT ? AS script_id
@@ -151,7 +173,7 @@ public class PostgresPersistenceManager implements PersistenceManager {
 //                        s.id IN (SELECT DISTINCT(cte.script_id) FROM cte);
 //                    """;
 
-    public static String SELECT_SCRIPT_GRAPH_RECURSIVE =
+    public static final String SELECT_SCRIPT_GRAPH_RECURSIVE =
             """
                     WITH RECURSIVE rgraph AS (
                             SELECT ? AS node_id
@@ -180,7 +202,7 @@ public class PostgresPersistenceManager implements PersistenceManager {
                         ORDER BY s.id ;
                     """; // FIXME redundant to have both the part of the where clause and inner join include 's.id = rgraph.node_id'
 
-    public static String SELECT_SCRIPT_GRAPH_RECURSIVE_FOR_KEYWORD =
+    public static final String SELECT_SCRIPT_GRAPH_RECURSIVE_FOR_KEYWORD =
             """
                     WITH RECURSIVE rgraph AS (
                             SELECT script_id FROM brbl_logic.keywords WHERE platform= ?::platform AND pattern = ?
@@ -206,7 +228,7 @@ public class PostgresPersistenceManager implements PersistenceManager {
                         ORDER BY s.id ;
                     """;
 
-    public static String SELECT_ALL_KEYWORDS =
+    public static final String SELECT_ALL_KEYWORDS =
             """
                     SELECT
                         k.id, k.pattern, k.platform, k.script_id, k.is_default, k.short_code
@@ -301,7 +323,7 @@ public class PostgresPersistenceManager implements PersistenceManager {
         try (PreparedStatement ps = connection.prepareStatement(MO_MESSAGE_PRCD)) {
             ps.setObject(1, message.id());                              // id
             ps.setTimestamp(2, Timestamp.from(Instant.now()));          // prcd_at
-            ps.setObject(3, session.id);                                // session_id
+            ps.setObject(3, session.getId());                           // session_id
             ps.setObject(4, session.getScriptForProcessedMO().id());    // script_id
             ps.execute();
         } catch (SQLException e) {
@@ -346,7 +368,7 @@ public class PostgresPersistenceManager implements PersistenceManager {
             ps.setString(3, message.from());                            // _from
             ps.setString(4, message.to());                              // _to
             ps.setString(5, message.text());                            // _text
-            ps.setObject(6, session.id);                                // session_id
+            ps.setObject(6, session.getId());                           // session_id
             ps.setObject(7, session.previousScript().id());    // script_id
             ps.execute();
         } catch (SQLException e) {
@@ -414,6 +436,79 @@ public class PostgresPersistenceManager implements PersistenceManager {
         //LOG.info("insertDeliveredMT: b {} a {}: d {} ", before, after, Duration.between(before, after));
         return true;
     }
+
+    public boolean upsertSession(Session session) {
+        try (Connection connection = fetchConnection()) {
+            assert connection != null;
+            return upsertSession(connection, session);
+        } catch (SQLException e) {
+            LOG.error("upsertSession: fetchConnection failed", e);
+            return false;
+        }
+    }
+
+    private boolean upsertSession(Connection connection, Session session) {
+        try (PreparedStatement ps = connection.prepareStatement(SESSION_UPSERT)) {
+            ps.setObject(1, session.getId());
+            ps.setBytes(2, sessionToBytes(session));
+            ps.setTimestamp(3, Timestamp.from(session.getStartTimeNanos()));
+            ps.setTimestamp(4, Timestamp.from(session.getLastUpdatedNanos()));
+            ps.execute();
+            return true;
+        } catch (SQLException | IOException e) {
+            LOG.error(e.getMessage(), e);
+            return false;
+        }
+    }
+
+    public Session getSession(UUID  id) {
+        LOG.info("Fetching session data for {}", id);
+        try (Connection connection = fetchConnection()) {
+            assert connection != null;
+            return getSession(connection, id);
+        } catch (SQLException e) {
+            LOG.error("getSession: fetchConnection failed", e);
+            return null;
+        }
+    }
+
+    private Session getSession(Connection connection, UUID id) {
+        LOG.info("Retrieving session {}", id);
+        try (PreparedStatement ps = connection.prepareStatement(SELECT_SESSION)) {
+            ps.setObject(1, id);
+            final ResultSet rs = ps.executeQuery();
+            final boolean next = rs.next();
+            if (next) {
+                final byte[] data = rs.getBytes(2);
+                return bytesToSession(data);
+            } else {
+                LOG.error("Session {} not found.", id);
+                return null;
+            }
+        } catch (Exception e) {
+            LOG.error("Error retrieving Session object for {}", id, e);
+            return null;
+        }
+    }
+
+    private byte[] sessionToBytes(Session session) throws IOException {
+        try (ByteArrayOutputStream baos = new ByteArrayOutputStream();
+             ObjectOutputStream oos = new ObjectOutputStream(baos)) {
+            oos.writeObject(session);
+            return baos.toByteArray();
+        }
+    }
+
+    private Session bytesToSession(byte[] data) throws IOException, ClassNotFoundException {
+        try (ByteArrayInputStream bais = new ByteArrayInputStream(data);
+             ObjectInputStream ois = new ObjectInputStream(bais)) {
+            return (Session) ois.readObject();
+        } /*catch (IOException | ClassNotFoundException e) {
+            LOG.error("Exception in bytesToSession", e);
+            return null;
+        }*/
+    }
+
 
     @Override
     public Map<Pattern, Keyword> getKeywords() {
@@ -521,7 +616,7 @@ public class PostgresPersistenceManager implements PersistenceManager {
                 SequencedSet<Edge> edgesForScript = tempEdges.get(idAndScript.getKey());
                 Node node = idAndScript.getValue();
                 for (Edge edge : edgesForScript) {
-                    if (edge.node() == null) {
+                    if (edge.targetNode() == null) {
                         UUID destinationScriptID = edgeIdToDstId.get(edge.id());
                         Node missingNode = scriptMap.get(destinationScriptID);
                         //LOG.info("Patching edge {} with dst: {}", node.id(), missingNode);
@@ -612,7 +707,7 @@ public class PostgresPersistenceManager implements PersistenceManager {
                 SequencedSet<Edge> edgesForScript = tempEdges.get(idAndScript.getKey());
                 Node node = idAndScript.getValue();
                 for (Edge edge : edgesForScript) {
-                    if (edge.node() == null) {
+                    if (edge.targetNode() == null) {
                         UUID destinationScriptID = edgeIdToDstId.get(edge.id());
                         Node missingNode = scriptMap.get(destinationScriptID);
                         //LOG.info("Patching edge {} with dst: {}", node.id(), missingNode);
@@ -731,7 +826,7 @@ public class PostgresPersistenceManager implements PersistenceManager {
         }
     }
 
-    public boolean insertUser(Connection connection, User user) {
+    private boolean insertUser(Connection connection, User user) {
         int numOfPlatforms = user.platformIds().size();
         assert numOfPlatforms == 1;
         final Map.Entry<Platform, String> onlyPlatform = user.platformIds().entrySet().iterator().next();

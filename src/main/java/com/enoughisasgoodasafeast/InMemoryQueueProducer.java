@@ -19,14 +19,14 @@ public class InMemoryQueueProducer implements QueueProducer {
     private final List<Message> queuedMessages = new ArrayList<>();
 
     public InMemoryQueueProducer() {
-        LOG.info("Creating InMemoryQueueProducer");
+        LOG.debug("Creating InMemoryQueueProducer");
     }
 
     @Override
     public void enqueue(Message event) throws IOException {
         LOG.info("Enqueuing message: {}", event);
         queuedMessages.add((Message) event);
-        LOG.info("number messages in queue: {}", queuedMessages.size());
+        LOG.info("Number messages in queue: {}", queuedMessages.size());
     }
 
     @Override
@@ -35,7 +35,11 @@ public class InMemoryQueueProducer implements QueueProducer {
         LOG.info("Shutdown called.");
     }
 
-    public List<Message> getQueuedMessages() {
+    public int enqueuedCount() {
+        return queuedMessages.size();
+    }
+
+    public List<Message> enqueued() {
         return queuedMessages;
     }
 

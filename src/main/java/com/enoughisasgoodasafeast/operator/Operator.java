@@ -54,9 +54,9 @@ public class Operator implements MessageProcessor {
     public Operator() {
     }
 
-    public Operator(QueueConsumer queueConsumer, QueueProducer queueProducer) {
-        this(queueConsumer, queueProducer, null);
-    }
+//    public Operator(QueueConsumer queueConsumer, QueueProducer queueProducer) {
+//        this(queueConsumer, queueProducer, null);
+//    }
 
     public Operator(QueueConsumer queueConsumer, QueueProducer queueProducer, PersistenceManager persistenceManager) {
         this.queueConsumer = queueConsumer;
@@ -65,17 +65,17 @@ public class Operator implements MessageProcessor {
     }
 
     // TODO get rid of this version by updating OperatorTest's use of it.
-    public void init() throws IOException, TimeoutException {
-        LOG.info("Initializing Brbl Operator");
-        if (queueConsumer == null) {
-            queueConsumer = RabbitQueueConsumer.createQueueConsumer(
-                    "rcvr.properties", this);
-        }
-        if (queueProducer == null) {
-            queueProducer = RabbitQueueProducer.createQueueProducer("sndr.properties");
-        }
-        // Other resources? Connections to database/distributed caches?
-    }
+//    public void init() throws IOException, TimeoutException {
+//        LOG.info("Initializing Brbl Operator");
+//        if (queueConsumer == null) {
+//            queueConsumer = RabbitQueueConsumer.createQueueConsumer(
+//                    "rcvr.properties", this);
+//        }
+//        if (queueProducer == null) {
+//            queueProducer = RabbitQueueProducer.createQueueProducer("sndr.properties");
+//        }
+//        // Other resources? Connections to database/distributed caches?
+//    }
 
     public void init(Properties props) throws IOException, TimeoutException, PersistenceManagerException {
         LOG.info("Initializing Brbl Operator with provided Properties object");
@@ -121,6 +121,7 @@ public class Operator implements MessageProcessor {
                 int size = session.currentInputsCount();
                 if (size > EXPECTED_INPUT_COUNT) {
                     LOG.error("Uh oh, there are more inputs ({}) than expected in session ({})", size, session);
+//                    return false;
                     // Corner case: user sent multiple responses that arrived closely together (probably due to delays/buffering in
                     // the telco's SMSc) and, due to an unfortunate thread context switch, we've processed each in the same
                     // Likely this creates an unexpected situation. To handle it we should create a new Node of
@@ -137,13 +138,14 @@ public class Operator implements MessageProcessor {
                     if (previousInputMessage.receivedAt().isAfter(message.receivedAt())) {
                         LOG.error("Oh shit, we processed an MO received later than this one: {} > {}",
                                 previousInputMessage.receivedAt(), message.receivedAt());
+//                        return false;
                     }
                 }
 
                 // FIXME Session.evaluate handles appending the node to the evaluatedScript list
-                // FIXME why split the logic for handling currentNode? Move it into Session? Or move both here?
+                // FIXME Why split the logic for handling currentNode? Move it into Session? Or move both here?
                 Node next = session.currentNode.evaluate(session, message); // FIXME session.evaluateCurrentNode()?
-                session.registerEvaluated(session.currentNode); //FIXME what if this is null?
+                session.registerEvaluated(session.currentNode); //FIXME What if this is null? Start using Optionals with a constant sentinel value instead of null?
                 LOG.info("Next node is {}", next);
                 session.currentNode = next;
 
@@ -160,7 +162,7 @@ public class Operator implements MessageProcessor {
 
                 }
 
-                session.flush(); //FIXME should be in a finally block but writing to db can throw. Hmm...
+                session.flush(); //FIXME ideally should be in a finally block but writing to db can throw. Hmm...
                 return true; // when would this be false?
             } catch (IOException e) {
                 LOG.error("Processing error", e);
@@ -191,12 +193,22 @@ public class Operator implements MessageProcessor {
 
             Supplier<User> user = scope.fork(() -> userCache.get(sessionKey));
             Supplier<Node> script = scope.fork(() -> scriptByKeywordCache.get(KeywordCacheKey.newKey(sessionKey)));
+
             scope.join().throwIfFailed(); // TODO consider using joinUntil() to enforce a collective timeout.
 
-            return new Session(
-                    UUID.randomUUID(), script.get(), user.get(),
-                    getQueueProducer(sessionKey.platform()),
-                    persistenceManager);
+            // Check if the Session table has a record for this User. We can skip this if the User is brand new.
+//            final Instant instant = user.get().platformCreationTimes().get(sessionKey.platform());
+//            final Session session = ((PostgresPersistenceManager) persistenceManager).getSession(user.get().id());
+//            if (session != null) {
+//                // Replace the script property with the one we just fetched.
+//
+//                return session;
+//            } else {
+                return new Session(
+                        UUID.randomUUID(), script.get(), user.get(),
+                        getQueueProducer(sessionKey.platform()),
+                        persistenceManager);
+//            }
         }
     }
 

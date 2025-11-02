@@ -10,6 +10,18 @@ import java.util.regex.Pattern;
 public
 class TestingPersistenceManager implements PersistenceManager {
 
+    public static final UUID KEYWORD_ID = UUID.randomUUID();
+    public static final UUID SCRIPT_ID = UUID.fromString("89eddcb8-7fe5-4cd1-b18b-78858f0789fb");
+    public static final String USER_ID = OperatorTest.MOBILE_MX;
+
+    private Map<Pattern, Keyword> keywordMap = new HashMap<>();
+
+    public TestingPersistenceManager() {
+        Keyword keyword = new Keyword(KEYWORD_ID, "Color quiz", Platform.SMS,
+                SCRIPT_ID, null);
+        keywordMap.put(Pattern.compile(keyword.wordPattern()), keyword);
+    }
+
     @Override
     public boolean insertMO(Message message) {
         return true;
@@ -37,13 +49,6 @@ class TestingPersistenceManager implements PersistenceManager {
 
     @Override
     public Map<Pattern, Keyword> getKeywords() {
-        Map<Pattern, Keyword> keywordMap = new HashMap<>();
-
-        Keyword keyword = new Keyword(UUID.randomUUID(), "Color quiz", Platform.SMS,
-                UUID.fromString("89eddcb8-7fe5-4cd1-b18b-78858f0789fb"), null);
-
-        keywordMap.put(Pattern.compile(keyword.wordPattern()), keyword);
-
         return keywordMap;
     }
 
@@ -60,9 +65,9 @@ class TestingPersistenceManager implements PersistenceManager {
     @Override
     public User getUser(SessionKey sessionKey) {
         Map<Platform, String> platformIds = new HashMap<>();
-        platformIds.put(Platform.BRBL, "completely_bullshit_brbl_id");
+        platformIds.put(Platform.SMS, USER_ID);
         Map<Platform, Instant> platformCreatedAt = new HashMap<>();
-        platformCreatedAt.put(Platform.BRBL, NanoClock.utcInstant());
+        platformCreatedAt.put(Platform.SMS, NanoClock.utcInstant());
         return new User(UUID.randomUUID(), platformIds, platformCreatedAt, "US", List.of("ENG"));
     }
 }

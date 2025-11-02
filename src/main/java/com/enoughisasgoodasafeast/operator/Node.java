@@ -6,6 +6,7 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import java.io.IOException;
+import java.io.Serializable;
 import java.util.*;
 
 /**
@@ -17,7 +18,7 @@ import java.util.*;
  * @param edges
  * @param label
  */
-public record Node(UUID id, String text, NodeType type, SequencedSet<Edge> edges, String label) {
+public record Node(UUID id, String text, NodeType type, SequencedSet<Edge> edges, String label) implements Serializable {
 
     private static final Logger LOG = LoggerFactory.getLogger(Node.class);
 
@@ -32,10 +33,14 @@ public record Node(UUID id, String text, NodeType type, SequencedSet<Edge> edges
             edges = new LinkedHashSet<>();
         }
         if (label == null) {
-            LOG.info("Created Node (type:{}, id:{}", type, id);
+            LOG.debug("Created Node (type:{}, id:{}", type, id);
         } else {
-            LOG.info("Created Node (type:{}, label:'{}', id:{}", type, label, id);
+            LOG.debug("Created Node (type:{}, label:'{}', id:{}", type, label, id);
         }
+    }
+
+    public Node(String text, NodeType type, SequencedSet<Edge> edges, String label) {
+        this(UUID.randomUUID(), text, type, edges, label);
     }
 
     public Node(UUID id, String text, NodeType type) {
@@ -57,6 +62,11 @@ public record Node(UUID id, String text, NodeType type, SequencedSet<Edge> edges
 
     public SequencedSet<Edge> edges() {
         return edges;
+    }
+
+    // NB It's painful creating and connecting Nodes and Edges. Trying to make it less so with this pseudo-DSL-like method?
+    public void addEdge(List<String> matchText, String text) {
+        edges.add(new Edge(matchText, text, this));
     }
 
     /**
@@ -125,7 +135,7 @@ public record Node(UUID id, String text, NodeType type, SequencedSet<Edge> edges
         int level = indent + 1;
         for (Edge edge : node.edges()) {
             printIndent(edge, level);
-            Node childNode = edge.node();
+            Node childNode = edge.targetNode();
 
             if (startNode != childNode) {
                 printGraph(startNode, childNode, level + 1);

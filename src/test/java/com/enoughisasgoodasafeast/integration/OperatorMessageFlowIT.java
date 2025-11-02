@@ -89,9 +89,9 @@ public class OperatorMessageFlowIT {
             simulatedMOSource.enqueue(keywordMO);
             await().atMost(5, SECONDS).until(mtResponsesDelivered(operatorProducer));
 
-            List<Message> queuedMessages = operatorProducer.getQueuedMessages();
+            List<Message> queuedMessages = operatorProducer.enqueued();
 
-            Message colorQuizMT = operatorProducer.getQueuedMessages().getFirst();
+            Message colorQuizMT = operatorProducer.enqueued().getFirst();
             assertNotNull(colorQuizMT);
             assertEquals(keywordMO.from(), colorQuizMT.to());
             assertEquals(keywordMO.to(), colorQuizMT.from());
@@ -102,7 +102,7 @@ public class OperatorMessageFlowIT {
             simulatedMOSource.enqueue(flortMO);
             await().atMost(5, SECONDS).until(mtResponsesDelivered(operatorProducer));
 
-            Message flortConfirmation = operatorProducer.getQueuedMessages().getFirst();
+            Message flortConfirmation = operatorProducer.enqueued().getFirst();
             assertNotNull(flortConfirmation);
             assertEquals(keywordMO.from(), flortConfirmation.to());
             assertEquals(keywordMO.to(), flortConfirmation.from());
@@ -119,9 +119,9 @@ public class OperatorMessageFlowIT {
             simulatedMOSource.enqueue(keywordMO);
             await().atMost(5, SECONDS).until(mtResponsesDelivered(operatorProducer));
 
-            List<Message> queuedMessages = operatorProducer.getQueuedMessages();
+            List<Message> queuedMessages = operatorProducer.enqueued();
 
-            Message colorQuizMT = operatorProducer.getQueuedMessages().getFirst();
+            Message colorQuizMT = operatorProducer.enqueued().getFirst();
             assertNotNull(colorQuizMT);
             assertEquals(keywordMO.from(), colorQuizMT.to());
             assertEquals(keywordMO.to(), colorQuizMT.from());
@@ -132,7 +132,7 @@ public class OperatorMessageFlowIT {
             simulatedMOSource.enqueue(unexpectedMO);
             await().atMost(5, SECONDS).until(mtResponsesDelivered(operatorProducer));
 
-            Message errorMessage = operatorProducer.getQueuedMessages().getFirst();
+            Message errorMessage = operatorProducer.enqueued().getFirst();
             assertNotNull(errorMessage);
             assertEquals(keywordMO.from(), errorMessage.to());
             assertEquals(keywordMO.to(), errorMessage.from());
@@ -149,9 +149,9 @@ public class OperatorMessageFlowIT {
             simulatedMOSource.enqueue(keywordMO);
             await().atMost(5, SECONDS).until(mtResponsesDelivered(operatorProducer));
 
-            List<Message> queuedMessages = operatorProducer.getQueuedMessages();
+            List<Message> queuedMessages = operatorProducer.enqueued();
 
-            Message colorQuizMT = operatorProducer.getQueuedMessages().getFirst();
+            Message colorQuizMT = operatorProducer.enqueued().getFirst();
             assertNotNull(colorQuizMT);
             assertEquals(keywordMO.from(), colorQuizMT.to());
             assertEquals(keywordMO.to(), colorQuizMT.from());
@@ -162,7 +162,7 @@ public class OperatorMessageFlowIT {
             simulatedMOSource.enqueue(unexpectedMO);
             await().atMost(5, SECONDS).until(mtResponsesDelivered(operatorProducer));
 
-            Message errorMessage = operatorProducer.getQueuedMessages().getFirst();
+            Message errorMessage = operatorProducer.enqueued().getFirst();
             assertNotNull(errorMessage);
             assertEquals(keywordMO.from(), errorMessage.to());
             assertEquals(keywordMO.to(), errorMessage.from());
@@ -206,7 +206,7 @@ public class OperatorMessageFlowIT {
     private Callable<Boolean> mtResponsesDelivered(InMemoryQueueProducer operatorProducer) {
         return () -> {
             LOG.info("...");
-            return !operatorProducer.getQueuedMessages().isEmpty();
+            return !operatorProducer.enqueued().isEmpty();
         };
 
     }
