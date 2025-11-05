@@ -6,12 +6,8 @@ import org.junit.jupiter.api.Test;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
-import java.io.IOException;
-import java.nio.file.Paths;
 import java.time.Instant;
 import java.util.List;
-import java.util.SequencedSet;
-import java.util.UUID;
 
 import static com.enoughisasgoodasafeast.Message.newMO;
 import static com.enoughisasgoodasafeast.Message.newMT;
@@ -35,6 +31,8 @@ public class OperatorTest {
 
     public static final String COLOR_QUIZ_KEYWORD = "Color quiz";
     public static final String COLOR_QUIZ_START_TEXT = "What is your favorite color? 1) red 2) blue 3) flort";
+    public static final String COLOR_QUIZ_UNEXPECTED_INPUT = "Sorry, please pick one of the choices by name or number.";
+    public static final String END_CONVERSATION = "Talk to you later.";
 
     public static final Message mo1 = newMO(
             MOBILE_US, SHORT_CODE_1, MO_TEXT_1
@@ -78,13 +76,13 @@ public class OperatorTest {
         PersistenceManager persistenceManager = new TestingPersistenceManager();
         operator = new Operator(fakeQueueConsumer, producer, persistenceManager);
 
-        Node presentQuestion = new Node(COLOR_QUIZ_START_TEXT, NodeType.PresentMulti, "ColorQuiz");
-        processAnswer = new Node("Sorry, please pick one of the choices by name or number.", NodeType.ProcessMulti);
+        Node presentQuestion = new Node(COLOR_QUIZ_START_TEXT, NodeType.PresentMulti, "ColorQuizStart");
+        processAnswer = new Node(COLOR_QUIZ_UNEXPECTED_INPUT, NodeType.ProcessMulti, "ColorQuizProcessResponse");
         presentQuestion.edges().add(
                 new Edge(List.of("n/a"), "n/a", processAnswer)
         );
 
-        endConversation = new Node("Talk to you later.", NodeType.EndOfChat);
+        endConversation = new Node(END_CONVERSATION, NodeType.EndOfChat, "ColorQuizEnd");
 
         Edge answerRed = new Edge(List.of("red"), "Red is the color of life.", endConversation);
         Edge answerBlue = new Edge(List.of("blue"), "Blue is my fave, as well.", endConversation);
@@ -208,6 +206,10 @@ public class OperatorTest {
 
             // The conversation is complete.
             assertNull(session.getCurrentNode());
+
+            session.getEvaluatedNodes().forEach( node -> {
+                LOG.info(node.text());
+            });
         });
     }
 
@@ -306,16 +308,19 @@ public class OperatorTest {
             var op = new Operator(new FakeQueueConsumer(), new InMemoryQueueProducer(), new TestingPersistenceManager());
 
             Instant beforeUserCreate = Instant.now();
+            assertEquals(0, op.userCache.estimatedSize());
+
             User uncachedUser = op.userCache.get(SESSION_KEY_US_SHORT_CODE_1);
             assertNotNull(uncachedUser);
-            // Make sure this user wasn't
+            // Make sure this user wasn't previously created.
             assertTrue(uncachedUser.platformCreationTimes().get(Platform.SMS).isAfter(beforeUserCreate));
 
             User cachedUser = op.userCache.get(SESSION_KEY_US_SHORT_CODE_1);
             assertNotNull(cachedUser);
 
             // Not just equivalent, the same object
-            assertTrue((uncachedUser == cachedUser));
+            assertEquals(uncachedUser, cachedUser, "User objects were not equal()");
+            assertTrue((uncachedUser == cachedUser), "User objects were the same instance.");
         });
     }
 

@@ -81,7 +81,7 @@ public record Node(UUID id, String text, NodeType type, SequencedSet<Edge> edges
      * @return the next Node in the conversation (or null if the conversation is complete?)
      * FIXME Maybe instead of null we return a symbolic Node that indicates the end of Node?
      */
-    public Node evaluate(/*Session*/ ScriptContext session, Message moMessage) throws IOException {
+    public Node evaluate(ScriptContext session, Message moMessage) throws IOException {
         return switch (session.getCurrentNode().type) {
             case EchoWithPrefix ->
                 SimpleTestScript.SimpleEchoResponseScript.evaluate(session, moMessage);

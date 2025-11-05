@@ -38,7 +38,7 @@ public class Multi {
                 LOG.info("End of node, '{}', reached.", session.getCurrentNode().label());
                 return null;
             } else {
-                final Node nextNode = session.getCurrentNode().edges().getFirst().targetNode(); // only one Edge available
+                final Node nextNode = session.getCurrentNode().edges().getFirst().targetNode(); // only one Edge available/expected
                 LOG.info("Multi.Present {} dispatching to {}", session.getCurrentNode().label(), nextNode);
                 return nextNode;
             }
@@ -67,7 +67,7 @@ public class Multi {
                 LOG.info("Checking option for match {} -> {}", userText, option.matchText());
                 if (option.matchText().contains(userText)) { //TODO make the matching more robust/flexible. Efficient regexes?
                     LOG.info("Input, {}, matched logic: {}", userText, option.matchText());
-                    final Message mt = newMTfromMO(moMessage, option.text());
+                    Message mt = newMTfromMO(moMessage, option.text());
                     context.registerOutput(mt);
                     //LOG.info("Enqueued {}", mt);
                     return option.targetNode();
@@ -98,14 +98,6 @@ public class Multi {
             // actual options are since it's only a few lines above in the chat history, right?
             context.registerOutput(newMTfromMO(moMessage, noMatchText==null ? UNEXPECTED_INPUT_MESSAGE : noMatchText));
             return current; // we won't advance in this case.
-        }
-
-        /*
-         * FIXME This should really be fetched from a database per shortcode and not handled by this
-         */
-        public static Node constructTopicScript(ScriptContext session, Message moMessage) {
-            // session.currentNode = Functions.findTopicScript(session, moMessage);
-            return Present.evaluate(session, moMessage);
         }
     }
 

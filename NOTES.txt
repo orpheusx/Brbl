@@ -2093,11 +2093,11 @@ Implementation uses Postgres' INSERT INTO ... ON CONFLICT syntax. Verified corre
      8d8e3123-b208-497c-b51f-18d517362433 | 2025-10-22 09:51:07.23876-04  | 2025-10-22 12:19:09.070032-04 | 02:28:01.831272
 
 Issues:
-The messages_mt table has a session_id column though it predates our persistenting session here.
+The messages_mt table has a session_id column though it predates our persisting session here.
 Previously, our notion of sessions were like web sessions. With the link to the group_id, however, sessions could be effectively eternal.
 In some ways this is an improvement. But how do we keep separate the conversations with different Customers?
 Along the same line, should we limit a Customer's interaction with a single User to a single context at a time?
 
+===== 2025-11-04 ====
 
-
-
+Took a fresh look at the way we're handling the currentNode of the Session. It's not as bad I recall.

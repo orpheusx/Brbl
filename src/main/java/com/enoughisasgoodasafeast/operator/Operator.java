@@ -64,19 +64,6 @@ public class Operator implements MessageProcessor {
         this.persistenceManager = persistenceManager;
     }
 
-    // TODO get rid of this version by updating OperatorTest's use of it.
-//    public void init() throws IOException, TimeoutException {
-//        LOG.info("Initializing Brbl Operator");
-//        if (queueConsumer == null) {
-//            queueConsumer = RabbitQueueConsumer.createQueueConsumer(
-//                    "rcvr.properties", this);
-//        }
-//        if (queueProducer == null) {
-//            queueProducer = RabbitQueueProducer.createQueueProducer("sndr.properties");
-//        }
-//        // Other resources? Connections to database/distributed caches?
-//    }
-
     public void init(Properties props) throws IOException, TimeoutException, PersistenceManagerException {
         LOG.info("Initializing Brbl Operator with provided Properties object");
         if (queueConsumer == null) {
@@ -121,13 +108,13 @@ public class Operator implements MessageProcessor {
                 int size = session.currentInputsCount();
                 if (size > EXPECTED_INPUT_COUNT) {
                     LOG.error("Uh oh, there are more inputs ({}) than expected in session ({})", size, session);
-//                    return false;
-                    // Corner case: user sent multiple responses that arrived closely together (probably due to delays/buffering in
-                    // the telco's SMSc) and, due to an unfortunate thread context switch, we've processed each in the same
-                    // Likely this creates an unexpected situation. To handle it we should create a new Node of
-                    // NodeType.PivotScript and chain the remaining Scripts to it.
-                    // These scripts will explain the problem and ask what the user what they want to do.
-                    // We'll do the same in other cases as well.
+                    // NB: We've synchronized on the Session which seems like it should prevent the following:
+                        // Corner case: user sent multiple responses that arrived closely together (possibly due to delays/buffering in
+                        // the telco's SMSc) and, due to an unfortunate thread context switch, we've processed each in the same process call.
+                        // Likely this creates an unexpected situation. To handle it we should create a new Node of
+                        // NodeType.PivotScript and chain the remaining Scripts to it.
+                        // These scripts will explain the problem and ask what the user what they want to do.
+                        // We'll do the same in other cases as well.
                     // TODO...fetch the PivotScript for the given shortcode
                 }
 
@@ -138,34 +125,32 @@ public class Operator implements MessageProcessor {
                     if (previousInputMessage.receivedAt().isAfter(message.receivedAt())) {
                         LOG.error("Oh shit, we processed an MO received later than this one: {} > {}",
                                 previousInputMessage.receivedAt(), message.receivedAt());
-//                        return false;
+                        // TODO fetch a special script to apologize to the user then replay the Node returned by Session.getScriptForProcessedMO()?
                     }
                 }
 
-                // FIXME Session.evaluate handles appending the node to the evaluatedScript list
-                // FIXME Why split the logic for handling currentNode? Move it into Session? Or move both here?
+                // FIXME Session.evaluate handles appending the evaluated node to the evaluatedScript list
+                // NB Script processing functions are limited to getting the currentNode, never setting it.
+                // Setting it is only done here based on the function's return value but can be
                 Node next = session.currentNode.evaluate(session, message); // FIXME session.evaluateCurrentNode()?
                 session.registerEvaluated(session.currentNode); //FIXME What if this is null? Start using Optionals with a constant sentinel value instead of null?
                 LOG.info("Next node is {}", next);
                 session.currentNode = next;
 
+                // Continue to walk the graph until we reach the end (null) or a node that blocks for input
                 while (next != null && !next.type().isAwaitInput()) {
                     LOG.info("Continuing playback...");
-                    // Assumes Present and Process are always paired. If this works, make the pattern more generic.
-                    // FIXME This is hideous because we're using Session variables as globals here and in the static Multi functions
                     session.currentNode = session.currentNode.evaluate(session, message);
                     if (session.currentNode != null) {
                         session.registerEvaluated(session.currentNode);
                     }
-
                     next = session.currentNode;
-
                 }
 
-                session.flush(); //FIXME ideally should be in a finally block but writing to db can throw. Hmm...
+                session.flush(); // FIXME ideally should be in a finally block but writing to db can throw. Hmm...
                 return true; // when would this be false?
             } catch (IOException e) {
-                LOG.error("Processing error", e);
+                LOG.error("Processing error", e); // TODO need to consider options for better handling of error scenarios.
                 return false;
             }
         }

@@ -118,7 +118,7 @@ public class Session implements ScriptContext, /*org.apache.fory.serializer.Seri
      */
     public Node getScriptForProcessedMO() {
 
-        if (currentNode != null) { // FIXME shouldn't be needed. See Session constructor.
+        if (currentNode != null) {
             return currentNode;
         }
 
