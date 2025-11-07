@@ -132,19 +132,16 @@ public class Operator implements MessageProcessor {
                 // FIXME Session.evaluate handles appending the evaluated node to the evaluatedScript list
                 // NB Script processing functions are limited to getting the currentNode, never setting it.
                 // Setting it is only done here based on the function's return value but can be
-                Node next = session.currentNode.evaluate(session, message); // FIXME session.evaluateCurrentNode()?
-                session.registerEvaluated(session.currentNode); //FIXME What if this is null? Start using Optionals with a constant sentinel value instead of null?
+                Node next = evaluate(session.currentNode, session, message); // FIXME What if currentNode is null? Start using Optionals with a constant sentinel value instead of null?
                 LOG.info("Next node is {}", next);
                 session.currentNode = next;
 
                 // Continue to walk the graph until we reach the end (null) or a node that blocks for input
                 while (next != null && !next.type().isAwaitInput()) {
                     LOG.info("Continuing playback...");
-                    session.currentNode = session.currentNode.evaluate(session, message);
-                    if (session.currentNode != null) {
-                        session.registerEvaluated(session.currentNode);
-                    }
-                    next = session.currentNode;
+                    next = evaluate(session.currentNode, session, message);
+
+                    session.currentNode = next;
                 }
 
                 session.flush(); // FIXME ideally should be in a finally block but writing to db can throw. Hmm...
@@ -154,6 +151,59 @@ public class Operator implements MessageProcessor {
                 return false;
             }
         }
+    }
+
+    /**
+     * Execute the node in the context of the given session and message.
+     * Most simply this can result in the creation of one more MTMessages.
+     * There are a variety of possible side effects including:
+     *  - inserts/updates to the database
+     *  - schedule new messages
+     *  - invoke an ML operation
+     * @param node the node being evaluated
+     * @param session the user context
+     * @param moMessage the MO message being processed
+     * @return the next Node in the conversation (or null if the conversation is complete?)
+     * FIXME Maybe instead of null we return a symbolic Node that indicates the end of Node?
+     */
+    public Node evaluate(Node node, ScriptContext session, Message moMessage) throws IOException {
+        Node nextNode = switch (node.type()) {
+            case EchoWithPrefix ->
+                    SimpleTestScript.SimpleEchoResponseScript.evaluate(session, moMessage);
+
+            case ReverseText ->
+                    SimpleTestScript.ReverseTextResponseScript.evaluate(session, moMessage);
+
+            case HelloGoodbye ->
+                    SimpleTestScript.HelloGoodbyeResponseScript.evaluate(session, moMessage);
+
+            // NOTE: practically speaking there's no reason to have any of the above. Most Scripts should
+            // be of the following types or more specific versions thereof. Simple chaining conversations can
+            // simply have a single logic list.
+            case PresentMulti ->
+                    Multi.Present.evaluate(session, moMessage); // Could re-use SendMessage logic while keeping the type difference
+
+            case ProcessMulti ->
+                    Multi.Process.evaluate(session, moMessage);
+
+            // TODO Behaves like a SendMessage albeit with the expectation that there's no "next" node so we could replace impl
+            case EndOfChat -> SendMessage.evaluate(session, moMessage); //EndOfSession? 'request' that the session be cleared?
+
+            // TODO Even easier to replace with SendMessage.evaluate(). The Editor will always pair it with an Input.Process
+            case RequestInput ->
+                    Input.Request.evaluate(session, moMessage);
+
+            case ProcessInput ->
+                    Input.Process.evaluate(session, moMessage);
+
+            case SendMessage ->
+                    SendMessage.evaluate(session, moMessage);
+
+        };
+
+        session.registerEvaluated(node);
+        return nextNode;
+
     }
 
 

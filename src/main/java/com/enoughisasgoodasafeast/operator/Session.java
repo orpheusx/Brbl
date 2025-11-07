@@ -17,7 +17,7 @@ import java.util.*;
  * Won't work as a Record since we need to update the currentNode field
  * and maintain state
  */
-public class Session implements ScriptContext, /*org.apache.fory.serializer.Serializer*/ Serializable {
+public class Session implements ScriptContext, Serializable {
 
     private static final Logger LOG = LoggerFactory.getLogger(Session.class);
 
@@ -53,10 +53,11 @@ public class Session implements ScriptContext, /*org.apache.fory.serializer.Seri
 
     /**
      * Creates a new, fully configured Session object.
-     * @param id the unique identifier
-     * @param currentNode the starting Node in the graph
-     * @param user the unique User
-     * @param producer the sink for messages created on behalf of this Session
+     *
+     * @param id                 the unique identifier
+     * @param currentNode        the starting Node in the graph
+     * @param user               the unique User
+     * @param producer           the sink for messages created on behalf of this Session
      * @param persistenceManager the object that writes artifacts created for this Session
      */
     public Session(UUID id, Node currentNode, User user, QueueProducer producer, PersistenceManager persistenceManager) {
@@ -105,15 +106,33 @@ public class Session implements ScriptContext, /*org.apache.fory.serializer.Seri
         outputBuffer.add(mtMessage);
         LOG.debug("Registered output message {}", mtMessage);
     }
-    
+
+    /**
+     * Add the evaluated Node to the Session history.
+     * We avoid appending the same Node if we're just looping due to user input mistakes
+     * However, if we revisit a Node multiple times due to branching in the script we want to record that
+     * as part of the history.
+     */
     public void registerEvaluated(Node node) {
-        evaluatedNodes.addLast(node);
-        LOG.debug("Registered evaluated node {}", node.id());
+        if (node == null) {
+            return;
+        }
+        if (!evaluatedNodes.isEmpty()) {
+            if (!evaluatedNodes.getLast().id().equals(node.id())) {
+                LOG.info("registerEvaluated (unique): {}:{}", node.id(), node.text());
+                evaluatedNodes.add(node);
+            }
+        } else {
+            LOG.info("registerEvaluated (empty): {}:{}", node.id(), node.text());
+            evaluatedNodes.add(node);
+        }
     }
+
 
     /**
      * Since multiple Scripts may be evaluated in response to a single MO we need a way of
      * finding the one that prompted it. Used when logging the processed MO.
+     *
      * @return the Node that prompted the User's latest MO.
      */
     public Node getScriptForProcessedMO() {
@@ -159,6 +178,7 @@ public class Session implements ScriptContext, /*org.apache.fory.serializer.Seri
     public Instant getLastUpdatedNanos() {
         return lastUpdatedNanos;
     }
+
     public void sessionUpdated() {
         lastUpdatedNanos = NanoClock.utcInstant();
     }

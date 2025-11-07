@@ -12,4 +12,5 @@ public interface ScriptContext {
 
     List<Node> getEvaluatedNodes();
 
+    void registerEvaluated(Node node);
 }

@@ -1,11 +1,9 @@
 package com.enoughisasgoodasafeast.operator;
 
 import com.enoughisasgoodasafeast.*;
-//import org.apache.fory.Fory;
-//import org.apache.fory.ThreadSafeFory;
-//import org.apache.fory.config.CompatibleMode;
-//import org.apache.fory.config.Language;
 import org.junit.jupiter.api.Test;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 import java.io.*;
 import java.nio.file.Files;
@@ -16,13 +14,15 @@ import java.util.UUID;
 import static com.enoughisasgoodasafeast.operator.NodeType.*;
 import static com.enoughisasgoodasafeast.operator.Session.MAX_INPUT_HISTORY;
 import static com.enoughisasgoodasafeast.operator.UserTest.*;
+import static java.lang.System.currentTimeMillis;
 import static org.junit.jupiter.api.Assertions.*;
 
 public class SessionTest {
 
+    private static final Logger LOG = LoggerFactory.getLogger(SessionTest.class);
+
     QueueProducer queueProducer = new InMemoryQueueProducer();
     TestingPersistenceManager persistenceManager = new TestingPersistenceManager();
-
 
     @Test
     void maintainInputHistorySize() {
@@ -55,7 +55,7 @@ public class SessionTest {
         final int numMessages = 20;
         final String fileName = "serializeSessionTest.ser";
         File file = new File(fileName);
-        System.out.println("Test file = " + file.getAbsolutePath());
+        LOG.info("Test file = {}", file.getAbsolutePath());
 
         assertDoesNotThrow(() -> {
             FileOutputStream fos
@@ -80,35 +80,27 @@ public class SessionTest {
                 sessions.add(session);
             }
 
-            long start = System.currentTimeMillis();
+            long start = currentTimeMillis();
             oos.writeObject(sessions);
             oos.flush();
             oos.close();
-            System.out.println("Serialization time = " + (System.currentTimeMillis() - start));
-
-//            File file = new File(fis); // Replace with your file path
-//            if (file.exists() && file.isFile()) {
-//                long fileSize = file.length();
-//                System.out.println("File size (using File.length()): " + fileSize + " bytes");
-//            } else {
-//                System.out.println("File does not exist or is a directory.");
-//            }
+            LOG.info("Serialization time = {}", (currentTimeMillis() - start));
 
             FileInputStream fis
                     = new FileInputStream(file);
             ObjectInputStream ois
                     = new ObjectInputStream(fis);
 
-            start = System.currentTimeMillis();
+            start = currentTimeMillis();
             @SuppressWarnings("unchecked")
             List<Session> deserializedSessions = (List<Session>) ois.readObject();
-            System.out.println("Deserialization time = " + (System.currentTimeMillis() - start));
+            LOG.info("Deserialization time = {}", (currentTimeMillis() - start));
             // Anecdotally on M1 the times are around 10 and 11 respectively.
 
             fis.close();
 
             final long size = Files.size(file.toPath());
-            System.out.println("Size of file in bytes: " + size);
+            LOG.info("Size of file in bytes: {}", size);
         });
 
     }
@@ -122,7 +114,7 @@ public class SessionTest {
 //        final int numMessages = 20;
 //        final String fileName = "serializeSessionTest.flr";
 //        File file = new File(fileName);
-//        System.out.println("Test file = " + file.getAbsolutePath());
+//        LOG.info("Test file = " + file.getAbsolutePath());
 //
 //        assertDoesNotThrow(() -> {
 //            List<Session> sessions = new ArrayList<>(numSessions);
@@ -174,11 +166,11 @@ public class SessionTest {
 //
 //            long start = System.currentTimeMillis();
 //            final byte[] forySerialized = fory.serialize(sessions);
-//            System.out.println("Fory serialization time = " + (System.currentTimeMillis() - start));
+//            LOG.info("Fory serialization time = " + (System.currentTimeMillis() - start));
 //            fos.write(forySerialized);
 //            fos.close();
-//            System.out.println("Fory serialize time = " + (System.currentTimeMillis() - start));
-//            System.out.println("Fory serialized size = " + forySerialized.length);
+//            LOG.info("Fory serialize time = " + (System.currentTimeMillis() - start));
+//            LOG.info("Fory serialized size = " + forySerialized.length);
 //
 //            // Now read it all back in from the file and deserialize back into objects.
 ////            FileInputStream fis
@@ -189,13 +181,13 @@ public class SessionTest {
 ////            start = System.currentTimeMillis();
 ////            @SuppressWarnings("unchecked")
 ////            List<Session> deserializedSessions = (List<Session>) ois.readObject();
-////            System.out.println("Deserialization time = " + (System.currentTimeMillis() - start));
+////            LOG.info("Deserialization time = " + (System.currentTimeMillis() - start));
 ////            // Anecdotally on M1 the times are around 10 and 11 respectively.
 ////
 ////            fis.close();
 ////
 ////            final long size = Files.size(file.toPath());
-////            System.out.println("Size of file in bytes: " + size);
+////            LOG.info("Size of file in bytes: " + size);
 //        });
 //
 //    }
@@ -237,20 +229,20 @@ public class SessionTest {
                 sessions.add(session);
             }
 
-            long start = System.currentTimeMillis();
+            long start = currentTimeMillis();
             oos.writeObject(sessions);
             final byte[] byteArray = baos.toByteArray();
 
             oos.flush();
             oos.close();
-            System.out.println("Serialization time = " + (System.currentTimeMillis() - start));
+            LOG.info("Serialization time = {}", currentTimeMillis() - start);
 
-            System.out.println("Num bytes: " + byteArray.length);
+            LOG.info("Num bytes: {}", byteArray.length);
 
 //            start = System.currentTimeMillis();
 //            @SuppressWarnings("unchecked")
 //            List<Session> deserializedSessions = (List<Session>) ois.readObject();
-//            System.out.println("Deserialization time = " + (System.currentTimeMillis() - start));
+//            LOG.info("Deserialization time = " + (System.currentTimeMillis() - start));
         });
 
     }
@@ -276,14 +268,33 @@ public class SessionTest {
                Need to be able set the queueProducer and persistenceManager unless we prefer to move those out of Session
                class and use independent functions.
             */
-            System.out.println(session);
-            System.out.println(clone);
+            LOG.info(session.toString());
+            LOG.info(clone.toString());
 
             assertEquals(session.getId().toString(), clone.getId().toString());
             assertEquals(session.currentNode, clone.currentNode);
 
-            System.out.println("Cool.");
+            LOG.info("Cool.");
 
         });
+    }
+
+    @Test
+    public void verifyNoSequentiallyDuplicateNodesInEvalList() {
+        var session = newSession();
+
+        var node1 = new Node("node 1 message text", NodeType.SendMessage, "node 1 label");
+        for (int i = 0; i <= 2; i++) {
+            session.registerEvaluated(node1);
+        }
+
+        var node2 = new Node("node 2 message text", NodeType.SendMessage, "node 2 label");
+        session.registerEvaluated(node2);
+
+        var evaluatedNodes = session.getEvaluatedNodes();
+        assertEquals(2, evaluatedNodes.size());
+
+        assertEquals(node1.id(), evaluatedNodes.get(0).id());
+        assertEquals(node2.id(), evaluatedNodes.get(1).id());
     }
 }

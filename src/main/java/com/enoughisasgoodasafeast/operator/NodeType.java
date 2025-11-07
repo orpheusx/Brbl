@@ -13,7 +13,9 @@ public enum NodeType {
     EndOfChat       (false), // 5
     RequestInput    (false), // 6
     ProcessInput    (true),  // 7
-    SendMessage     (false)  // 8
+    SendMessage     (false)/*,
+
+    NullTerminator  (true)*/;// 8
     ;
     //    Pivot           (6, false),
     //    TopicSelection  (7, false);

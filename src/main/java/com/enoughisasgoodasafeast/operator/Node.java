@@ -70,61 +70,6 @@ public record Node(UUID id, String text, NodeType type, SequencedSet<Edge> edges
     }
 
     /**
-     * Execute the node in the context of the given session and message.
-     * Most simply this can result in the creation of one more MTMessages.
-     * There are a variety of possible side effects including:
-     *  - inserts/updates to the database
-     *  - schedule new messages
-     *  - invoke an ML operation
-     * @param session the user context
-     * @param moMessage the MO message being processed
-     * @return the next Node in the conversation (or null if the conversation is complete?)
-     * FIXME Maybe instead of null we return a symbolic Node that indicates the end of Node?
-     */
-    public Node evaluate(ScriptContext session, Message moMessage) throws IOException {
-        return switch (session.getCurrentNode().type) {
-            case EchoWithPrefix ->
-                SimpleTestScript.SimpleEchoResponseScript.evaluate(session, moMessage);
-
-            case ReverseText ->
-                SimpleTestScript.ReverseTextResponseScript.evaluate(session, moMessage);
-
-            case HelloGoodbye ->
-                SimpleTestScript.HelloGoodbyeResponseScript.evaluate(session, moMessage);
-
-            // NOTE: practically speaking there's no reason to have any of the above. Most Scripts should
-            // be of the following types or more specific versions thereof. Simple chaining conversations can
-            // simply have a single logic list.
-            case PresentMulti ->
-                    Multi.Present.evaluate(session, moMessage); // Could re-use SendMessage logic while keeping the type difference
-
-            case ProcessMulti ->
-                    Multi.Process.evaluate(session, moMessage);
-
-            // TODO Behaves like a SendMessage albeit with the expectation that there's no "next" node so we could replace impl
-            case EndOfChat -> SendMessage.evaluate(session, moMessage); //EndOfSession? 'request' that the session be cleared?
-
-            // TODO Even easier to replace with SendMessage.evaluate(). The Editor will always pair it with an Input.Process
-            case RequestInput ->
-                    Input.Request.evaluate(session, moMessage);
-
-            case ProcessInput ->
-                    Input.Process.evaluate(session, moMessage);
-
-            case SendMessage ->
-                    SendMessage.evaluate(session, moMessage);
-
-        };
-
-        // If we didn't advance to a different node then we're not done evaluating this one.
-        //        if (!this.equals(next)) {
-        //            session.registerEvaluated(this);
-        //        }
-        //        return next;
-
-    }
-
-    /**
      * A convenience function that displays the structure of a node graph
      * @param startNode the origin of the graph
      * @param node the "current" node in the recursive call

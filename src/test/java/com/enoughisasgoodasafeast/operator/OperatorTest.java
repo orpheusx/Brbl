@@ -1,6 +1,7 @@
 package com.enoughisasgoodasafeast.operator;
 
 import com.enoughisasgoodasafeast.*;
+import io.jenetics.util.NanoClock;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.slf4j.Logger;
@@ -20,7 +21,7 @@ public class OperatorTest {
 
     public static final String MOBILE_CA = "14385551234";  // Quebec, CA
     public static final String MOBILE_MX = "522005551234"; // Mexico City, MX
-    public static final String MOBILE_US = "7815551234";  // Fake US number.
+    public static final String MOBILE_US = "7815551234";   // Fake US number.
     public static final String SHORT_CODE_1 = "1234";
     public static final String SHORT_CODE_2 = "2345";
     public static final String SHORT_CODE_3 = "3456";
@@ -32,7 +33,7 @@ public class OperatorTest {
     public static final String COLOR_QUIZ_KEYWORD = "Color quiz";
     public static final String COLOR_QUIZ_START_TEXT = "What is your favorite color? 1) red 2) blue 3) flort";
     public static final String COLOR_QUIZ_UNEXPECTED_INPUT = "Sorry, please pick one of the choices by name or number.";
-    public static final String END_CONVERSATION = "Talk to you later.";
+    public static final String COLOR_QUIZ_END_CONVERSATION = "Talk to you later.";
 
     public static final Message mo1 = newMO(
             MOBILE_US, SHORT_CODE_1, MO_TEXT_1
@@ -82,7 +83,7 @@ public class OperatorTest {
                 new Edge(List.of("n/a"), "n/a", processAnswer)
         );
 
-        endConversation = new Node(END_CONVERSATION, NodeType.EndOfChat, "ColorQuizEnd");
+        endConversation = new Node(COLOR_QUIZ_END_CONVERSATION, NodeType.EndOfChat, "ColorQuizEnd");
 
         Edge answerRed = new Edge(List.of("red"), "Red is the color of life.", endConversation);
         Edge answerBlue = new Edge(List.of("blue"), "Blue is my fave, as well.", endConversation);
@@ -146,7 +147,6 @@ public class OperatorTest {
     void getUserSessionUncachedCached() {
         assertDoesNotThrow(() -> {
             var operator = new Operator(new FakeQueueConsumer(), new InMemoryQueueProducer(), new TestingPersistenceManager());
-            //operator.init();
 
             Node node1 = new Node(SCRIPT_RESPONSE, NodeType.SendMessage);
             Edge edge1 = new Edge(List.of("1","2","3"), null);
@@ -205,11 +205,19 @@ public class OperatorTest {
             assertEquals(endConversation.text(), queuedMessages.get(2).text());
 
             // The conversation is complete.
-            assertNull(session.getCurrentNode());
+            // assertNull(session.getCurrentNode());
 
-            session.getEvaluatedNodes().forEach( node -> {
-                LOG.info(node.text());
-            });
+            // Check the evaluatedNodes.
+            final List<Node> evaluatedNodes = session.getEvaluatedNodes();
+            assertEquals(COLOR_QUIZ_START_TEXT, evaluatedNodes.get(0).text());
+            assertEquals(COLOR_QUIZ_UNEXPECTED_INPUT, evaluatedNodes.get(1).text());
+            assertEquals(COLOR_QUIZ_END_CONVERSATION, evaluatedNodes.get(2).text());
+
+            // Check that the Session's currentNode is now the last node in the conversation
+            assertNull(session.currentNode, "Session's currentNode is unexpected.");
+
+            // Instead of null make the last Node to a constant symbolic?
+
         });
     }
 
@@ -246,13 +254,23 @@ public class OperatorTest {
                 LOG.info(message.text());
             });
             assertEquals(5, queuedMessages.size(), "Unexpected number of messages queued.");
-            assertEquals(processAnswer.text(), queuedMessages.get(1).text(),"Expected text not found in 2nd queued message.");
+            assertEquals(processAnswer.text(), queuedMessages.get(1).text(),"Expected text not found in 1st queued message.");
             assertEquals(processAnswer.text(), queuedMessages.get(2).text(),"Expected text not found in 2nd queued message.");
-            assertEquals(answerFlort.text(), queuedMessages.get(3).text(),"Expected text not found in 2nd queued message.");
+            assertEquals(answerFlort.text(), queuedMessages.get(3).text(),"Expected text not found in 3rd queued message.");
             assertEquals(endConversation.text(), queuedMessages.get(4).text());
 
             // The conversation is complete.
-            assertNull(session.getCurrentNode());
+
+            // Check the evaluatedNodes.
+            final List<Node> evaluatedNodes = session.getEvaluatedNodes();
+
+            evaluatedNodes.forEach(node -> LOG.info("Evaluated node: {}", node));
+
+//            assertEquals(COLOR_QUIZ_START_TEXT, evaluatedNodes.get(0).text());
+//            assertEquals(COLOR_QUIZ_UNEXPECTED_INPUT, evaluatedNodes.get(1).text());
+//            assertEquals(COLOR_QUIZ_END_CONVERSATION, evaluatedNodes.get(2).text());
+
+            assertNull(session.currentNode, "Session's currentNode is unexpected.");
         });
     }
 
@@ -307,13 +325,14 @@ public class OperatorTest {
         assertDoesNotThrow(() -> {
             var op = new Operator(new FakeQueueConsumer(), new InMemoryQueueProducer(), new TestingPersistenceManager());
 
-            Instant beforeUserCreate = Instant.now();
+            Instant beforeUserCreate = NanoClock.utcInstant(); // use the same timestamp method for comparison.
             assertEquals(0, op.userCache.estimatedSize());
 
             User uncachedUser = op.userCache.get(SESSION_KEY_US_SHORT_CODE_1);
             assertNotNull(uncachedUser);
             // Make sure this user wasn't previously created.
-            assertTrue(uncachedUser.platformCreationTimes().get(Platform.SMS).isAfter(beforeUserCreate));
+            final Instant createdAt = uncachedUser.platformCreationTimes().get(Platform.SMS);
+            assertTrue(createdAt.isAfter(beforeUserCreate), "before Session create: " + beforeUserCreate + " <= create: " + createdAt);
 
             User cachedUser = op.userCache.get(SESSION_KEY_US_SHORT_CODE_1);
             assertNotNull(cachedUser);
