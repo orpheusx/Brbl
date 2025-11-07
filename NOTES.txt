@@ -2101,3 +2101,13 @@ Along the same line, should we limit a Customer's interaction with a single User
 ===== 2025-11-04 ====
 
 Took a fresh look at the way we're handling the currentNode of the Session. It's not as bad I recall.
+Cleaned up what needed cleaning. Decided to leave the use of null to terminate the conversation graph for now.
+
+Turning our attention to how we initiate conversations:
+    We were assuming keywords were needed because short codes would often be shared. However, short codes hardly exist anymore in the wonderful world of SMS so, while they could still be useful, they are not as common.
+    We also want to start implementing push messaging so customers can start conversations. This is likely the most important feature.
+        This needs to be done without necessarily pushing the session context into the cache. Instead we want to serialize the Session state to brbl_logic.sessions. This acknowledges that a lot of push messages don't get responses so the pressure it puts on the session cache--pushing out active conversations--is a bad bet.
+
+
+TODO
+_ tests for the keyword/script cache?

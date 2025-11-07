@@ -250,9 +250,7 @@ public class OperatorTest {
 
             // Now provide good input to the question posed and check that we advance to the end of the conversation.
             assertTrue(operator.process(mo5));
-            producer.enqueued().forEach( message -> {
-                LOG.info(message.text());
-            });
+            //producer.enqueued().forEach(message -> LOG.info(message.text()));
             assertEquals(5, queuedMessages.size(), "Unexpected number of messages queued.");
             assertEquals(processAnswer.text(), queuedMessages.get(1).text(),"Expected text not found in 1st queued message.");
             assertEquals(processAnswer.text(), queuedMessages.get(2).text(),"Expected text not found in 2nd queued message.");
@@ -264,11 +262,12 @@ public class OperatorTest {
             // Check the evaluatedNodes.
             final List<Node> evaluatedNodes = session.getEvaluatedNodes();
 
-            evaluatedNodes.forEach(node -> LOG.info("Evaluated node: {}", node));
+            //evaluatedNodes.forEach(node -> LOG.info("Evaluated node: {}", node));
 
-//            assertEquals(COLOR_QUIZ_START_TEXT, evaluatedNodes.get(0).text());
-//            assertEquals(COLOR_QUIZ_UNEXPECTED_INPUT, evaluatedNodes.get(1).text());
-//            assertEquals(COLOR_QUIZ_END_CONVERSATION, evaluatedNodes.get(2).text());
+            assertEquals(3, evaluatedNodes.size());
+            assertEquals(COLOR_QUIZ_START_TEXT, evaluatedNodes.get(0).text());
+            assertEquals(COLOR_QUIZ_UNEXPECTED_INPUT, evaluatedNodes.get(1).text());
+            assertEquals(COLOR_QUIZ_END_CONVERSATION, evaluatedNodes.get(2).text());
 
             assertNull(session.currentNode, "Session's currentNode is unexpected.");
         });
