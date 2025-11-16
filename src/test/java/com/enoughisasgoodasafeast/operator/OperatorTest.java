@@ -9,6 +9,8 @@ import org.slf4j.LoggerFactory;
 
 import java.time.Instant;
 import java.util.List;
+import java.util.Map;
+import java.util.regex.Pattern;
 
 import static com.enoughisasgoodasafeast.Message.newMO;
 import static com.enoughisasgoodasafeast.Message.newMT;
@@ -64,20 +66,24 @@ public class OperatorTest {
 
     private InMemoryQueueProducer producer;
     private Operator operator = null;
+    private PersistenceManager persistenceManager;
 
     // Elements of the script needed for assertions
+    private Node presentQuestion;
     private Edge answerFlort = null;
     private Node endConversation;
     private Node processAnswer;
+    private Node defaultScript;
 
     @BeforeEach
     void setup() {
         producer = new InMemoryQueueProducer();
         QueueConsumer fakeQueueConsumer = new FakeQueueConsumer();
-        PersistenceManager persistenceManager = new TestingPersistenceManager();
+        persistenceManager = new TestingPersistenceManager();
         operator = new Operator(fakeQueueConsumer, producer, persistenceManager);
 
-        Node presentQuestion = new Node(COLOR_QUIZ_START_TEXT, NodeType.PresentMulti, "ColorQuizStart");
+        // Construct a script for testing purposes
+        presentQuestion = new Node(COLOR_QUIZ_START_TEXT, NodeType.PresentMulti, "ColorQuizStart");
         processAnswer = new Node(COLOR_QUIZ_UNEXPECTED_INPUT, NodeType.ProcessMulti, "ColorQuizProcessResponse");
         presentQuestion.edges().add(
                 new Edge(List.of("n/a"), "n/a", processAnswer)
@@ -91,232 +97,265 @@ public class OperatorTest {
 
         processAnswer.edges().addAll(List.of(answerRed, answerBlue, answerFlort));
 
-        operator.scriptByKeywordCache.put(new KeywordCacheKey(SHORT_CODE_4, COLOR_QUIZ_KEYWORD), presentQuestion);
+        // Define a default script for the platform-channel.
+        defaultScript = new Node("Welcome! You can talk to us about the following topics...", NodeType.EndOfChat, "CustomerTopicStarter");
+        operator.defaultScriptForChannel.put(mo1.to(), defaultScript);
+
+        ((TestingPersistenceManager) persistenceManager).addScript(
+                TestingPersistenceManager.SCRIPT_ID, presentQuestion);
+
+//        operator.scriptByKeywordCache.put(
+//                new KeywordCacheKey(SHORT_CODE_4, Platform.SMS, COLOR_QUIZ_KEYWORD), presentQuestion);
     }
 
     @Test
     void processAndCheckResponse() {
 
-        final InMemoryQueueProducer queueProducer = new InMemoryQueueProducer();
-        final TestingPersistenceManager persistenceManager = new TestingPersistenceManager();
-        final Operator operator = new Operator(new FakeQueueConsumer(), queueProducer, persistenceManager);
-
         Node node1 = new Node(SCRIPT_RESPONSE, NodeType.SendMessage);
-        Edge edge1 = new Edge(List.of("1","2","3"), null);
+        Edge edge1 = new Edge(List.of("1", "2", "3"), null);
         node1.edges().add(edge1);
-
-        operator.scriptByKeywordCache.put(new KeywordCacheKey(SHORT_CODE_1, MO_TEXT_1), node1);
-        operator.scriptByKeywordCache.put(new KeywordCacheKey(SHORT_CODE_2, MO_TEXT_1), node1);
-        operator.scriptByKeywordCache.put(new KeywordCacheKey(SHORT_CODE_3, MO_TEXT_2), node1);
 
         Message mo1 = newMO(MOBILE_CA, SHORT_CODE_1, MO_TEXT_1);
         Message mo2 = newMO(MOBILE_MX, SHORT_CODE_2, MO_TEXT_1);
         Message mo3 = newMO(MOBILE_US, SHORT_CODE_3, MO_TEXT_2);
 
+        operator.scriptByKeywordCache.put(KeywordCacheKey.newKey(SessionKey.newSessionKey(mo1)), node1);
+        operator.scriptByKeywordCache.put(KeywordCacheKey.newKey(SessionKey.newSessionKey(mo2)), node1);
+        operator.scriptByKeywordCache.put(KeywordCacheKey.newKey(SessionKey.newSessionKey(mo3)), node1);
+
         Message mt1 = newMT(SHORT_CODE_1, MOBILE_CA, SCRIPT_RESPONSE);
         Message mt2 = newMT(SHORT_CODE_2, MOBILE_MX, SCRIPT_RESPONSE);
         Message mt3 = newMT(SHORT_CODE_3, MOBILE_US, SCRIPT_RESPONSE);
 
-        assertDoesNotThrow(() -> {
-            assertTrue(operator.process(mo1));
-            assertEquals(1, queueProducer.enqueuedCount());
-            assertEquals(mt1.to(),   queueProducer.enqueued().get(0).to());
-            assertEquals(mt1.from(), queueProducer.enqueued().get(0).from());
-            assertEquals(mt1.text(), queueProducer.enqueued().get(0).text());
-            assertEquals(mt1.type(), queueProducer.enqueued().get(0).type());
+        assertTrue(operator.process(mo1));
+        assertEquals(1, producer.enqueuedCount());
+        assertEquals(mt1.to(), producer.enqueued().getFirst().to());
+        assertEquals(mt1.from(), producer.enqueued().getFirst().from());
+        assertEquals(mt1.text(), producer.enqueued().getFirst().text());
+        assertEquals(mt1.type(), producer.enqueued().getFirst().type());
 
-            assertTrue(operator.process(mo2));
-            assertEquals(2, queueProducer.enqueuedCount());
-            assertEquals(mt2.to(), queueProducer.enqueued().  get(1).to());
-            assertEquals(mt2.from(), queueProducer.enqueued().get(1).from());
-            assertEquals(mt2.text(), queueProducer.enqueued().get(1).text());
-            assertEquals(mt2.type(), queueProducer.enqueued().get(1).type());
+        assertTrue(operator.process(mo2));
+        assertEquals(2, producer.enqueuedCount());
+        assertEquals(mt2.to(), producer.enqueued().get(1).to());
+        assertEquals(mt2.from(), producer.enqueued().get(1).from());
+        assertEquals(mt2.text(), producer.enqueued().get(1).text());
+        assertEquals(mt2.type(), producer.enqueued().get(1).type());
 
-            assertTrue(operator.process(mo3));
-            assertEquals(3, queueProducer.enqueuedCount());
-            assertEquals(mt3.to(), queueProducer.enqueued().  get(2).to());
-            assertEquals(mt3.from(), queueProducer.enqueued().get(2).from());
-            assertEquals(mt3.text(), queueProducer.enqueued().get(2).text());
-            assertEquals(mt3.type(), queueProducer.enqueued().get(2).type());
-
-        });
-
+        assertTrue(operator.process(mo3));
+        assertEquals(3, producer.enqueuedCount());
+        assertEquals(mt3.to(), producer.enqueued().get(2).to());
+        assertEquals(mt3.from(), producer.enqueued().get(2).from());
+        assertEquals(mt3.text(), producer.enqueued().get(2).text());
+        assertEquals(mt3.type(), producer.enqueued().get(2).type());
     }
 
     @Test
     void getUserSessionUncachedCached() {
-        assertDoesNotThrow(() -> {
-            var operator = new Operator(new FakeQueueConsumer(), new InMemoryQueueProducer(), new TestingPersistenceManager());
+        var operator = new Operator(new FakeQueueConsumer(), new InMemoryQueueProducer(), new TestingPersistenceManager());
 
-            Node node1 = new Node(SCRIPT_RESPONSE, NodeType.SendMessage);
-            Edge edge1 = new Edge(List.of("1","2","3"), null);
-            node1.edges().add(edge1);
+        Node node1 = new Node(SCRIPT_RESPONSE, NodeType.SendMessage);
+        Edge edge1 = new Edge(List.of("1", "2", "3"), null);
+        node1.edges().add(edge1);
 
-            operator.scriptByKeywordCache.put(new KeywordCacheKey(SHORT_CODE_1, MO_TEXT_1), node1);
+        operator.scriptByKeywordCache.put(new KeywordCacheKey(SHORT_CODE_1, Platform.SMS, MO_TEXT_1), node1);
 
-            assertDoesNotThrow(() -> {
-                Session s1 = operator.sessionCache.get(SessionKey.newSessionKey(mo1)); // from a US number
-                Session s2 = operator.sessionCache.get(SessionKey.newSessionKey(mo2)); // from a MX number
-                Session s3 = operator.sessionCache.get(SessionKey.newSessionKey(mo3)); // from same MX number
+        Session s1 = operator.sessionCache.get(SessionKey.newSessionKey(mo1)); // from a US number
+        Session s2 = operator.sessionCache.get(SessionKey.newSessionKey(mo2)); // from a MX number
+        Session s3 = operator.sessionCache.get(SessionKey.newSessionKey(mo3)); // from same MX number
 
-                assertNotNull(s1);
-                assertNotNull(s2);
-                assertNotNull(s3);
+        assertNotNull(s1);
+        assertNotNull(s2);
+        assertNotNull(s3);
 
-                // Sessions for two different Users are separate
-                assertNotEquals(s1.getId(), s2.getId());
+        // Sessions for two different Users are separate
+        assertNotEquals(s1.getId(), s2.getId());
 
-                // A Session, once cached, is returned for subsequent messages from the same User
-                assertEquals(s2.getId(), s3.getId());
-                // and has the same values (records guarantee this but...)
-                assertEquals(s2.getStartTimeNanos(), s3.getStartTimeNanos());
-                assertEquals(s2.getUser(), s3.getUser());
+        // A Session, once cached, is returned for subsequent messages from the same User
+        assertEquals(s2.getId(), s3.getId());
+        // and has the same values (records guarantee this but...)
+        assertEquals(s2.getStartTimeNanos(), s3.getStartTimeNanos());
+        assertEquals(s2.getUser(), s3.getUser());
 
-                // And are, in fact, the same instance
-                assertEquals(s2, s3);
-            });
-        });
+        // And are, in fact, the same instance
+        assertEquals(s2, s3);
+
+    }
+
+    @Test
+    void findMatchForKeyword() {
+        final Map<Pattern, Keyword> all = operator.allKeywordsByPatternCache.get(Operator.ALL_KEYWORDS);
+        assertNotNull(all);
+        assertFalse(all.isEmpty());
+
+        // NB: MTs don't make sense in this situation. Only MOs and, possibly, push messages.
+        assertNotSame(MessageType.MT, mo4.type());
+
+        // The platform, channel and patter will match this message.
+        var matching = KeywordCacheKey.newKey(SessionKey.newSessionKey(mo4));
+        assertNotNull(operator.findMatch(all, matching), "Expected a match for " + mo4);
+
+        // Neither the channel nor the keyword will match for this.
+        var keyNotMatchingChannelOrKeyword = KeywordCacheKey.newKey(SessionKey.newSessionKey(mo3));
+        assertNull(operator.findMatch(all, keyNotMatchingChannelOrKeyword));
+
+        var keyNotMatchingKeyword = KeywordCacheKey.newKey(SessionKey.newSessionKey(mo5));
+        assertNull(operator.findMatch(all, keyNotMatchingKeyword));
     }
 
     @Test
     void stepThroughPresentProcessMulti() {
-        assertDoesNotThrow(() -> {
-            // Initiate the conversation
-            assertTrue(operator.process(mo4));
+        // Preflight check: cache is empty.
+        assertEquals(0, operator.scriptByKeywordCache.estimatedSize());
+        ((TestingPersistenceManager) persistenceManager).addScript(
+                TestingPersistenceManager.SCRIPT_ID, presentQuestion);
 
-            var session = operator.sessionCache.get(SessionKey.newSessionKey(mo4));
-            assertNotNull(session);
-            final String userPhoneNumber = session.getUser().platformIds().get(Platform.SMS);
-            LOG.info("Session User platform ID = {}", userPhoneNumber);
-            assertEquals(MOBILE_MX, userPhoneNumber);
+        // Initiate the conversation
+        assertTrue(operator.process(mo4));
 
-            final List<Message> queuedMessages = producer.enqueued();
+        // The lookup from scriptCache will have the effect of populating scriptByKeywordCache
+        assertEquals(1, operator.scriptByKeywordCache.estimatedSize());
 
-            assertEquals(1, queuedMessages.size(),"Unexpected number of messages queued.");
-            assertTrue(requireNonNull(queuedMessages.getFirst()).text().contains("favorite color"), "Expected text not found in first queued message.");
-            assertEquals(NodeType.ProcessMulti, session.getCurrentNode().type(), "Session node state has unexpected type."); // The current node should be awaiting a response
+        var session = operator.sessionCache.get(SessionKey.newSessionKey(mo4));
+        assertNotNull(session);
+        final String userPhoneNumber = session.getUser().platformIds().get(Platform.SMS);
+        LOG.info("Session User platform ID = {}", userPhoneNumber);
+        assertEquals(MOBILE_MX, userPhoneNumber);
 
-            // Send a valid response
-            assertTrue(operator.process(mo5)); // answer given should select "flort"
+        final List<Message> queuedMessages = producer.enqueued();
 
-            // Check the rest of the MT responses.
-            assertEquals(3, queuedMessages.size(), "Unexpected number of messages queued.");
-            assertEquals(answerFlort.text(), queuedMessages.get(1).text(), "Expected text not found in 2nd queued message.");
-            assertEquals(endConversation.text(), queuedMessages.get(2).text());
+        assertEquals(1, queuedMessages.size(), "Unexpected number of messages queued.");
+        assertTrue(requireNonNull(queuedMessages.getFirst()).text().contains("favorite color"), "Expected text not found in first queued message.");
+        assertEquals(NodeType.ProcessMulti, session.getCurrentNode().type(), "Session node state has unexpected type."); // The current node should be awaiting a response
 
-            // The conversation is complete.
-            // assertNull(session.getCurrentNode());
+        // Send a valid response
+        assertTrue(operator.process(mo5)); // answer given should select "flort"
 
-            // Check the evaluatedNodes.
-            final List<Node> evaluatedNodes = session.getEvaluatedNodes();
-            assertEquals(COLOR_QUIZ_START_TEXT, evaluatedNodes.get(0).text());
-            assertEquals(COLOR_QUIZ_UNEXPECTED_INPUT, evaluatedNodes.get(1).text());
-            assertEquals(COLOR_QUIZ_END_CONVERSATION, evaluatedNodes.get(2).text());
+        // Check the rest of the MT responses.
+        assertEquals(3, queuedMessages.size(), "Unexpected number of messages queued.");
+        assertEquals(answerFlort.text(), queuedMessages.get(1).text(), "Expected text not found in 2nd queued message.");
+        assertEquals(endConversation.text(), queuedMessages.get(2).text());
 
-            // Check that the Session's currentNode is now the last node in the conversation
-            assertNull(session.currentNode, "Session's currentNode is unexpected.");
+        // The conversation is now effectively complete.
+        // assertNull(session.getCurrentNode());
 
-            // Instead of null make the last Node to a constant symbolic?
+        // Check the evaluatedNodes.
+        final List<Node> evaluatedNodes = session.getEvaluatedNodes();
+        assertEquals(COLOR_QUIZ_UNEXPECTED_INPUT, evaluatedNodes.get(1).text());
+        assertEquals(COLOR_QUIZ_END_CONVERSATION, evaluatedNodes.get(2).text());
+        assertEquals(COLOR_QUIZ_START_TEXT, evaluatedNodes.get(0).text());
 
-        });
+        // Check that the Session's currentNode is now the last node in the conversation
+        assertNull(session.currentNode, "Session's currentNode is unexpected.");
+
+        // Instead of null make the last Node to a constant symbolic?
     }
 
 
     @Test
     void stepThroughPresentProcessMultiWithBadInput() {
-        assertDoesNotThrow(() -> {
-            // Initiate the conversation
-            assertTrue(operator.process(mo4));
 
-            var session = operator.sessionCache.get(SessionKey.newSessionKey(mo4));
-            assertNotNull(session);
+        // Preflight check: cache is empty.
+        assertEquals(0, operator.scriptByKeywordCache.estimatedSize());
+        ((TestingPersistenceManager) persistenceManager).addScript(
+                TestingPersistenceManager.SCRIPT_ID, presentQuestion);
 
-            // Make sure we get the expected initial response.
-            final List<Message> queuedMessages = producer.enqueued();
-            assertEquals(1, queuedMessages.size(), "Unexpected number of messages queued.");
-            assertTrue(requireNonNull(queuedMessages.getFirst()).text().contains("favorite color"), "Expected text not found in first queued message.");
-            // The current node should now be awaiting a response
+        // Initiate the conversation
+        assertTrue(operator.process(mo4));
+
+        // The lookup from scriptCache will have the effect of populating scriptByKeywordCache
+        assertEquals(1, operator.scriptByKeywordCache.estimatedSize());
+
+        var session = operator.sessionCache.get(SessionKey.newSessionKey(mo4));
+        assertNotNull(session);
+
+        // Make sure we get the expected initial response.
+        final List<Message> queuedMessages = producer.enqueued();
+        assertEquals(1, queuedMessages.size(), "Unexpected number of messages queued.");
+        assertTrue(requireNonNull(queuedMessages.getFirst()).text().contains("favorite color"), "Expected text not found in first queued message.");
+        // The current node should now be awaiting a response
+        assertEquals(NodeType.ProcessMulti, session.getCurrentNode().type(), "Session node state has unexpected type.");
+
+        // Now provide bad input to the question posed
+        for (int i = 1; i < 3; i++) { // TODO At some point we should add handling for repeated failures. Until then we continue to handle bad input the same way.
+            assertTrue(operator.process(unexpected));
+            final Message errorMessage = queuedMessages.get(i);
+            LOG.info("Bad input response: {}", errorMessage.text());
+            assertTrue(errorMessage.text().contains(processAnswer.text()), "Expected error response not found.");
+            // Since we don't advance when there's an error we should still be on the ProcessMulti
             assertEquals(NodeType.ProcessMulti, session.getCurrentNode().type(), "Session node state has unexpected type.");
+        }
 
-            // Now provide bad input to the question posed
-            for (int i = 1; i < 3; i++) { // TODO At some point we should add handling for repeated failures. Until then we continue to handle bad input the same way.
-                assertTrue(operator.process(unexpected));
-                final Message errorMessage = queuedMessages.get(i);
-                LOG.info("Bad input response: {}", errorMessage.text());
-                assertTrue(errorMessage.text().contains(processAnswer.text()), "Expected error response not found.");
-                // Since we don't advance when there's an error we should still be on the ProcessMulti
-                assertEquals(NodeType.ProcessMulti, session.getCurrentNode().type(), "Session node state has unexpected type.");
-            }
+        // Now provide good input to the question posed and check that we advance to the end of the conversation.
+        assertTrue(operator.process(mo5));
+        //producer.enqueued().forEach(message -> LOG.info(message.text()));
+        assertEquals(5, queuedMessages.size(), "Unexpected number of messages queued.");
+        assertEquals(processAnswer.text(), queuedMessages.get(1).text(), "Expected text not found in 1st queued message.");
+        assertEquals(processAnswer.text(), queuedMessages.get(2).text(), "Expected text not found in 2nd queued message.");
+        assertEquals(answerFlort.text(), queuedMessages.get(3).text(), "Expected text not found in 3rd queued message.");
+        assertEquals(endConversation.text(), queuedMessages.get(4).text());
 
-            // Now provide good input to the question posed and check that we advance to the end of the conversation.
-            assertTrue(operator.process(mo5));
-            //producer.enqueued().forEach(message -> LOG.info(message.text()));
-            assertEquals(5, queuedMessages.size(), "Unexpected number of messages queued.");
-            assertEquals(processAnswer.text(), queuedMessages.get(1).text(),"Expected text not found in 1st queued message.");
-            assertEquals(processAnswer.text(), queuedMessages.get(2).text(),"Expected text not found in 2nd queued message.");
-            assertEquals(answerFlort.text(), queuedMessages.get(3).text(),"Expected text not found in 3rd queued message.");
-            assertEquals(endConversation.text(), queuedMessages.get(4).text());
+        // The conversation is complete.
 
-            // The conversation is complete.
+        // Check the evaluatedNodes.
+        final List<Node> evaluatedNodes = session.getEvaluatedNodes();
 
-            // Check the evaluatedNodes.
-            final List<Node> evaluatedNodes = session.getEvaluatedNodes();
+        //evaluatedNodes.forEach(node -> LOG.info("Evaluated node: {}", node));
 
-            //evaluatedNodes.forEach(node -> LOG.info("Evaluated node: {}", node));
+        assertEquals(3, evaluatedNodes.size());
+        assertEquals(COLOR_QUIZ_START_TEXT, evaluatedNodes.get(0).text());
+        assertEquals(COLOR_QUIZ_UNEXPECTED_INPUT, evaluatedNodes.get(1).text());
+        assertEquals(COLOR_QUIZ_END_CONVERSATION, evaluatedNodes.get(2).text());
 
-            assertEquals(3, evaluatedNodes.size());
-            assertEquals(COLOR_QUIZ_START_TEXT, evaluatedNodes.get(0).text());
-            assertEquals(COLOR_QUIZ_UNEXPECTED_INPUT, evaluatedNodes.get(1).text());
-            assertEquals(COLOR_QUIZ_END_CONVERSATION, evaluatedNodes.get(2).text());
-
-            assertNull(session.currentNode, "Session's currentNode is unexpected.");
-        });
+        assertNull(session.currentNode, "Session's currentNode is unexpected.");
+//        });
     }
 
     @Test
     void stepThroughWithUnexpectedInputAndChangeTopic() {
+        // Preflight check: cache is empty.
+        assertEquals(0, operator.scriptByKeywordCache.estimatedSize());
+        ((TestingPersistenceManager) persistenceManager).addScript(
+                TestingPersistenceManager.SCRIPT_ID, presentQuestion);
 
-        assertDoesNotThrow(() -> {
-            // Initiate the conversation
-            assertTrue(operator.process(mo4));
+        // Initiate the conversation
+        assertTrue(operator.process(mo4));
 
-            var session = operator.sessionCache.get(SessionKey.newSessionKey(mo4));
-            assertNotNull(session);
+        var session = operator.sessionCache.get(SessionKey.newSessionKey(mo4));
+        assertNotNull(session);
 
-            // Make sure we get the expected initial response.
-            final List<Message> queuedMessages = producer.enqueued();
-            assertEquals(1, queuedMessages.size(), "Unexpected number of messages queued.");
-            assertTrue(requireNonNull(queuedMessages.getFirst()).text().contains("favorite color"), "Expected text not found in first queued message.");
-            // The current node should now be awaiting a response
+        // Make sure we get the expected initial response.
+        final List<Message> queuedMessages = producer.enqueued();
+        assertEquals(1, queuedMessages.size(), "Unexpected number of messages queued.");
+        assertTrue(requireNonNull(queuedMessages.getFirst()).text().contains("favorite color"), "Expected text not found in first queued message.");
+        // The current node should now be awaiting a response
+        assertEquals(NodeType.ProcessMulti, session.getCurrentNode().type(), "Session node state has unexpected type.");
+
+        // Now provide bad input to the question posed
+        for (int i = 1; i <= 2; i++) { // TODO At some point we should add handling for repeated failures. Until then we continue to handle bad input the same way.
+            assertTrue(operator.process(unexpected));
+            final Message errorMessage = queuedMessages.get(i);
+            assertTrue(errorMessage.text().contains(processAnswer.text()), "Expected error response not found.");
+            // Since we don't advance when there's an error we should still be on the ProcessMulti
             assertEquals(NodeType.ProcessMulti, session.getCurrentNode().type(), "Session node state has unexpected type.");
+        }
 
-            // Now provide bad input to the question posed
-            for (int i = 1; i <= 2; i++) { // TODO At some point we should add handling for repeated failures. Until then we continue to handle bad input the same way.
-                assertTrue(operator.process(unexpected));
-                final Message errorMessage = queuedMessages.get(i);
-                assertTrue(errorMessage.text().contains(processAnswer.text()), "Expected error response not found.");
-                // Since we don't advance when there's an error we should still be on the ProcessMulti
-                assertEquals(NodeType.ProcessMulti, session.getCurrentNode().type(), "Session node state has unexpected type.");
-            }
-
-            // Now request a change of topic
-            assertTrue(operator.process(changeTopic));
-            producer.enqueued().forEach( message -> {
-                LOG.info(message.text());
-            });
-
-            assertEquals(4, queuedMessages.size(), "Unexpected number of messages queued.");
-            assertEquals(processAnswer.text(), queuedMessages.get(1).text(),"Expected text not found in 2nd queued message.");
-            assertEquals(processAnswer.text(), queuedMessages.get(2).text(),"Expected text not found in 3rd queued message.");
-            assertEquals(Multi.CHANGE_TOPIC_RESPONSE, queuedMessages.get(3).text(),"Expected topic change acknowledgement not found in 4th queued message.");
-
-            // At this point we would send a message with a list of available topics...
-            // but we haven't yet implemented this functionality.
-            // Current thinking is to return a special constant/symbolic Node type that Operator handles by finding the customer's registered topic script
-
-            // The conversation is effectively complete because we've moved to the end of the graph.
-            assertNull(session.getCurrentNode());
+        // Now request a change of topic
+        assertTrue(operator.process(changeTopic));
+        producer.enqueued().forEach(message -> {
+            LOG.info(message.text());
         });
+
+        assertEquals(4, queuedMessages.size(), "Unexpected number of messages queued.");
+        assertEquals(processAnswer.text(), queuedMessages.get(1).text(), "Expected text not found in 2nd queued message.");
+        assertEquals(processAnswer.text(), queuedMessages.get(2).text(), "Expected text not found in 3rd queued message.");
+        assertEquals(Multi.CHANGE_TOPIC_RESPONSE, queuedMessages.get(3).text(), "Expected topic change acknowledgement not found in 4th queued message.");
+
+        // At this point we would send a message with a list of available topics...
+        // but we haven't yet implemented this functionality.
+        // Current thinking is to return a special constant/symbolic Node type that Operator handles by finding the customer's registered topic script
+
+        // The conversation is effectively complete because we've moved to the end of the graph.
+        assertNull(session.getCurrentNode());
     }
 
     @Test

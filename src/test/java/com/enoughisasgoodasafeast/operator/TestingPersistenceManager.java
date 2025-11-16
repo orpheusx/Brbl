@@ -14,11 +14,16 @@ class TestingPersistenceManager implements PersistenceManager {
     public static final UUID SCRIPT_ID = UUID.fromString("89eddcb8-7fe5-4cd1-b18b-78858f0789fb");
     public static final String USER_ID = OperatorTest.MOBILE_MX;
 
-    private Map<Pattern, Keyword> keywordMap = new HashMap<>();
+    private final Map<Pattern, Keyword> keywordMap = new HashMap<>();
+    private final Map<UUID, Node> nodesByScriptId = new HashMap<>();
 
     public TestingPersistenceManager() {
-        Keyword keyword = new Keyword(KEYWORD_ID, "Color quiz", Platform.SMS,
-                SCRIPT_ID, null);
+        Keyword keyword = new Keyword(
+                KEYWORD_ID,
+                "(color|colour|colr).*(quiz|q|kwiz)",
+                Platform.SMS,
+                SCRIPT_ID,
+                OperatorTest.SHORT_CODE_4); // channel
         keywordMap.put(Pattern.compile(keyword.wordPattern()), keyword);
     }
 
@@ -52,9 +57,13 @@ class TestingPersistenceManager implements PersistenceManager {
         return keywordMap;
     }
 
+    void addScript(UUID scriptId, Node presentQuestion) {
+        nodesByScriptId.put(scriptId, presentQuestion);
+    }
+
     @Override
     public Node getScript(UUID scriptId) {
-        return null;
+        return nodesByScriptId.get(scriptId);
     }
 
     @Override

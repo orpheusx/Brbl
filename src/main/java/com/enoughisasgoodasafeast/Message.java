@@ -27,7 +27,7 @@ public record Message(UUID id, Instant receivedAt, MessageType type, Platform pl
     }
 
     public Message(MessageType type, String from, String to, String text) {
-        this(UUID.randomUUID(), NanoClock.utcInstant(), type, Platform.BRBL, from, to, text);
+        this(UUID.randomUUID(), NanoClock.utcInstant(), type, Platform.SMS, from, to, text);
     }
 
     public Message(MessageType type, Platform platform, String from, String to, String text) {

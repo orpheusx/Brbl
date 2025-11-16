@@ -33,6 +33,7 @@ public interface PersistenceManager {
     Node getScript(UUID scriptId);
 
     Node getScriptForKeyword(Platform platform, String keyword);
+
     /*
      * This exception exists simply to slightly abstract the internal details involved.
      */

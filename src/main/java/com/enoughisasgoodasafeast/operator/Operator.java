@@ -20,8 +20,9 @@ import static com.enoughisasgoodasafeast.operator.Telecom.deriveCountryCodeFromI
 public class Operator implements MessageProcessor {
 
     private static final Logger LOG = LoggerFactory.getLogger(Operator.class);
-    private static final int EXPECTED_INPUT_COUNT = 1;
-    private static final String ALL_KEYWORDS = "ALL";
+
+    static final int EXPECTED_INPUT_COUNT = 1;
+    static final String ALL_KEYWORDS = "ALL";
 
     final LoadingCache<SessionKey, Session> sessionCache = Caffeine.newBuilder()
             .expireAfterAccess(20, TimeUnit.MINUTES) // TODO make duration part of the configuration
@@ -44,6 +45,10 @@ public class Operator implements MessageProcessor {
     final LoadingCache<KeywordCacheKey, Node> scriptByKeywordCache = Caffeine.newBuilder()
             .expireAfterAccess(20, TimeUnit.MINUTES)
             .build(key -> findScriptForKeywordShortCode(key));
+
+    final LoadingCache<String, Node> defaultScriptForChannel = Caffeine.newBuilder()
+            .expireAfterWrite(60, TimeUnit.MINUTES)
+            .build(channel -> loadDefaultScriptsByChannelCache(channel));
 
     private final Platform defaultPlatform = Platform.BRBL;
 
@@ -239,10 +244,12 @@ public class Operator implements MessageProcessor {
 //
 //                return session;
 //            } else {
-                return new Session(
-                        UUID.randomUUID(), script.get(), user.get(),
-                        getQueueProducer(sessionKey.platform()),
-                        persistenceManager);
+            return new Session(
+                    UUID.randomUUID(),
+                    script.get(),
+                    user.get(),
+                    getQueueProducer(sessionKey.platform()),
+                    persistenceManager);
 //            }
         }
     }
@@ -294,36 +301,52 @@ public class Operator implements MessageProcessor {
             LOG.error("CRITICAL: No keywords available from system for new session!!!");
             return null;
         }
+        UUID scriptId = findMatch(all, keywordCacheKey);
+        if (scriptId != null) {
+            return scriptCache.get(scriptId);
+        } else {
+            LOG.warn("No keyword found for {}. Using default for {}", keywordCacheKey, keywordCacheKey.channel());
+            return defaultScriptForChannel.get(keywordCacheKey.channel());
+        }
+    }
 
+    UUID findMatch(Map<Pattern, Keyword> all, KeywordCacheKey keywordCacheKey) {
         // The key here is the pattern and the value is the Keyword object.
         // It is possible for Keywords with different patterns to point at the same Node.
         for (Map.Entry<Pattern, Keyword> entry : all.entrySet()) {
             Pattern pattern = entry.getKey();
             Keyword keyword = entry.getValue();
             LOG.info("Evaluating pattern {} for {}", pattern, keyword);
-            // If the keyword's shortCode is null this means that its effectively global.
-            if (keywordCacheKey.code().equals(keyword.shortCode()) || keyword.shortCode() == null) { // filter by short code
+            if (keywordCacheKey.platform() == keyword.platform() && keyword.channel().equals(keywordCacheKey.channel())) {
                 if (pattern.matcher(keywordCacheKey.keyword()).matches()) {
                     LOG.info("Match found for {}", keywordCacheKey);
-                    return scriptCache.get(keyword.scriptId());
+                    return keyword.scriptId();
+                } else {
+                    LOG.info("Not a match: {} !~ {}", keywordCacheKey.keyword(), pattern);
                 }
             }
             // Should we be more exhaustive in our search? How to select the right one if more than one matches?
             // The ordering of the map is non-deterministic.
             // Our authoring setup tools will need to pre-test the keyword entries to avoid unintended matches.
         }
-
-        LOG.warn("No keyword found for {}", keywordCacheKey);
-        return null; // no matches!
+        return null;
     }
 
     Node getScript(UUID nodeId) {
         return persistenceManager.getScript(nodeId);
     }
 
+    // FIXME ...or defaultScript. I suspect we'll want the Platform
+    Node loadDefaultScriptsByChannelCache(String channel) {
+        LOG.error("Function not yet implemented! Returning hardcoded value...");
+//        return null; // TODO implement
+        return defaultScript(null, null);
+    }
+
+    // FIXME pick this interface or loadDefaultScriptsByChannelCache as the method for fetching default scripts.
     Node defaultScript(Platform platform, String shortCodeOrKeywordOrChannelName) {
         // TODO use params to determine the correct initial node.
-        return new Node("TEST SCRIPT RESPONSE PREFIX", NodeType.EchoWithPrefix, "DefaultScript");
+        return new Node("THIS IS THE CHANNEL DEFAULT", NodeType.SendMessage, "DefaultScript");
     }
 
     Map<Platform, String> defaultPlatformIdMap(String from) {
