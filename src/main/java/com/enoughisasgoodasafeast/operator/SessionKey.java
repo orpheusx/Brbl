@@ -20,6 +20,7 @@ import java.util.Objects;
  * @param keyword
  */
 public record SessionKey(Platform platform, String from, String to, String keyword) {
+
     /*
     * Most times the message will be an MO but a push campaign might want to start a Session with an MT
     */

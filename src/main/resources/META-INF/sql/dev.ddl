@@ -539,3 +539,63 @@ CREATE TABLE brbl_logic.sessions (
 );
 COMMENT ON COLUMN brbl_logic.sessions.group_id IS 'Effectively (but not actually) the foreign key to brbl_logic.users.';
 COMMENT ON COLUMN brbl_logic.sessions.data     IS 'The latest serialized session data for the referenced user.';
+
+Updated 11/24/2025:
+
+-- We will need to track history elsewhere so including created/updated_at here isn't helpful here.
+CREATE TABLE brbl_logic.default_scripts (
+ id          UUID PRIMARY KEY,
+ node_id     UUID NOT NULL,
+ CONSTRAINT fk_default_scripts_nodes_id
+    FOREIGN KEY(node_id) REFERENCES brbl_logic.nodes(id),
+ CONSTRAINT fk_default_scripts_channel
+    FOREIGN KEY(channel) REFERENCES brbl_logic.channels --> this is the table that should link to customer.
+ );
+COMMENT ON TABLE brbl_logic.default_scripts IS 'For each unique route (platform & channel) a row must exist here to identify the script that will be used for session initiating MOs that lack keyword matches.';
+
+-- Grr, annoyingly, using the \d+ command for psql won't display the table comment. Only the column comments.
+
+
+--> Introducing a new word to describe the combination of a Platform and a platform-specific identifier (e.g. a 10DLC, a WhatsApp number, a FB Messenger id)
+--> Channel remains the generic term for the latter rather than overloading the (out-of-date) meaning of a shortcode.
+--> Every Route must be "owned" by a Customer and must define a script (node_id) that will be used to respond to unsolicited MOs when no keyword matches are found.
+CREATE TYPE brbl_logic.route_status AS ENUM ('REQUESTED', 'APPROVED', 'ACTIVE', 'SUSPENDED', 'LAPSED');
+CREATE TABLE brbl_logic.routes (
+    id              UUID PRIMARY KEY,
+    platform        public.platform NOT NULL,
+    channel         VARCHAR(15) NOT NULL,
+    default_node_id UUID NOT NULL,
+    customer_id     UUID NOT NULL,
+    status          brbl_logic.route_status NOT NULL DEFAULT 'REQUESTED',
+    created_at      TIMESTAMP WITH TIME ZONE NOT NULL,
+    updated_at      TIMESTAMP WITH TIME ZONE NOT NULL,
+    CONSTRAINT unique_routes_platform_channel
+        UNIQUE(platform, channel),
+    CONSTRAINT fk_routes_nodes_id
+        FOREIGN KEY(default_node_id) REFERENCES brbl_logic.nodes(id),
+    CONSTRAINT fk_routes_customers_id FOREIGN KEY(customer_id)
+            REFERENCES brbl_users.customers(id)
+);
+
+-- Create at least one record in the default_scripts table:
+INSERT INTO brbl_logic.routes VALUES(
+    gen_random_uuid(), -- id
+    'S'::public.platform, -- platform
+    '21249', -- channel
+    '89eddcb8-7fe5-4cd1-b18b-78858f0789fb'::UUID,  -- node_id
+    '4d351c0e-5ce5-456e-8de0-70e04bd5c0fd'::UUID, -- customer_id
+    'ACTIVE'::route_status,
+    NOW(),
+    NOW()
+);
+
+-- Also, gotta fix keywords table to reflect the design changes:
+ALTER TABLE brbl_logic.keywords DROP COLUMN is_default;
+ALTER TABLE brbl_logic.keywords ALTER COLUMN short_code TYPE VARCHAR(15) ;
+ALTER TABLE brbl_logic.keywords RENAME COLUMN short_code TO channel ;
+--> Define a primary for the table. Currently, it's only NOT NULL.
+--> Remove the
+
+
+--> TODO at some point we should go through all our foreign keys and rename them uniformly.
+-- ALTER TABLE table_name RENAME CONSTRAINT oldname TO newname

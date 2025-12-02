@@ -154,10 +154,12 @@ public class Session implements ScriptContext, Serializable {
     public void flush() throws IOException {
         int numInBuffer = outputBuffer.size();
         LOG.info("flushOutput: outputBuffer size = {}", numInBuffer);
-        for (int i = 0; i < numInBuffer; i++) {
-            Message mtMessage = outputBuffer.poll();
+        Message mtMessage = null;
+        while((mtMessage = outputBuffer.poll()) !=null) {
             producer.enqueue(mtMessage);
-            persistenceManager.insertMT(mtMessage, this);
+            if (!persistenceManager.insertMT(mtMessage, this)) {
+                throw new IOException("MT write failed for: " + mtMessage.toString());
+            }
         }
 
         outputBuffer.clear();

@@ -15,6 +15,8 @@ import java.util.concurrent.*;
 import java.util.function.Supplier;
 import java.util.regex.Pattern;
 
+import org.jspecify.annotations.NonNull;
+
 import static com.enoughisasgoodasafeast.operator.Telecom.deriveCountryCodeFromId;
 
 public class Operator implements MessageProcessor {
@@ -24,31 +26,31 @@ public class Operator implements MessageProcessor {
     static final int EXPECTED_INPUT_COUNT = 1;
     static final String ALL_KEYWORDS = "ALL";
 
-    final LoadingCache<SessionKey, Session> sessionCache = Caffeine.newBuilder()
+    final LoadingCache<@NonNull SessionKey, Session> sessionCache = Caffeine.newBuilder()
             .expireAfterAccess(20, TimeUnit.MINUTES) // TODO make duration part of the configuration
             .build(key -> createSession(key));
 
-    final LoadingCache<SessionKey, User> userCache = Caffeine.newBuilder()
+    final LoadingCache<@NonNull SessionKey, User> userCache = Caffeine.newBuilder()
             .expireAfterAccess(20, TimeUnit.MINUTES)
             .build(key -> findOrCreateUser(key));
 
-    final LoadingCache<UUID, Node> scriptCache = Caffeine.newBuilder()
+    final LoadingCache<@NonNull UUID, Node> scriptCache = Caffeine.newBuilder()
             .expireAfterAccess(20, TimeUnit.MINUTES)
             .build(id -> getScript(id));
 
     // NB: This is an odd duck because it's intended to contain a single entry with all the keyword data.
     // We're using a LoadingCache here to benefit from its auto-eviction and thread safety features.
-    final LoadingCache<String, Map<Pattern, Keyword>> allKeywordsByPatternCache = Caffeine.newBuilder()
+    final LoadingCache<@NonNull String, Map<Pattern, Keyword>> allKeywordsByPatternCache = Caffeine.newBuilder()
             .expireAfterWrite(20, TimeUnit.MINUTES)
             .build(theOneAndOnlyKey -> loadAllKeywords(theOneAndOnlyKey));
 
-    final LoadingCache<KeywordCacheKey, Node> scriptByKeywordCache = Caffeine.newBuilder()
+    final LoadingCache<@NonNull KeywordCacheKey, Node> scriptByKeywordCache = Caffeine.newBuilder()
             .expireAfterAccess(20, TimeUnit.MINUTES)
             .build(key -> findScriptForKeywordShortCode(key));
 
-    final LoadingCache<String, Node> defaultScriptForChannel = Caffeine.newBuilder()
+    final LoadingCache<@NonNull PlatformChannelKey, Node> defaultScriptForChannel = Caffeine.newBuilder()
             .expireAfterWrite(60, TimeUnit.MINUTES)
-            .build(channel -> loadDefaultScriptsByChannelCache(channel));
+            .build(key -> loadDefaultScriptsByChannelCache(key));
 
     private final Platform defaultPlatform = Platform.BRBL;
 
@@ -58,10 +60,6 @@ public class Operator implements MessageProcessor {
 
     public Operator() {
     }
-
-//    public Operator(QueueConsumer queueConsumer, QueueProducer queueProducer) {
-//        this(queueConsumer, queueProducer, null);
-//    }
 
     public Operator(QueueConsumer queueConsumer, QueueProducer queueProducer, PersistenceManager persistenceManager) {
         this.queueConsumer = queueConsumer;
@@ -88,7 +86,6 @@ public class Operator implements MessageProcessor {
 
     /**
      * Find/setup session and process message, tracking state changes in the session.
-     *
      * @param message the message being processed.
      * @return true if processing was complete, false if incomplete.
      */
@@ -226,13 +223,13 @@ public class Operator implements MessageProcessor {
      * @param sessionKey the key associated with the new Session
      * @return the newly constructed Session added to the sessionCache
      * @throws InterruptedException if any of the involved threads was interrupted
-     * @throws ExecutionException   if any of the subtasks failed
+     * @throws ExecutionException if any of the subtasks failed
      */
     Session createSession(SessionKey sessionKey) throws InterruptedException, ExecutionException {
         try (var scope = new StructuredTaskScope.ShutdownOnFailure()) {
 
             Supplier<User> user = scope.fork(() -> userCache.get(sessionKey));
-            Supplier<Node> script = scope.fork(() -> scriptByKeywordCache.get(KeywordCacheKey.newKey(sessionKey)));
+            Supplier<Node> script = scope.fork(() -> scriptByKeywordCache.get(KeywordCacheKey.newKey(sessionKey))); // an Optional with orElse() might work well here.
 
             scope.join().throwIfFailed(); // TODO consider using joinUntil() to enforce a collective timeout.
 
@@ -306,7 +303,8 @@ public class Operator implements MessageProcessor {
             return scriptCache.get(scriptId);
         } else {
             LOG.warn("No keyword found for {}. Using default for {}", keywordCacheKey, keywordCacheKey.channel());
-            return defaultScriptForChannel.get(keywordCacheKey.channel());
+            var platformChannelKey = PlatformChannelKey.newPlatformChannel(keywordCacheKey);
+            return defaultScriptForChannel.get(platformChannelKey);
         }
     }
 
@@ -337,10 +335,9 @@ public class Operator implements MessageProcessor {
     }
 
     // FIXME ...or defaultScript. I suspect we'll want the Platform
-    Node loadDefaultScriptsByChannelCache(String channel) {
-        LOG.error("Function not yet implemented! Returning hardcoded value...");
-//        return null; // TODO implement
-        return defaultScript(null, null);
+    Node loadDefaultScriptsByChannelCache(PlatformChannelKey platformChannelKey) {
+//        return null;
+        return defaultScript(platformChannelKey.platform(), "");
     }
 
     // FIXME pick this interface or loadDefaultScriptsByChannelCache as the method for fetching default scripts.

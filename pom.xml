@@ -78,14 +78,14 @@
         <dependency>
             <groupId>ch.qos.logback</groupId>
             <artifactId>logback-classic</artifactId>
-            <version>1.5.15</version>
+            <version>1.5.19</version>
         </dependency>
 
         <!-- https://mvnrepository.com/artifact/ch.qos.logback/logback-core -->
         <dependency>
             <groupId>ch.qos.logback</groupId>
             <artifactId>logback-core</artifactId>
-            <version>1.5.15</version>
+            <version>1.5.19</version>
         </dependency>
 
         <!-- The tyler-base lib is only needed to generate a TylerConfiguration class from a logback.xml file. -->

@@ -99,7 +99,7 @@ public class OperatorTest {
 
         // Define a default script for the platform-channel.
         defaultScript = new Node("Welcome! You can talk to us about the following topics...", NodeType.EndOfChat, "CustomerTopicStarter");
-        operator.defaultScriptForChannel.put(mo1.to(), defaultScript);
+        operator.defaultScriptForChannel.put(new PlatformChannelKey(Platform.SMS, mo1.to()), defaultScript);
 
         ((TestingPersistenceManager) persistenceManager).addScript(
                 TestingPersistenceManager.SCRIPT_ID, presentQuestion);

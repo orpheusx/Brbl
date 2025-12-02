@@ -2101,7 +2101,7 @@ Along the same line, should we limit a Customer's interaction with a single User
 ===== 2025-11-04 ====
 
 Took a fresh look at the way we're handling the currentNode of the Session. It's not as bad I recall.
-Cleaned up what needed cleaning. Decided to leave the use of null to terminate the conversation graph for now.
+Cleaned up what needed cleaning. Decided to leave the use of null to terminate the conversation graph for now. Using Optionals doesn't solve the problem when something is null.
 
 Turning our attention to how we initiate conversations:
     We were assuming keywords were needed because short codes would often be shared. However, short codes hardly exist anymore in the wonderful world of SMS so, while they could still be useful, they are not as common.
@@ -2110,4 +2110,75 @@ Turning our attention to how we initiate conversations:
 
 
 TODO
-_ tests for the keyword/script cache?
+X tests for the keyword/script cache
+
+===== 2025-11-22 ====
+
+Graphing the MO call flow of the Operator. Courtesy of Gemini.
+
+   * Operator.process(Message)
+       * SessionKey.newSessionKey(Message) constructs a SessionKey derived from the Message.
+       * Use the returned SessionKey to fetch the Session from sessionCache...
+       * Operator.createSession(SessionKey) (if session is not in sessionCache)
+           * Operator.findOrCreateUser(SessionKey) (if user is not in userCache)
+               * PersistenceManager.getUser(SessionKey) queries the database
+               * User.<init>(...) if the User is not found in database
+               * PersistenceManager.insertUser(User) adds the new User to the database and userCache.
+           * KeywordCacheKey.newKey(SessionKey) constructs a KeywordCacheKey from the SessionKey
+           * Operator.findScriptForKeywordShortCode(KeywordCacheKey) (if script is not cached)
+               * Operator.loadAllKeywords(String) (if keywords are not cached)
+                   * PersistenceManager.getKeywords()
+               * Operator.findMatch(Map, KeywordCacheKey) figure out if the Message text matches one of the keywords
+               * Operator.getScript(UUID)
+                   * PersistenceManager.getScript(UUID) (if script is not cached)
+               * Operator.loadDefaultScriptsByChannelCache(String) (if no keyword match and default script is not cached)
+                   * Operator.defaultScript(Platform, String)
+           * Session.<init>(...) the new Session is now added to the sessionCache and passed to...
+       * Operator.process(Session, Message)
+           * Session.registerInput(Message) adds the Message to the Session's set of inputs.
+           * Session.previousInput() return previously processed Message and compares it to the current message, logging error if the receivedTime ordering is not correct.
+           * Operator.evaluate(Node, ScriptContext, Message)
+               * This calls a specific evaluate method based on the node type, most commonly:
+               * Multi$Present.evaluate(ScriptContext, Message)
+               * Input$Process.evaluate(ScriptContext, Message)
+               * SendMessage.evaluate(ScriptContext, Message)
+           * Session.registerEvaluated(Node) appends to Sessions's evaluatedNodes list.
+           * The call to Operator.evaluate is repeated in a loop until a node requires user input.
+           * Session.flush() sends all buffered output, logs activity and clears the buffers.
+
+
+===== 2025-11-23 ====
+
+Hmm, the current keywords table has some properties I'd forgotten:
+    - "short_code" is used for what we're trying now to call "channel"
+    - It doesn't reference the customer table but _does_ include a boolean is_default. Selecting the right row doesn't require knowledge of the customer, only the channel. Still it leaves a gap referentially. We should probably add that.
+    - The is_default column isn't currently being included in the Keyword records returned from the query. The idea was to reuse the result set to find the default for the channel when there are no pattern matches found. Problem: there's no way to allow only a single row to have is_default be true.
+
+    We could separate the default script from keywords entirely.
+
+
+===== 2025-11-28 ====
+
+Using roughly the same structure as the Gemini outline. Here's what I'm thinking might be appropriate for push messages:
+
+* Operator.process(User, Keyword)
+    * Operator.getSession(User.id) from sessionCache.
+        [There may be circumstances where we abort here to avoid interrupting an active session.]
+        [Using a SessionKey for the cache would be nice for consistency but not sure how to handle the keyword part. Generating a complex generated string could work]
+        * Operator.getOrCreateSession(SessionKey) (if session is not in sessionCache). DO NOT add this session to sessionCache!
+            * Operator.getUser(User.id) (if user is not in userCache)
+                * PersistenceManager.getUser(User.id) queries the database. User must exist.
+            * Operator.getScript(UUID)
+                * PersistenceManager.getScript(UUID) (if script is not cached)
+        * Operator.evaluatePush(Node, ScriptContext)
+            * The starting push message will need to be generated at this point. Possibly we send a few messages before awaiting User response.
+        * Operator.registerOutput(Message)
+        * Session.flush()
+* PersistenceManager.upsertSession(Session)
+
+There are two ways we create Users.
+1) they messaged in to us using information they acquired on their own (ads, personal interactions, etc.)
+2) they checked a box on a Customer form somewhere (online or off) that is being tracked somehow for verification. If the User sends a stop message without any other interaction we might consider this a signal to drop them completely. A "hard drop."
+
+TODO
+_ complete the keywords and default keyword implementation including the table design.

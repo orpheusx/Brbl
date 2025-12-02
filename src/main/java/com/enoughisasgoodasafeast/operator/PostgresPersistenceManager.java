@@ -556,97 +556,97 @@ public class PostgresPersistenceManager implements PersistenceManager {
     }
 
 
-        @Override
-    public Node getScriptForKeyword(Platform platform, String keyword) {
-        try (Connection connection = fetchConnection()) {
-            assert connection != null;
-            return getScriptForKeyword(connection, platform, keyword);
-        } catch (SQLException e) {
-            LOG.error("getScript: fetchConnection failed", e);
-            return null;
-        }
-    }
+//        @Override
+//    public Node getScriptForKeyword(Platform platform, String keyword) {
+//        try (Connection connection = fetchConnection()) {
+//            assert connection != null;
+//            return getScriptForKeyword(connection, platform, keyword);
+//        } catch (SQLException e) {
+//            LOG.error("getScript: fetchConnection failed", e);
+//            return null;
+//        }
+//    }
 
-    public Node getScriptForKeyword(Connection connection, Platform platform, String keyword) {
-        Map<UUID, Node> scriptMap = new HashMap<>(); // FIXME does the ordering matter?
-        try (PreparedStatement ps = connection.prepareStatement(SELECT_SCRIPT_GRAPH_RECURSIVE_FOR_KEYWORD)) {
-//            ps.setObject(1, platform);
-            ps.setString(1, platform.code());
-            ps.setString(2, keyword.trim());
-
-            // s.id, s.created_at, s.text, s.type, s.label,
-            // e.id, e.created_at, e.match_text, e.response_text, e.src, e.dst
-            Map<UUID, SequencedSet<Edge>> tempEdges = new HashMap<>();
-            Map<UUID, UUID> edgeIdToDstId = new HashMap<>();
-
-            final ResultSet rs = ps.executeQuery();
-            while (rs.next()) {
-
-                UUID id = (UUID) rs.getObject(1); // id
-
-                Node node = scriptMap.get(id);
-                if (node == null) {
-                    // columnIndex 2, // createdAt
-                    String text = rs.getString(3);  // text
-                    NodeType type = NodeType.forValue(rs.getInt(4));  // type
-                    String label = rs.getString(5); // label
-
-                    node = new Node(id, text, type, null, label); // no next entries yet...
-                    scriptMap.put(id, node);
-                }
-
-                UUID edgeId = (UUID) rs.getObject(6); // Edge.id
-                // index 7, skip the createdAt
-                List<String> matchText = Functions.parseMatchTextPatterns(rs.getString(8)); // matchText
-                String responseText = rs.getString(9);
-                UUID srcId = (UUID) rs.getObject(10);
-                UUID dstId = (UUID) rs.getObject(11);
-
-                Edge tempEdge = new Edge(
-                        edgeId, responseText, matchText, scriptMap.get(dstId)
-                ); // NB: the destination node may not exist so we will need to update/replace this edge at the end of the while loop
-                edgeIdToDstId.put(edgeId, dstId);
-
-                SequencedSet<Edge> edgesForParentScript = tempEdges.computeIfAbsent(srcId, k -> new LinkedHashSet<>());
-                edgesForParentScript.add(tempEdge);
-            }
-
-            // Now patch all the references for both the edges and the scripts
-            for (Map.Entry<UUID, Node> idAndScript : scriptMap.entrySet()) {
-                SequencedSet<Edge> edgesForScript = tempEdges.get(idAndScript.getKey());
-                Node node = idAndScript.getValue();
-                for (Edge edge : edgesForScript) {
-                    if (edge.targetNode() == null) {
-                        UUID destinationScriptID = edgeIdToDstId.get(edge.id());
-                        Node missingNode = scriptMap.get(destinationScriptID);
-                        //LOG.info("Patching edge {} with dst: {}", node.id(), missingNode);
-                        edge = edge.copyReplacing(missingNode);
-                    }
-                    // else the node was already available when we created the Edge from the ResultSet
-
-                    node.edges().add(edge);
-                }
-            }
-
-        } catch (SQLException e) {
-            LOG.error("getScript failed", e);
-            return null;
-        }
-
-        // FIXME remove
-        scriptMap.forEach((k, v) -> {
-            LOG.info(v.toString());
-        });
-
-        Node initialNode = null;
-        for (Node s : scriptMap.values()) {
-            if (s.text().equals(keyword)) {
-                initialNode = s;
-                break;
-            }
-        }
-        return initialNode;
-    }
+//    public Node getScriptForKeyword(Connection connection, Platform platform, String keyword) {
+//        Map<UUID, Node> scriptMap = new HashMap<>(); // FIXME does the ordering matter?
+//        try (PreparedStatement ps = connection.prepareStatement(SELECT_SCRIPT_GRAPH_RECURSIVE_FOR_KEYWORD)) {
+////            ps.setObject(1, platform);
+//            ps.setString(1, platform.code());
+//            ps.setString(2, keyword.trim());
+//
+//            // s.id, s.created_at, s.text, s.type, s.label,
+//            // e.id, e.created_at, e.match_text, e.response_text, e.src, e.dst
+//            Map<UUID, SequencedSet<Edge>> tempEdges = new HashMap<>();
+//            Map<UUID, UUID> edgeIdToDstId = new HashMap<>();
+//
+//            final ResultSet rs = ps.executeQuery();
+//            while (rs.next()) {
+//
+//                UUID id = (UUID) rs.getObject(1); // id
+//
+//                Node node = scriptMap.get(id);
+//                if (node == null) {
+//                    // columnIndex 2, // createdAt
+//                    String text = rs.getString(3);  // text
+//                    NodeType type = NodeType.forValue(rs.getInt(4));  // type
+//                    String label = rs.getString(5); // label
+//
+//                    node = new Node(id, text, type, null, label); // no next entries yet...
+//                    scriptMap.put(id, node);
+//                }
+//
+//                UUID edgeId = (UUID) rs.getObject(6); // Edge.id
+//                // index 7, skip the createdAt
+//                List<String> matchText = Functions.parseMatchTextPatterns(rs.getString(8)); // matchText
+//                String responseText = rs.getString(9);
+//                UUID srcId = (UUID) rs.getObject(10);
+//                UUID dstId = (UUID) rs.getObject(11);
+//
+//                Edge tempEdge = new Edge(
+//                        edgeId, responseText, matchText, scriptMap.get(dstId)
+//                ); // NB: the destination node may not exist so we will need to update/replace this edge at the end of the while loop
+//                edgeIdToDstId.put(edgeId, dstId);
+//
+//                SequencedSet<Edge> edgesForParentScript = tempEdges.computeIfAbsent(srcId, k -> new LinkedHashSet<>());
+//                edgesForParentScript.add(tempEdge);
+//            }
+//
+//            // Now patch all the references for both the edges and the scripts
+//            for (Map.Entry<UUID, Node> idAndScript : scriptMap.entrySet()) {
+//                SequencedSet<Edge> edgesForScript = tempEdges.get(idAndScript.getKey());
+//                Node node = idAndScript.getValue();
+//                for (Edge edge : edgesForScript) {
+//                    if (edge.targetNode() == null) {
+//                        UUID destinationScriptID = edgeIdToDstId.get(edge.id());
+//                        Node missingNode = scriptMap.get(destinationScriptID);
+//                        //LOG.info("Patching edge {} with dst: {}", node.id(), missingNode);
+//                        edge = edge.copyReplacing(missingNode);
+//                    }
+//                    // else the node was already available when we created the Edge from the ResultSet
+//
+//                    node.edges().add(edge);
+//                }
+//            }
+//
+//        } catch (SQLException e) {
+//            LOG.error("getScript failed", e);
+//            return null;
+//        }
+//
+//        // FIXME remove
+//        scriptMap.forEach((k, v) -> {
+//            LOG.info(v.toString());
+//        });
+//
+//        Node initialNode = null;
+//        for (Node s : scriptMap.values()) {
+//            if (s.text().equals(keyword)) {
+//                initialNode = s;
+//                break;
+//            }
+//        }
+//        return initialNode;
+//    }
 
     @Override
     public Node getScript(UUID scriptId) {
@@ -732,6 +732,25 @@ public class PostgresPersistenceManager implements PersistenceManager {
         });
 
         return scriptMap.get(nodeId);
+    }
+
+    public Node getDefaultScript(PlatformChannelKey key) {
+        try (Connection connection = fetchConnection()) {
+            assert connection != null;
+            return getDefaultScript(connection, key);
+        } catch (SQLException e) {
+            LOG.error("getScript: fetchConnection failed", e);
+            return null;
+        }
+    }
+
+    public Node getDefaultScript(Connection connection, PlatformChannelKey key) {
+        try (PreparedStatement ps = connection.prepareStatement("")) {
+
+        } catch (SQLException e) {
+            //
+        }
+        return null;
     }
 
     @Override
