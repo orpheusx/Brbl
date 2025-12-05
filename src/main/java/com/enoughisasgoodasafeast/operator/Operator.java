@@ -5,6 +5,7 @@ import com.enoughisasgoodasafeast.operator.PersistenceManager.PersistenceManager
 import com.github.benmanes.caffeine.cache.Caffeine;
 import com.github.benmanes.caffeine.cache.LoadingCache;
 import io.jenetics.util.NanoClock;
+import org.jspecify.annotations.Nullable;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -23,8 +24,9 @@ public class Operator implements MessageProcessor {
 
     private static final Logger LOG = LoggerFactory.getLogger(Operator.class);
 
-    static final int EXPECTED_INPUT_COUNT = 1;
-    static final String ALL_KEYWORDS = "ALL";
+    private static final int EXPECTED_INPUT_COUNT = 1;
+
+    public static final String ALL = "ALL";
 
     final LoadingCache<@NonNull SessionKey, Session> sessionCache = Caffeine.newBuilder()
             .expireAfterAccess(20, TimeUnit.MINUTES) // TODO make duration part of the configuration
@@ -46,11 +48,13 @@ public class Operator implements MessageProcessor {
 
     final LoadingCache<@NonNull KeywordCacheKey, Node> scriptByKeywordCache = Caffeine.newBuilder()
             .expireAfterAccess(20, TimeUnit.MINUTES)
-            .build(key -> findScriptForKeywordShortCode(key));
+            .build(key -> findScriptForKeywordChannel(key));
 
-    final LoadingCache<@NonNull PlatformChannelKey, Node> defaultScriptForChannel = Caffeine.newBuilder()
-            .expireAfterWrite(60, TimeUnit.MINUTES)
-            .build(key -> loadDefaultScriptsByChannelCache(key));
+    // NB: Another single entry cache used for the same benefits as above.
+    final LoadingCache<@NonNull String, @NonNull Route[]> activeRoutesCache = Caffeine.newBuilder()
+            .expireAfterWrite(20, TimeUnit.MINUTES)
+            .build(allRoutes -> loadAllActiveRoutes(allRoutes));
+
 
     private final Platform defaultPlatform = Platform.BRBL;
 
@@ -168,7 +172,7 @@ public class Operator implements MessageProcessor {
      * @return the next Node in the conversation (or null if the conversation is complete?)
      * FIXME Maybe instead of null we return a symbolic Node that indicates the end of Node?
      */
-    public Node evaluate(Node node, ScriptContext session, Message moMessage) throws IOException {
+    private Node evaluate(Node node, ScriptContext session, Message moMessage) throws IOException {
         Node nextNode = switch (node.type()) {
             case EchoWithPrefix ->
                     SimpleTestScript.SimpleEchoResponseScript.evaluate(session, moMessage);
@@ -210,7 +214,7 @@ public class Operator implements MessageProcessor {
 
 
     @Override
-    public boolean log(/*Session session, */Message message) {
+    public boolean log(Message message) {
         return persistenceManager.insertProcessedMO(
                 message,
                 this.sessionCache.get(SessionKey.newSessionKey(message)));
@@ -225,38 +229,48 @@ public class Operator implements MessageProcessor {
      * @throws InterruptedException if any of the involved threads was interrupted
      * @throws ExecutionException if any of the subtasks failed
      */
-    Session createSession(SessionKey sessionKey) throws InterruptedException, ExecutionException {
+    private Session createSession(SessionKey sessionKey) throws InterruptedException, ExecutionException {
         try (var scope = new StructuredTaskScope.ShutdownOnFailure()) {
 
             Supplier<User> user = scope.fork(() -> userCache.get(sessionKey));
-            Supplier<Node> script = scope.fork(() -> scriptByKeywordCache.get(KeywordCacheKey.newKey(sessionKey))); // an Optional with orElse() might work well here.
+            Supplier<Node> keywordScript = scope.fork(() -> scriptByKeywordCache.get(KeywordCacheKey.newKey(sessionKey)));
+            Supplier<Node> defaultScript = scope.fork(() ->
+                    findDefaultScriptByRouteCache(sessionKey));
 
             scope.join().throwIfFailed(); // TODO consider using joinUntil() to enforce a collective timeout.
 
-            // Check if the Session table has a record for this User. We can skip this if the User is brand new.
-//            final Instant instant = user.get().platformCreationTimes().get(sessionKey.platform());
-//            final Session session = ((PostgresPersistenceManager) persistenceManager).getSession(user.get().id());
-//            if (session != null) {
-//                // Replace the script property with the one we just fetched.
-//
-//                return session;
-//            } else {
-            return new Session(
-                    UUID.randomUUID(),
-                    script.get(),
-                    user.get(),
-                    getQueueProducer(sessionKey.platform()),
-                    persistenceManager);
-//            }
+            // Check if the Session table has a record for this User. We can skip this check if the User is brand new.
+            //            final Instant instant = user.get().platformCreationTimes().get(sessionKey.platform());
+            //            final Session session = ((PostgresPersistenceManager) persistenceManager).getSession(user.get().id());
+            //            if (session != null) {
+            //                // Replace the script property with the one we just fetched.
+            //
+            //                return session;
+            //            } else {
+
+            Node script = (keywordScript.get() != null) ? keywordScript.get() : defaultScript.get();
+            if (script == null) {
+                LOG.error("No script available by keyword match or route default. Configuration error in route table for {}:{} ",
+                        sessionKey.platform(), sessionKey.to());
+                return null;
+            } else {
+                return new Session(
+                        UUID.randomUUID(),
+                        script,
+                        user.get(),
+                        getQueueProducer(sessionKey.platform()),
+                        persistenceManager);
+            }
+            //            }
         }
     }
 
-    QueueProducer getQueueProducer(Platform platform) {
+    private QueueProducer getQueueProducer(Platform platform) {
         // We may need to add different handling for each Platform.
         return queueProducer;
     }
 
-    protected User findOrCreateUser(SessionKey sessionKey) {
+    private User findOrCreateUser(SessionKey sessionKey) {
         User user = persistenceManager.getUser(sessionKey);
         if (user == null) {
             LOG.info("User not found.");
@@ -283,7 +297,7 @@ public class Operator implements MessageProcessor {
      * Load the single entry into the map of Keywords
      * @return a map of all the regex pattern-to-Keyword entries in the system.
      */
-    Map<Pattern, Keyword> loadAllKeywords(String theOneAndOnlyKey) {
+    private Map<Pattern, Keyword> loadAllKeywords(String theOneAndOnlyKey) {
         return persistenceManager.getKeywords();
     }
 
@@ -292,8 +306,8 @@ public class Operator implements MessageProcessor {
      * @param keywordCacheKey that contains the keyword and short/long code or platform specific program identifier.
      * @return the connected Node assigned to the keyword.
      */
-    Node findScriptForKeywordShortCode(KeywordCacheKey keywordCacheKey) {
-        final Map<Pattern, Keyword> all = allKeywordsByPatternCache.get(ALL_KEYWORDS);
+    private Node findScriptForKeywordChannel(KeywordCacheKey keywordCacheKey) {
+        final Map<Pattern, Keyword> all = allKeywordsByPatternCache.get(ALL);
         if (all == null || all.isEmpty()) {
             LOG.error("CRITICAL: No keywords available from system for new session!!!");
             return null;
@@ -302,13 +316,11 @@ public class Operator implements MessageProcessor {
         if (scriptId != null) {
             return scriptCache.get(scriptId);
         } else {
-            LOG.warn("No keyword found for {}. Using default for {}", keywordCacheKey, keywordCacheKey.channel());
-            var platformChannelKey = PlatformChannelKey.newPlatformChannel(keywordCacheKey);
-            return defaultScriptForChannel.get(platformChannelKey);
+            return null;
         }
     }
 
-    UUID findMatch(Map<Pattern, Keyword> all, KeywordCacheKey keywordCacheKey) {
+    protected UUID findMatch(Map<Pattern, Keyword> all, KeywordCacheKey keywordCacheKey) {
         // The key here is the pattern and the value is the Keyword object.
         // It is possible for Keywords with different patterns to point at the same Node.
         for (Map.Entry<Pattern, Keyword> entry : all.entrySet()) {
@@ -327,6 +339,7 @@ public class Operator implements MessageProcessor {
             // The ordering of the map is non-deterministic.
             // Our authoring setup tools will need to pre-test the keyword entries to avoid unintended matches.
         }
+        LOG.info("No keyword matches for {}", keywordCacheKey.keyword());
         return null;
     }
 
@@ -334,27 +347,39 @@ public class Operator implements MessageProcessor {
         return persistenceManager.getScript(nodeId);
     }
 
-    // FIXME ...or defaultScript. I suspect we'll want the Platform
-    Node loadDefaultScriptsByChannelCache(PlatformChannelKey platformChannelKey) {
-//        return null;
-        return defaultScript(platformChannelKey.platform(), "");
+
+    private Route[] loadAllActiveRoutes(@NonNull String allRoutes) {
+        // NB: Conventionally we'd use a map but the number here is probably pretty well bounded to < 1000 for the foreseeable future.
+        // Faster to just iterate over the array.
+        return persistenceManager.getActiveRoutes();
     }
 
-    // FIXME pick this interface or loadDefaultScriptsByChannelCache as the method for fetching default scripts.
-    Node defaultScript(Platform platform, String shortCodeOrKeywordOrChannelName) {
-        // TODO use params to determine the correct initial node.
-        return new Node("THIS IS THE CHANNEL DEFAULT", NodeType.SendMessage, "DefaultScript");
+    /*
+     * Loops through the routes looking for one that matches the provided platform and channel.
+     * NB: For (even not so) small numbers of elements, looping is faster that using a map.
+     */
+    @Nullable Node findDefaultScriptByRouteCache(SessionKey sessionKey) {
+        final Route[] routes = activeRoutesCache.get(ALL);
+        if (routes != null) {
+            for (Route route : routes) {
+                if (route.platform() == sessionKey.platform() && route.channel().equals(sessionKey.to())) {
+                    LOG.info("Found default script for route: {}", route);
+                    return scriptCache.get(route.default_node_id());
+                }
+            }
+        }
+        return null;
     }
 
-    Map<Platform, String> defaultPlatformIdMap(String from) {
+    private Map<Platform, String> defaultPlatformIdMap(String from) {
         return Map.of(defaultPlatform, from);
     }
 
-    Map<Platform, Instant> defaultPlatformTimeCreatedMap(Instant createdAt) {
+    private Map<Platform, Instant> defaultPlatformTimeCreatedMap(Instant createdAt) {
         return Map.of(defaultPlatform, createdAt);
     }
 
-    List<String> defaultLanguageList(String from, String to) {
+    private List<String> defaultLanguageList(String from, String to) {
         // TODO:
         // the associated shortcode/longcode should probably have expected language code(s)
         // we could also use the 'from' to guess. E.g. if the number is Mexican we could assume 'SPA'

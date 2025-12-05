@@ -32,12 +32,15 @@ public interface PersistenceManager {
     // Called by Operator
     Node getScript(UUID scriptId);
 
+    // Called by Operator
+    Route[] getActiveRoutes();
+
     //Node getScriptForKeyword(Platform platform, String keyword);
 
     /*
      * This exception exists simply to slightly abstract the internal details involved.
      */
-    public static class PersistenceManagerException extends Exception {
+    class PersistenceManagerException extends Exception {
         public PersistenceManagerException(String message, Exception e) {
             super(message, e);
         }

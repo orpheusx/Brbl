@@ -2181,4 +2181,37 @@ There are two ways we create Users.
 2) they checked a box on a Customer form somewhere (online or off) that is being tracked somehow for verification. If the User sends a stop message without any other interaction we might consider this a signal to drop them completely. A "hard drop."
 
 TODO
-_ complete the keywords and default keyword implementation including the table design.
+_ complete the keywords and default scripts implementation including the table design.
+
+
+===== 2025-12-03 ====
+
+Worked out the design for default scripts. Completely different result:
+brbl_logic.routes tracks all the registered combinations of platform and channel (formerly shortcodes), the customer that "owns" them, and the default
+script (node.) Since channels are assigned through an application process by the platform holders we also need a status column to track their progress (and egress.)
+
+The Keywords table needs to be overhauled to reflect this new scope. Keywords need only be unique per route (NB: route is the combination of platform and channel.)
+
+Now that we have the design we gotta decide how to structure the caches.
+Given the semi-static nature of a default mapping we could do as we do for keywords (reading them all in one shot) and cache just the id of the script then pull through the main script cache.
+Let's try that...
+
+
+===== 2025-12-04 ====
+
+Completed work on keywords and routes, implementing default scripts and the caching thereof.
+
+Read an interesting post-mortem of a project that ran containerized Java apps and moved from JDK8 to 17. They ran afoul of a regression in the latter version that ignored cgroup cpu limits (2 vCPUs) and read the host's native core count (96!). The JVM used the much larger number when scaling thread creation. At 2mb per thread that almost blew out the container's total memory size. Yikes. The same bug increased the number of malloc arenas created by glibc. Neither of these show up when you're looking at heap size; they're both in the native parts of the JMV. The G1GC in 17 is also known to use more native memory.
+The suggested solution is to set -XX:ActiveProcessorCount=<N> (for the thread problem) and set export MALLOC_ARENA_MAX=<1 or 2> (for the malloc issue.)
+For the garbage collector issue either tune it by adding something like this:
+    -XX:+UseG1GC -XX:MaxGCPauseMillis=200 -XX:G1HeapRegionSize=16m
+Or, ParallelGC instead. It's apparently it has the lowest native memory footprint of all the collectors.
+And, to observe native memory:
+    -XX:NativeMemoryTracking=summary
+then use jcmd <pid> VM.native_memory summary to see the values.
+The article is here: https://dzone.com/articles/jdk-memory-bloat-containers
+
+
+===== 2025-12-05 ====
+
+Implement database persistence of sessions. This is currently stubbed out.

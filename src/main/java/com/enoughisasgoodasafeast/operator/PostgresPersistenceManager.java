@@ -60,7 +60,7 @@ public class PostgresPersistenceManager implements PersistenceManager {
 
     public static final String MO_MESSAGE_PRCD =
             """
-                    INSERT INTO brbl_logs.messages_mo_prcd 
+                    INSERT INTO brbl_logs.messages_mo_prcd
                         (id, prcd_at, session_id, script_id)
                     VALUES
                         (?, ?, ?, ?);
@@ -200,7 +200,7 @@ public class PostgresPersistenceManager implements PersistenceManager {
                         AND
                         rgraph.is_cycle IS FALSE
                         ORDER BY s.id ;
-                    """; // FIXME redundant to have both the part of the where clause and inner join include 's.id = rgraph.node_id'
+                    """; // FIXME redundant to include 's.id = rgraph.node_id' in the where clause when its already an inner join.
 
     public static final String SELECT_SCRIPT_GRAPH_RECURSIVE_FOR_KEYWORD =
             """
@@ -231,9 +231,26 @@ public class PostgresPersistenceManager implements PersistenceManager {
     public static final String SELECT_ALL_KEYWORDS =
             """
                     SELECT
-                        k.id, k.pattern, k.platform, k.script_id, k.is_default, k.short_code
+                        k.id, k.pattern, k.platform, k.script_id, k.channel
                     FROM
                         brbl_logic.keywords k ;
+                    """;
+
+    public static final String SELECT_ALL_ROUTES_WITH_STATUS =
+            """
+                    SELECT
+                        r.id,
+                        r.platform,
+                        r.channel,
+                        r.default_node_id,
+                        r.customer_id,
+                        r.status,
+                        r.created_at,
+                        r.updated_at
+                    FROM
+                        brbl_logic.routes r
+                    WHERE
+                        r.status = ?::route_status
                     """;
 
 
@@ -535,12 +552,10 @@ public class PostgresPersistenceManager implements PersistenceManager {
                 Platform platform = Platform.byCode(rs.getString(3));
                 // k.script_id
                 UUID scriptId = (UUID) rs.getObject(4);
-                // k.is_default
-                boolean isDefault = rs.getBoolean(5);
+                // k.channel
+                String channel = rs.getString(5);
 
-                String shortCode = rs.getString(6);
-
-                Keyword keyword = new Keyword(id, pattern.trim(), platform, scriptId, shortCode);
+                Keyword keyword = new Keyword(id, pattern.trim(), platform, scriptId, channel);
 
                 Pattern compiledPattern = Pattern.compile(pattern);
 
@@ -555,6 +570,53 @@ public class PostgresPersistenceManager implements PersistenceManager {
         return allKeywordMap;
     }
 
+
+    @Override
+    public Route[] getActiveRoutes() {
+        LOG.info("(Re)Loading route cache...");
+        try (Connection connection = fetchConnection()) {
+            assert connection != null;
+            return getActiveRoutes(connection);
+        } catch (SQLException e) {
+            LOG.error("getActiveRoutes: fetchConnection failed", e);
+            return null;
+        }
+    }
+
+    public Route[] getActiveRoutes(Connection connection) {
+        List<Route> allRoutes = new ArrayList<>();
+        try (PreparedStatement ps = connection.prepareStatement(SELECT_ALL_ROUTES_WITH_STATUS)) {
+            ps.setObject(1, "ACTIVE");
+            final ResultSet rs = ps.executeQuery();
+            while (rs.next()) {
+                // r.id
+                UUID id = (UUID) rs.getObject(1);
+                // r.platform
+                Platform platform = Platform.byCode(rs.getString(2));
+                // r.channel
+                String channel = rs.getString(3);
+                // r.default_node_id
+                UUID nodeId = (UUID) rs.getObject(4);
+                // r.customer_id
+                UUID customerId = (UUID) rs.getObject(5);
+                // r.status
+                RouteStatus status = RouteStatus.valueOf(rs.getString(6)); //(RouteStatus) rs.getObject(6);
+                // r.created_at
+                Instant createdAt = rs.getTimestamp(7).toInstant();
+                // r.updated_at
+                Instant updatedAt = rs.getTimestamp(8).toInstant();
+
+                Route route = new Route(id, platform, channel, nodeId, customerId, status, createdAt, updatedAt);
+                allRoutes.add(route);
+            }
+            return allRoutes.toArray(new Route[0]);
+        }
+
+        catch (SQLException e) {
+            LOG.error("getActiveRoutes failed.");
+            throw new RuntimeException(e);
+        }
+    }
 
 //        @Override
 //    public Node getScriptForKeyword(Platform platform, String keyword) {
@@ -698,7 +760,7 @@ public class PostgresPersistenceManager implements PersistenceManager {
                 ); // NB: the destination node may not exist so we will need to update/replace this edge at the end of the while loop
                 edgeIdToDstId.put(edgeId, dstId);
 
-                SequencedSet<Edge> edgesForParentScript = tempEdges.computeIfAbsent(srcId, k -> new LinkedHashSet<>());
+                SequencedSet<Edge> edgesForParentScript = tempEdges.computeIfAbsent(srcId, _ -> new LinkedHashSet<>());
                 edgesForParentScript.add(tempEdge);
             }
 
@@ -712,9 +774,9 @@ public class PostgresPersistenceManager implements PersistenceManager {
                         Node missingNode = scriptMap.get(destinationScriptID);
                         //LOG.info("Patching edge {} with dst: {}", node.id(), missingNode);
                         edge = edge.copyReplacing(missingNode);
-                    } else {
+                    } //else {
                         //LOG.info("Edge {} already points to {}", edge.id(), edge.node());
-                    }
+                    //}
                     // else the node was already available when we created the Edge from the ResultSet
 
                     node.edges().add(edge);
@@ -727,30 +789,9 @@ public class PostgresPersistenceManager implements PersistenceManager {
         }
 
         // FIXME remove
-        scriptMap.forEach((k, v) -> {
-            LOG.info(v.toString());
-        });
+        scriptMap.forEach((_, v) -> LOG.info(v.toString()));
 
         return scriptMap.get(nodeId);
-    }
-
-    public Node getDefaultScript(PlatformChannelKey key) {
-        try (Connection connection = fetchConnection()) {
-            assert connection != null;
-            return getDefaultScript(connection, key);
-        } catch (SQLException e) {
-            LOG.error("getScript: fetchConnection failed", e);
-            return null;
-        }
-    }
-
-    public Node getDefaultScript(Connection connection, PlatformChannelKey key) {
-        try (PreparedStatement ps = connection.prepareStatement("")) {
-
-        } catch (SQLException e) {
-            //
-        }
-        return null;
     }
 
     @Override
@@ -833,7 +874,6 @@ public class PostgresPersistenceManager implements PersistenceManager {
         }
     }
 
-
     @Override
     public boolean insertUser(User user) {
         try (Connection connection = fetchConnection()) {
@@ -879,72 +919,15 @@ public class PostgresPersistenceManager implements PersistenceManager {
 
     }
 
-    private void insertTest() throws InterruptedException {
-//        final SessionKey sessionKey = new SessionKey(Platform.SMS, "17817299468", "12345");
-//        LOG.info("Testing getUser with {}", sessionKey);
-//        User u = getUser(sessionKey);
-//        LOG.info("Returned {}", u);
-//        if (u == null) {
-
-//        Map<Platform, String> platformIds = new LinkedHashMap<>();
-//        platformIds.put(Platform.SMS, "14162221234");
-//        Map<Platform, Instant> platformCreatedAt = new LinkedHashMap<>();
-//        platformCreatedAt.put(Platform.SMS, NanoClock.utcInstant());
-//        User newUser = new User(UUID.randomUUID(), platformIds, platformCreatedAt, "CA", List.of("FRA"));
-//        final boolean insertOk = insertUser(newUser);
-//        LOG.info("Inserted {}", insertOk);
-
-        final SessionKey sessionKey = new SessionKey(Platform.SMS, "14162221234", "12345", "ignore");
-        LOG.info("Testing getUser with {}", sessionKey);
-        User u = getUser(sessionKey);
-        LOG.info("Returned {}", u);
-
-//        }
-        //    try {
-        //        Connection c = fetchConnection(); // warm the pool
-        //        c.close();
-        //    } catch (SQLException e) {
-        //        throw new RuntimeException(e);
-        //    }
-        //    final Message moMessage = Message.newMO("17817209468", "12345", "first message");
-        //    final UUID uuid = moMessage.id();
-        //    final boolean insertsOk = insertMO(moMessage);
-        //    LOG.info("Messages inserted: {}", insertsOk);
-        //    LOG.info("New Message id: {}", uuid);
-//
-        //    final Node node = new Node("blah", NodeType.PresentMulti, null, "blahLabel");
-        //    final Node previousScript = new Node("response to blah", NodeType.PresentMulti, null, "blahResponseLabel");
-        //    final User user = new User(UUID.randomUUID(), Map.of(Platform.SMS, "17815551234"), "MX", List.of("spa", "eng"));
-        //    final InMemoryQueueProducer queueProducer = new InMemoryQueueProducer();
-        //    Session session = new Session(UUID.randomUUID(), node, user, queueProducer, null);
-        //    session.addEvaluated(previousScript);
-        //    boolean procdMessageOk = insertProcessedMO(moMessage, session);
-        //    LOG.info("processedMessage inserted: {}", procdMessageOk);
-        //
-        //    final Message mtMessage = Message.newMO("12345", "17817209468", "first response");
-        //    final boolean mtInsertOk = insertMT(mtMessage, session);
-        //    LOG.info("MT inserted: {}", mtInsertOk);
-        //
-        //    boolean dlvrMtOk = insertDeliveredMT(mtMessage);
-        //    LOG.info("deliveredMessage inserted: {}", dlvrMtOk);
-        //
-        //    return uuid;
-    }
-
-    public static void main(String[] args) throws InterruptedException, IOException, PersistenceManagerException {
+    static void main(String[] args) throws /*InterruptedException,*/ IOException, PersistenceManagerException {
         PostgresPersistenceManager pm = new PostgresPersistenceManager(ConfigLoader.readConfig("persistence_manager_test.properties"));
+        //var routes = pm.getActiveRoutes();
+        //for (var route : routes) {
+        //    LOG.info(route.toString());
+        //}
 
-        Node node = pm.getScript(UUID.fromString("89eddcb8-7fe5-4cd1-b18b-78858f0789fb"));
-        System.out.println("\n\n\n\n\n\n");
-        Node.printGraph(node, node, 0);
-
-//      Node script2 = pm.getScript(UUID.fromString("525028ae-0a33-4c80-a22f-868f77bb9531"));
-
-//        LOG.info("Calling getKeywords...");
-//        final Map<String, Keyword> keywords = pm.getKeywords();
-//        keywords.forEach( (s, keyword) -> {
-//            System.out.println(keyword);
-//        });
+        final Map<Pattern, Keyword> keywords = pm.getKeywords();
+        keywords.forEach((key, value) -> LOG.info("{} -> {}", key, value.wordPattern()));
     }
 
 }

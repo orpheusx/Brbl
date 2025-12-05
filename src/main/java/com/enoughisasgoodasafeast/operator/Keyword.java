@@ -11,5 +11,5 @@ import java.util.UUID;
  * @param scriptId the script mapped to this keyword.
  * @param channel the channel where the keyword is defined.
  */
-public record Keyword(UUID id, String wordPattern, Platform platform, UUID scriptId/*, Customer c*/, String channel) {}
+public record Keyword(UUID id, String wordPattern, Platform platform, UUID scriptId, String channel) {}
 

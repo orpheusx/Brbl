@@ -577,7 +577,7 @@ CREATE TABLE brbl_logic.routes (
             REFERENCES brbl_users.customers(id)
 );
 
--- Create at least one record in the default_scripts table:
+-- Create a couple of records in the routes table:
 INSERT INTO brbl_logic.routes VALUES(
     gen_random_uuid(), -- id
     'S'::public.platform, -- platform
@@ -589,13 +589,36 @@ INSERT INTO brbl_logic.routes VALUES(
     NOW()
 );
 
+INSERT INTO brbl_logic.routes VALUES(
+    gen_random_uuid(), -- id
+    'S'::public.platform, -- platform
+    '98712', -- channel
+    '35ab8b42-fbdf-47e1-ac62-bae86c3c7178'::UUID,  -- node_id
+    '50fd2114-c64d-4475-99a8-1a202b128112'::UUID, -- customer_id
+    'ACTIVE'::route_status,
+    NOW(),
+    NOW()
+);
+
+INSERT INTO brbl_logic.routes VALUES(
+    gen_random_uuid(), -- id
+    'S'::public.platform, -- platform
+    '1234', -- channel
+    '525028ae-0a33-4c80-a22f-868f77bb9531'::UUID,  -- node_id
+    '50fd2114-c64d-4475-99a8-1a202b128112'::UUID, -- customer_id
+    'ACTIVE'::route_status,
+    NOW(),
+    NOW()
+);
+
 -- Also, gotta fix keywords table to reflect the design changes:
 ALTER TABLE brbl_logic.keywords DROP COLUMN is_default;
 ALTER TABLE brbl_logic.keywords ALTER COLUMN short_code TYPE VARCHAR(15) ;
 ALTER TABLE brbl_logic.keywords RENAME COLUMN short_code TO channel ;
---> Define a primary for the table. Currently, it's only NOT NULL.
---> Remove the
+--> Define a primary for the table, replacing the unique constraint on the id column. Currently, it's only NOT NULL.
+ALTER TABLE keywords DROP CONSTRAINT keywords_id_key;
+ALTER TABLE keywords ADD PRIMARY KEY(id);
 
 
 --> TODO at some point we should go through all our foreign keys and rename them uniformly.
--- ALTER TABLE table_name RENAME CONSTRAINT oldname TO newname
+-- ALTER TABLE table_name RENAME CONSTRAINT old_name TO new_name

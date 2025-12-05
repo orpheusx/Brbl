@@ -10,6 +10,7 @@ import org.slf4j.LoggerFactory;
 import java.time.Instant;
 import java.util.List;
 import java.util.Map;
+import java.util.UUID;
 import java.util.regex.Pattern;
 
 import static com.enoughisasgoodasafeast.Message.newMO;
@@ -64,26 +65,22 @@ public class OperatorTest {
 
     public static final SessionKey SESSION_KEY_US_SHORT_CODE_1 = SessionKey.newSessionKey(mo1);
 
-    private InMemoryQueueProducer producer;
+    private InMemoryQueueProducer queueProducer;
     private Operator operator = null;
-    private PersistenceManager persistenceManager;
 
-    // Elements of the script needed for assertions
-    private Node presentQuestion;
     private Edge answerFlort = null;
     private Node endConversation;
     private Node processAnswer;
-    private Node defaultScript;
 
     @BeforeEach
     void setup() {
-        producer = new InMemoryQueueProducer();
+        queueProducer = new InMemoryQueueProducer();
         QueueConsumer fakeQueueConsumer = new FakeQueueConsumer();
-        persistenceManager = new TestingPersistenceManager();
-        operator = new Operator(fakeQueueConsumer, producer, persistenceManager);
+        PersistenceManager persistenceManager = new TestingPersistenceManager();
+        operator = new Operator(fakeQueueConsumer, queueProducer, persistenceManager);
 
         // Construct a script for testing purposes
-        presentQuestion = new Node(COLOR_QUIZ_START_TEXT, NodeType.PresentMulti, "ColorQuizStart");
+        Node presentQuestion = new Node(COLOR_QUIZ_START_TEXT, NodeType.PresentMulti, "ColorQuizStart");
         processAnswer = new Node(COLOR_QUIZ_UNEXPECTED_INPUT, NodeType.ProcessMulti, "ColorQuizProcessResponse");
         presentQuestion.edges().add(
                 new Edge(List.of("n/a"), "n/a", processAnswer)
@@ -97,15 +94,18 @@ public class OperatorTest {
 
         processAnswer.edges().addAll(List.of(answerRed, answerBlue, answerFlort));
 
-        // Define a default script for the platform-channel.
-        defaultScript = new Node("Welcome! You can talk to us about the following topics...", NodeType.EndOfChat, "CustomerTopicStarter");
-        operator.defaultScriptForChannel.put(new PlatformChannelKey(Platform.SMS, mo1.to()), defaultScript);
-
+        // Add the test script to the fixture's script "cache."
         ((TestingPersistenceManager) persistenceManager).addScript(
                 TestingPersistenceManager.SCRIPT_ID, presentQuestion);
 
-//        operator.scriptByKeywordCache.put(
-//                new KeywordCacheKey(SHORT_CODE_4, Platform.SMS, COLOR_QUIZ_KEYWORD), presentQuestion);
+        // Define a default script for the platform-channel, adding it with the default route.
+        Node defaultScript = new Node("Welcome! You can talk to us about the following topics...", NodeType.EndOfChat, "CustomerTopicStarter");
+        Route route = new Route(Platform.SMS, mo1.to(), defaultScript.id(), UUID.randomUUID());
+        operator.activeRoutesCache.put(
+                Operator.ALL,
+                List.of(route).toArray(new Route[0]));
+        // Remember the default routes only holds the script id. We still need to add the script itself to the main cache.
+        ((TestingPersistenceManager) persistenceManager).addScript(defaultScript.id(), defaultScript);
     }
 
     @Test
@@ -128,37 +128,36 @@ public class OperatorTest {
         Message mt3 = newMT(SHORT_CODE_3, MOBILE_US, SCRIPT_RESPONSE);
 
         assertTrue(operator.process(mo1));
-        assertEquals(1, producer.enqueuedCount());
-        assertEquals(mt1.to(), producer.enqueued().getFirst().to());
-        assertEquals(mt1.from(), producer.enqueued().getFirst().from());
-        assertEquals(mt1.text(), producer.enqueued().getFirst().text());
-        assertEquals(mt1.type(), producer.enqueued().getFirst().type());
+        assertEquals(1, queueProducer.enqueuedCount());
+        assertEquals(mt1.to(), queueProducer.enqueued().getFirst().to());
+        assertEquals(mt1.from(), queueProducer.enqueued().getFirst().from());
+        assertEquals(mt1.text(), queueProducer.enqueued().getFirst().text());
+        assertEquals(mt1.type(), queueProducer.enqueued().getFirst().type());
 
         assertTrue(operator.process(mo2));
-        assertEquals(2, producer.enqueuedCount());
-        assertEquals(mt2.to(), producer.enqueued().get(1).to());
-        assertEquals(mt2.from(), producer.enqueued().get(1).from());
-        assertEquals(mt2.text(), producer.enqueued().get(1).text());
-        assertEquals(mt2.type(), producer.enqueued().get(1).type());
+        assertEquals(2, queueProducer.enqueuedCount());
+        assertEquals(mt2.to(), queueProducer.enqueued().get(1).to());
+        assertEquals(mt2.from(), queueProducer.enqueued().get(1).from());
+        assertEquals(mt2.text(), queueProducer.enqueued().get(1).text());
+        assertEquals(mt2.type(), queueProducer.enqueued().get(1).type());
 
         assertTrue(operator.process(mo3));
-        assertEquals(3, producer.enqueuedCount());
-        assertEquals(mt3.to(), producer.enqueued().get(2).to());
-        assertEquals(mt3.from(), producer.enqueued().get(2).from());
-        assertEquals(mt3.text(), producer.enqueued().get(2).text());
-        assertEquals(mt3.type(), producer.enqueued().get(2).type());
+        assertEquals(3, queueProducer.enqueuedCount());
+        assertEquals(mt3.to(), queueProducer.enqueued().get(2).to());
+        assertEquals(mt3.from(), queueProducer.enqueued().get(2).from());
+        assertEquals(mt3.text(), queueProducer.enqueued().get(2).text());
+        assertEquals(mt3.type(), queueProducer.enqueued().get(2).type());
     }
 
     @Test
     void getUserSessionUncachedCached() {
-        var operator = new Operator(new FakeQueueConsumer(), new InMemoryQueueProducer(), new TestingPersistenceManager());
-
         Node node1 = new Node(SCRIPT_RESPONSE, NodeType.SendMessage);
         Edge edge1 = new Edge(List.of("1", "2", "3"), null);
         node1.edges().add(edge1);
 
         operator.scriptByKeywordCache.put(new KeywordCacheKey(SHORT_CODE_1, Platform.SMS, MO_TEXT_1), node1);
 
+        //MOBILE_US, SHORT_CODE_1, MO_TEXT_1
         Session s1 = operator.sessionCache.get(SessionKey.newSessionKey(mo1)); // from a US number
         Session s2 = operator.sessionCache.get(SessionKey.newSessionKey(mo2)); // from a MX number
         Session s3 = operator.sessionCache.get(SessionKey.newSessionKey(mo3)); // from same MX number
@@ -183,7 +182,7 @@ public class OperatorTest {
 
     @Test
     void findMatchForKeyword() {
-        final Map<Pattern, Keyword> all = operator.allKeywordsByPatternCache.get(Operator.ALL_KEYWORDS);
+        final Map<Pattern, Keyword> all = operator.allKeywordsByPatternCache.get(Operator.ALL);
         assertNotNull(all);
         assertFalse(all.isEmpty());
 
@@ -206,8 +205,8 @@ public class OperatorTest {
     void stepThroughPresentProcessMulti() {
         // Preflight check: cache is empty.
         assertEquals(0, operator.scriptByKeywordCache.estimatedSize());
-        ((TestingPersistenceManager) persistenceManager).addScript(
-                TestingPersistenceManager.SCRIPT_ID, presentQuestion);
+//        ((TestingPersistenceManager) persistenceManager).addScript(
+//                TestingPersistenceManager.SCRIPT_ID, presentQuestion);
 
         // Initiate the conversation
         assertTrue(operator.process(mo4));
@@ -221,7 +220,7 @@ public class OperatorTest {
         LOG.info("Session User platform ID = {}", userPhoneNumber);
         assertEquals(MOBILE_MX, userPhoneNumber);
 
-        final List<Message> queuedMessages = producer.enqueued();
+        final List<Message> queuedMessages = queueProducer.enqueued();
 
         assertEquals(1, queuedMessages.size(), "Unexpected number of messages queued.");
         assertTrue(requireNonNull(queuedMessages.getFirst()).text().contains("favorite color"), "Expected text not found in first queued message.");
@@ -256,8 +255,8 @@ public class OperatorTest {
 
         // Preflight check: cache is empty.
         assertEquals(0, operator.scriptByKeywordCache.estimatedSize());
-        ((TestingPersistenceManager) persistenceManager).addScript(
-                TestingPersistenceManager.SCRIPT_ID, presentQuestion);
+//        ((TestingPersistenceManager) persistenceManager).addScript(
+//                TestingPersistenceManager.SCRIPT_ID, presentQuestion);
 
         // Initiate the conversation
         assertTrue(operator.process(mo4));
@@ -269,7 +268,7 @@ public class OperatorTest {
         assertNotNull(session);
 
         // Make sure we get the expected initial response.
-        final List<Message> queuedMessages = producer.enqueued();
+        final List<Message> queuedMessages = queueProducer.enqueued();
         assertEquals(1, queuedMessages.size(), "Unexpected number of messages queued.");
         assertTrue(requireNonNull(queuedMessages.getFirst()).text().contains("favorite color"), "Expected text not found in first queued message.");
         // The current node should now be awaiting a response
@@ -314,8 +313,8 @@ public class OperatorTest {
     void stepThroughWithUnexpectedInputAndChangeTopic() {
         // Preflight check: cache is empty.
         assertEquals(0, operator.scriptByKeywordCache.estimatedSize());
-        ((TestingPersistenceManager) persistenceManager).addScript(
-                TestingPersistenceManager.SCRIPT_ID, presentQuestion);
+//        ((TestingPersistenceManager) persistenceManager).addScript(
+//                TestingPersistenceManager.SCRIPT_ID, presentQuestion);
 
         // Initiate the conversation
         assertTrue(operator.process(mo4));
@@ -324,7 +323,7 @@ public class OperatorTest {
         assertNotNull(session);
 
         // Make sure we get the expected initial response.
-        final List<Message> queuedMessages = producer.enqueued();
+        final List<Message> queuedMessages = queueProducer.enqueued();
         assertEquals(1, queuedMessages.size(), "Unexpected number of messages queued.");
         assertTrue(requireNonNull(queuedMessages.getFirst()).text().contains("favorite color"), "Expected text not found in first queued message.");
         // The current node should now be awaiting a response
@@ -341,9 +340,7 @@ public class OperatorTest {
 
         // Now request a change of topic
         assertTrue(operator.process(changeTopic));
-        producer.enqueued().forEach(message -> {
-            LOG.info(message.text());
-        });
+        queueProducer.enqueued().forEach(message -> LOG.info(message.text()));
 
         assertEquals(4, queuedMessages.size(), "Unexpected number of messages queued.");
         assertEquals(processAnswer.text(), queuedMessages.get(1).text(), "Expected text not found in 2nd queued message.");

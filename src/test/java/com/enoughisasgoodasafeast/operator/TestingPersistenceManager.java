@@ -66,10 +66,15 @@ class TestingPersistenceManager implements PersistenceManager {
         return nodesByScriptId.get(scriptId);
     }
 
-//    @Override
-    public Node getScriptForKeyword(Platform platform, String keyword) {
+    @Override
+    public Route[] getActiveRoutes() {
         return null;
     }
+
+//    @Override
+//    public Node getScriptForKeyword(Platform platform, String keyword) {
+//        return null;
+//    }
 
     @Override
     public User getUser(SessionKey sessionKey) {
