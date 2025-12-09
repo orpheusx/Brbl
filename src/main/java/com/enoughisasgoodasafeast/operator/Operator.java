@@ -235,7 +235,7 @@ public class Operator implements MessageProcessor {
             Supplier<User> user = scope.fork(() -> userCache.get(sessionKey));
             Supplier<Node> keywordScript = scope.fork(() -> scriptByKeywordCache.get(KeywordCacheKey.newKey(sessionKey)));
             Supplier<Node> defaultScript = scope.fork(() ->
-                    findDefaultScriptByRouteCache(sessionKey));
+                    findDefaultScriptByRoute(sessionKey));
 
             scope.join().throwIfFailed(); // TODO consider using joinUntil() to enforce a collective timeout.
 
@@ -247,6 +247,7 @@ public class Operator implements MessageProcessor {
             //
             //                return session;
             //            } else {
+//            persistenceManager.getActiveRoutes()loadSession
 
             Node script = (keywordScript.get() != null) ? keywordScript.get() : defaultScript.get();
             if (script == null) {
@@ -270,15 +271,17 @@ public class Operator implements MessageProcessor {
         return queueProducer;
     }
 
-    private User findOrCreateUser(SessionKey sessionKey) {
+    User findOrCreateUser(SessionKey sessionKey) {
         User user = persistenceManager.getUser(sessionKey);
         if (user == null) {
             LOG.info("User not found.");
             user = new User(UUID.randomUUID(),
                     defaultPlatformIdMap(sessionKey.from()),
                     defaultPlatformTimeCreatedMap(NanoClock.utcInstant()),
+                    defaultNickNameMap(),
                     deriveCountryCodeFromId(sessionKey.from()),
-                    defaultLanguageList(sessionKey.from(), sessionKey.to()));
+                    defaultLanguageList(sessionKey.from(), sessionKey.to()),
+                    findCustomerIdByRoute(sessionKey));
             boolean isInserted = persistenceManager.insertUser(user);
             if (!isInserted) {
                 LOG.error("findOrCreateUser failed to insert user. Caching it anyway: {}", user);
@@ -358,13 +361,39 @@ public class Operator implements MessageProcessor {
      * Loops through the routes looking for one that matches the provided platform and channel.
      * NB: For (even not so) small numbers of elements, looping is faster that using a map.
      */
-    @Nullable Node findDefaultScriptByRouteCache(SessionKey sessionKey) {
+    @Nullable Node findDefaultScriptByRoute(SessionKey sessionKey) {
+        //final Route[] routes = activeRoutesCache.get(ALL);
+        //if (routes != null) {
+        //    for (Route route : routes) {
+        //        if (route.platform() == sessionKey.platform() && route.channel().equals(sessionKey.to())) {
+        //            LOG.info("Found default script for route: {}", route);
+        //            return scriptCache.get(route.default_node_id());
+        //        }
+        //    }
+        //}
+        Route route = findRoute(sessionKey);
+        if (route != null) {
+            return scriptCache.get(route.default_node_id());
+        } else {
+            return null;
+        }
+    }
+
+    @Nullable UUID findCustomerIdByRoute(SessionKey sessionKey) {
+        Route route = findRoute(sessionKey);
+        if (route != null) {
+            return route.customer_id();
+        } else {
+            return null;
+        }
+    }
+
+    @Nullable Route findRoute(SessionKey sessionKey) {
         final Route[] routes = activeRoutesCache.get(ALL);
         if (routes != null) {
             for (Route route : routes) {
                 if (route.platform() == sessionKey.platform() && route.channel().equals(sessionKey.to())) {
-                    LOG.info("Found default script for route: {}", route);
-                    return scriptCache.get(route.default_node_id());
+                    return route;
                 }
             }
         }
@@ -377,6 +406,10 @@ public class Operator implements MessageProcessor {
 
     private Map<Platform, Instant> defaultPlatformTimeCreatedMap(Instant createdAt) {
         return Map.of(defaultPlatform, createdAt);
+    }
+
+    private Map<Platform, String> defaultNickNameMap() {
+        return Collections.emptyMap();
     }
 
     private List<String> defaultLanguageList(String from, String to) {

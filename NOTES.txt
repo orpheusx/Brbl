@@ -2201,8 +2201,8 @@ Let's try that...
 
 Completed work on keywords and routes, implementing default scripts and the caching thereof.
 
-Read an interesting post-mortem of a project that ran containerized Java apps and moved from JDK8 to 17. They ran afoul of a regression in the latter version that ignored cgroup cpu limits (2 vCPUs) and read the host's native core count (96!). The JVM used the much larger number when scaling thread creation. At 2mb per thread that almost blew out the container's total memory size. Yikes. The same bug increased the number of malloc arenas created by glibc. Neither of these show up when you're looking at heap size; they're both in the native parts of the JMV. The G1GC in 17 is also known to use more native memory.
-The suggested solution is to set -XX:ActiveProcessorCount=<N> (for the thread problem) and set export MALLOC_ARENA_MAX=<1 or 2> (for the malloc issue.)
+Read an interesting post-mortem of a project that ran containerized Java apps and moved from JDK8 to 17. They ran afoul of a regression in the latter version that ignored cgroup cpu limits (2 vCPUs) and read the host's native core count (96!). The JVM used the much larger number when scaling thread creation. At 2mb per thread that almost blew out the container's total memory size. Yikes. The same bug increased the number of malloc arenas created by glibc. Neither of these show up when you're looking at heap size; they're both in the native parts of the JMV. The G1GC in 17 is also known to use more native memory than previous versions.
+The suggested solution is to set -XX:ActiveProcessorCount=<N> (for the thread problem, matching the number in the container config) and set export MALLOC_ARENA_MAX=<1 or 2> (for the malloc issue.)
 For the garbage collector issue either tune it by adding something like this:
     -XX:+UseG1GC -XX:MaxGCPauseMillis=200 -XX:G1HeapRegionSize=16m
 Or, ParallelGC instead. It's apparently it has the lowest native memory footprint of all the collectors.
@@ -2214,4 +2214,36 @@ The article is here: https://dzone.com/articles/jdk-memory-bloat-containers
 
 ===== 2025-12-05 ====
 
-Implement database persistence of sessions. This is currently stubbed out.
+Implement database persistence of sessions... (This is currently stubbed out.)
+Requires some thinking about how we store sessions:
+    Per user globally (via the group_id) or per platform that the user has used (platform & channel?)
+
+We've thought about this before but hadn't made any decisions. Its theoretically useful to be able to transition a session from one platform to another (less expensive one) but totally unclear how appealing this would be for users. When transitioning we can provide (via the link) additional context to determine how we handle shared session data.
+
+What I hadn't thought about before: a user could interact with multiple routes, each owned by a different Customer. The user lookup for the second Customer route will find the common user record but shouldn't, in that case, restore the session because it belongs to the first Customer and would be confusing to the user. Same problem occurs when spanning platforms.
+
+The current query to fetch the user will return all the rows bound to the group_id and merge them together. The various platform specific ids are included in a map. So we are aware of when a user exists for multiple routes. However, it doesn't have any knowledge of which customer brought them in/has knowledge of them. And it wouldn't make sense to the user to be recognized by a Customer who hadn't contacted them before. Nor would Customers be pleased to share their Users this way.
+
+I think what we need to do is add a customer_id field to the User entity and include it in the primary key: platform, platform_code, customer_id.
+Then reorder/rework the logic in the Operator.createSession() method; the userCache will need the route information.
+
+This means that Profiles will need to be scoped by Customer as well. So that each Customer has their own distinct collection of User entities.
+
+SessionKeys should continue to work fine since they already include the "to" (aka channel) field that is unique. We don't know which Customer owns it but its enough to distinguish the same user sending a message to a different route.
+
+
+
+===== 2025-12-08 ====
+
+While adding customer_id to the User's primary key I re-remembered that the existing query was left joining with Profiles but the created User model was not using any of the data it provides. It does bundle all the combined set of languages and build a map of the other User associated by the shared Profile. Should we include the Profile as a property of the User? Or vice versa? Or create a tuple-like record that holds them both.
+
+We knew the object model and schema were intentionally asymmetric but the addition of the Customer id might change how we decide to manage it. The latter creates a more limited scope; the profile and the user records now all belong to the customer. I think this is more sensible than imagining a single Profile spanning multiple customers.
+
+Added customerId and map of nickNames to User. Add Profile, too?
+
+
+===== 2025-12-09 ====
+TODO
+X create test for PostgresPersistenceManager.getUser
+X create tests for Operator.findCustomerIdByRoute and findDefaultScriptByRoute
+

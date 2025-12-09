@@ -82,7 +82,7 @@ public class PostgresPersistenceManager implements PersistenceManager {
                         (?, ?);
                     """;
 
-    public static final String USER_PROFILE_BY_PLATFORM_ID_AND_CODE =
+    public static final String USER_PROFILE_BY_PLATFORM_ID =
             """
                     SELECT
                     	u.group_id, u.platform_id, u.platform_code,
@@ -102,12 +102,41 @@ public class PostgresPersistenceManager implements PersistenceManager {
                     	)
                     """; // FIXME figure out if a LATERAL JOIN might replace the sub-select part of this query
 
+    public static final String USER_PROFILE_BY_PLATFORM_ID_ROUTE =
+            """
+                    SELECT
+                    	u.group_id, u.platform_id, u.platform_code,
+                    	u.country, u.language, u.nickname, u.created_at,
+                    	p.surname, p.given_name, p.other_languages,
+                    	r.customer_id
+                    FROM
+                        brbl_users.users u
+                    LEFT JOIN
+                        brbl_users.profiles p
+                    ON
+                        u.group_id = p.group_id
+                    LEFT JOIN
+                        brbl_logic.routes r
+                    ON
+                        r.customer_id = u.customer_id
+                    WHERE
+                        r.platform = ?::public.platform
+                        AND
+                        r.channel = ?
+                        AND
+                    	u.group_id = (
+                    		SELECT group_id
+                    		FROM brbl_users.users
+                    		WHERE platform_id = ?
+                    	)
+                    """;
+
     public static final String USER_INSERT =
             """
                     INSERT INTO brbl_users.users
-                        (group_id, platform_id, platform_code, country, language, nickname, created_at)
+                        (group_id, platform_id, platform_code, country, language, nickname, created_at, customer_id)
                     VALUES
-                        (?, ?, ?, ?, ?, ?, ?)
+                        (?, ?, ?, ?, ?, ?, ?, ?)
                     """;
 
     public static final String PROFILE_INSERT =
@@ -454,17 +483,17 @@ public class PostgresPersistenceManager implements PersistenceManager {
         return true;
     }
 
-    public boolean upsertSession(Session session) {
+    public boolean saveSession(Session session) {
         try (Connection connection = fetchConnection()) {
             assert connection != null;
-            return upsertSession(connection, session);
+            return saveSession(connection, session);
         } catch (SQLException e) {
             LOG.error("upsertSession: fetchConnection failed", e);
             return false;
         }
     }
 
-    private boolean upsertSession(Connection connection, Session session) {
+    private boolean saveSession(Connection connection, Session session) {
         try (PreparedStatement ps = connection.prepareStatement(SESSION_UPSERT)) {
             ps.setObject(1, session.getId());
             ps.setBytes(2, sessionToBytes(session));
@@ -478,18 +507,18 @@ public class PostgresPersistenceManager implements PersistenceManager {
         }
     }
 
-    public Session getSession(UUID  id) {
+    public Session loadSession(UUID id) {
         LOG.info("Fetching session data for {}", id);
         try (Connection connection = fetchConnection()) {
             assert connection != null;
-            return getSession(connection, id);
+            return loadSession(connection, id);
         } catch (SQLException e) {
             LOG.error("getSession: fetchConnection failed", e);
             return null;
         }
     }
 
-    private Session getSession(Connection connection, UUID id) {
+    private Session loadSession(Connection connection, UUID id) {
         LOG.info("Retrieving session {}", id);
         try (PreparedStatement ps = connection.prepareStatement(SELECT_SESSION)) {
             ps.setObject(1, id);
@@ -788,9 +817,6 @@ public class PostgresPersistenceManager implements PersistenceManager {
             return null;
         }
 
-        // FIXME remove
-        scriptMap.forEach((_, v) -> LOG.info(v.toString()));
-
         return scriptMap.get(nodeId);
     }
 
@@ -806,17 +832,24 @@ public class PostgresPersistenceManager implements PersistenceManager {
     }
 
     public User getUser(Connection connection, SessionKey sessionKey) {
-        try (PreparedStatement ps = connection.prepareStatement(USER_PROFILE_BY_PLATFORM_ID_AND_CODE)) {
-            ps.setString(1, sessionKey.from()); // platform_id
+        try (PreparedStatement ps = connection.prepareStatement(USER_PROFILE_BY_PLATFORM_ID_ROUTE)) {
+
+            ps.setString(1, sessionKey.platform().code()); // platform
+            ps.setString(2, sessionKey.to()); // channel
+            ps.setString(3, sessionKey.from()); // platform_id
 
             final ResultSet rs = ps.executeQuery();
 
-            UUID id = UUID.randomUUID();
-            String country = "US", nickName, surname, givenName;
+            UUID id = null;//UUID.randomUUID();
+            String country = "US";
+            String nickName, surname, givenName;
             Map<Platform, String> platformMap = new HashMap<>();
             Map<Platform, Instant> platformCreatedMap = new HashMap<>();
+            Map<Platform, String> platformNickNames = new HashMap<>();
             Set<String> languages = new LinkedHashSet<>();
             Set<String> otherLanguages = new LinkedHashSet<>();
+            UUID customerId = null;
+
             int rowCount = 0;
 
             while (rs.next()) {
@@ -825,24 +858,22 @@ public class PostgresPersistenceManager implements PersistenceManager {
 
                 String platformId = rs.getString(2); // u.platform_id
                 Platform platform = Platform.byCode(rs.getString(3)); // u.platform_code // throws IaE if null
-                if (platformId == null) {
-                    LOG.error("Platform id {} was null for SessionKey {}", platformId, sessionKey);
-                    return null;
-                }
 
                 // Build up the map of IDs for each Platform.
                 platformMap.put(platform, platformId);
 
-                country = rs.getString(4);// u.country
+                country = rs.getString(4); // u.country
 
                 // Build up the list of languages selected by the User.
                 languages.add(rs.getString(5)); // u.language
 
-                nickName = rs.getString(6); // u.nickname // FIXME per platform, how to handle creation
+                nickName = rs.getString(6); // u.nickname
+                platformNickNames.put(platform, nickName); // NB trying out an Optional here
 
                 Instant createdAt = rs.getTimestamp(7).toInstant();
                 platformCreatedMap.put(platform, createdAt);
 
+                // TODO Add these to an optional Profile
                 surname = rs.getString(7); // p.surname
                 givenName = rs.getString(8); // p.given_name
 
@@ -850,6 +881,8 @@ public class PostgresPersistenceManager implements PersistenceManager {
                 if (otherLangStr != null) {
                     Collections.addAll(otherLanguages, otherLangStr.split(","));
                 }
+
+                customerId = (UUID) rs.getObject(11);
 
                 ++rowCount;
             }
@@ -866,7 +899,7 @@ public class PostgresPersistenceManager implements PersistenceManager {
             List<String> userLanguages = new ArrayList<>(languages);
             LOG.info("Languages for user: {}", languages);
 
-            return new User(id, platformMap, platformCreatedMap, country, userLanguages);
+            return new User(id, platformMap, platformCreatedMap, platformNickNames, country, userLanguages, customerId);
 
         } catch (SQLException e) {
             LOG.error("getUser failed", e);
@@ -905,8 +938,10 @@ public class PostgresPersistenceManager implements PersistenceManager {
             ps.setObject(3, onlyPlatform.getKey().code(), OTHER); // platform_code
             ps.setObject(4, user.countryCode(), OTHER); // country
             ps.setObject(5, user.languages().getFirst(), OTHER); // language
-            ps.setString(6, null); // nickname // FIXME move nickname to Profile?
+//            ps.setString(6, null); // nickname // FIXME move nickname to Profile?
+            ps.setObject(6, user.platformNickNames().get(onlyPlatform.getKey()));
             ps.setTimestamp(7, Timestamp.from(createdAt));
+            ps.setObject(8, user.customerId());
 
             int numInserted = ps.executeUpdate();
             LOG.info("insertUser: inserted {} record(s).", numInserted); // FIXME change to .debug

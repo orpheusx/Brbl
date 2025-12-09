@@ -31,8 +31,8 @@ public class Session implements ScriptContext, Serializable {
     private final User user;
 
     // TODO move these out of the class
-    private final transient QueueProducer producer;
-    private final transient PersistenceManager persistenceManager;
+    private transient QueueProducer producer;
+    private transient PersistenceManager persistenceManager;
 
     Node currentNode;
 
@@ -83,9 +83,9 @@ public class Session implements ScriptContext, Serializable {
         return inputHistory;
     }
 
-    public Queue<Message> getOutputBuffer() {
-        return outputBuffer;
-    }
+    //public Queue<Message> getOutputBuffer() {
+    //    return outputBuffer;
+    //}
 
     public Node previousScript() {
         return evaluatedNodes.getLast();
@@ -198,6 +198,14 @@ public class Session implements ScriptContext, Serializable {
         currentNode = node;
     }
 
+    /*
+     * Hook up the elements that can't be (de)serialized.
+     */
+    public void postDeserialize(QueueProducer producer, PersistenceManager persistenceManager) {
+        this.producer = producer;
+        this.persistenceManager = persistenceManager;
+    }
+
     @Override
     public String toString() {
         return new StringJoiner(", ", Session.class.getSimpleName() + "[", "]")
@@ -213,5 +221,17 @@ public class Session implements ScriptContext, Serializable {
                 .add("inputHistory=" + inputHistory)
                 .add("evaluatedNodes=" + evaluatedNodes)
                 .toString();
+    }
+
+    @Override
+    public boolean equals(Object o) {
+        if (o == null || getClass() != o.getClass()) return false;
+        Session session = (Session) o;
+        return Objects.equals(startTimeNanos, session.startTimeNanos) && Objects.equals(id, session.id) && Objects.equals(user, session.user) && Objects.equals(producer, session.producer) && Objects.equals(persistenceManager, session.persistenceManager) && Objects.equals(currentNode, session.currentNode) && Objects.equals(outputBuffer, session.outputBuffer) && Objects.equals(inputs, session.inputs) && Objects.equals(inputHistory, session.inputHistory) && Objects.equals(evaluatedNodes, session.evaluatedNodes) && Objects.equals(lastUpdatedNanos, session.lastUpdatedNanos);
+    }
+
+    @Override
+    public int hashCode() {
+        return Objects.hash(startTimeNanos, id, user, producer, persistenceManager, currentNode, outputBuffer, inputs, inputHistory, evaluatedNodes, lastUpdatedNanos);
     }
 }

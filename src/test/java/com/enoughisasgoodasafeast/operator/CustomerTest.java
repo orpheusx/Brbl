@@ -13,10 +13,12 @@ public class CustomerTest {
     final static UUID id = UUID.randomUUID();
     final static Map<Platform, String> platformIds = Map.of(Platform.SMS, "17815551234");
     final static Map<Platform, Instant> platformCreatedMap = Map.of(Platform.SMS, NanoClock.utcInstant());
+    final static Map<Platform, String> userNickNames = new LinkedHashMap<>();
     final static String countryCode = Locale.getDefault().getCountry();
     final static List<String> languages = List.of("SPA", "FRA");
+    final static UUID customerId = UUID.randomUUID();
 
-    final static User user = new User(id, platformIds, platformCreatedMap, countryCode, languages);
+    final static User user = new User(id, platformIds, platformCreatedMap, userNickNames, countryCode, languages, customerId);
 
     // final String firstName = "Fred";
     // final String surname = "Flintstone";

@@ -519,7 +519,7 @@ Temporarily removed NOT NULL constraints:
         ALTER COLUMN customer_id DROP NOT NULL;
 
 -- ===============================================================================================
-Updated 10/14/2025:
+-- Updated 10/14/2025:
 
 ALTER TABLE brbl_users.profiles
     ADD COLUMN roles VARCHAR(64); -- just an comma-delimited array of strings.
@@ -529,7 +529,7 @@ ALTER TABLE brbl_users.profiles
 -- we need to implement.
 
 -- ===============================================================================================
-Updated 10/20/2025:
+-- Updated 10/20/2025:
 
 CREATE TABLE brbl_logic.sessions (
     group_id                UUID PRIMARY KEY,
@@ -540,7 +540,8 @@ CREATE TABLE brbl_logic.sessions (
 COMMENT ON COLUMN brbl_logic.sessions.group_id IS 'Effectively (but not actually) the foreign key to brbl_logic.users.';
 COMMENT ON COLUMN brbl_logic.sessions.data     IS 'The latest serialized session data for the referenced user.';
 
-Updated 11/24/2025:
+-- ===============================================================================================
+-- Updated 11/24/2025:
 
 -- We will need to track history elsewhere so including created/updated_at here isn't helpful here.
 CREATE TABLE brbl_logic.default_scripts (
@@ -622,3 +623,17 @@ ALTER TABLE keywords ADD PRIMARY KEY(id);
 
 --> TODO at some point we should go through all our foreign keys and rename them uniformly.
 -- ALTER TABLE table_name RENAME CONSTRAINT old_name TO new_name
+
+
+-- ===============================================================================================
+--Updated 12/7/2025:
+
+-- Working on getting db persistence of sessions working round-trip in code.
+-- Need to add customer_id to USERS table.
+
+ALTER TABLE brbl_users.users ADD COLUMN customer_id UUID;
+ALTER TABLE brbl_users.users DROP CONSTRAINT users_pkey;
+UPDATE brbl_users SET customer_id = '4d351c0e-5ce5-456e-8de0-70e04bd5c0fd'; -- before adding the pkey that includes the new column
+ALTER TABLE brbl_users.users ADD PRIMARY KEY  (platform_id, customer_id, platform_code);
+ALTER TABLE brbl_users.users ADD CONSTRAINT fk_customer_id FOREIGN KEY(customer_id) REFERENCES brbl_users.customers(id);
+-- Completed these changes.

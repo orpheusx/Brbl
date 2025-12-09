@@ -32,7 +32,7 @@ public class SessionTest {
             Session session = new Session(
                     UUID.randomUUID(),
                     new Node("do nothing", EchoWithPrefix, null),
-                    new User(UUID.randomUUID(), platformIds, platformsCreated, countryCode, languages),
+                    new User(UUID.randomUUID(), platformIds, platformsCreated, userNickNames, countryCode, languages, customerId),
                     new InMemoryQueueProducer(),
                     null);
             int numElements = MAX_INPUT_HISTORY + 1;
@@ -200,7 +200,7 @@ public class SessionTest {
         return new Session(
                 id,
                 new Node("The quick brown fox jumps over the lazy dog.", NodeType.SendMessage, "A test Node"),
-                new User(UUID.randomUUID(), platformIds, platformsCreated, countryCode, languages),
+                new User(UUID.randomUUID(), platformIds, platformsCreated, userNickNames, countryCode, languages, customerId),
                 queueProducer,
                 persistenceManager);
     }
@@ -235,7 +235,7 @@ public class SessionTest {
 
             oos.flush();
             oos.close();
-            LOG.info("Serialization time = {}", currentTimeMillis() - start);
+            LOG.info("serializeSessionAsByteStream time = {}", currentTimeMillis() - start);
 
             LOG.info("Num bytes: {}", byteArray.length);
 
@@ -253,17 +253,17 @@ public class SessionTest {
             PostgresPersistenceManager ppm = (PostgresPersistenceManager) PostgresPersistenceManager.createPersistenceManager(
                     ConfigLoader.readConfig("persistence_manager_test.properties"));
 
-            final UUID sessionId = UUID.fromString("8d8e3123-b208-497c-b51f-18d517362433");
+            final UUID sessionId = UUID.randomUUID();
 
             // FIXME add the new method to the interface so the cast isn't needed.
             final Session session = newSession(sessionId);
 
-            if (!ppm.upsertSession(session)) {
-                throw new RuntimeException("upsertSession failed");
+            if (!ppm.saveSession(session)) {
+                throw new RuntimeException("saveSession failed");
             }
 
             // Now fetch it back and check values
-            final Session clone = ppm.getSession(sessionId);
+            final Session clone = ppm.loadSession(sessionId);
             /* FIXME
                Need to be able set the queueProducer and persistenceManager unless we prefer to move those out of Session
                class and use independent functions.
@@ -273,6 +273,14 @@ public class SessionTest {
 
             assertEquals(session.getId().toString(), clone.getId().toString());
             assertEquals(session.currentNode, clone.currentNode);
+
+            assertNotEquals(session, clone);
+
+            clone.postDeserialize(queueProducer, persistenceManager);
+            assertEquals(session, clone);
+
+//            clone.registerOutput(new Message(MessageType.MT, "17817209468", "1234", "still connected to ppm and queue?"));
+//            clone.flush();
 
             LOG.info("Cool.");
 

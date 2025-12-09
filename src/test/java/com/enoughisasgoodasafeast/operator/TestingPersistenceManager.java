@@ -13,6 +13,7 @@ class TestingPersistenceManager implements PersistenceManager {
     public static final UUID KEYWORD_ID = UUID.randomUUID();
     public static final UUID SCRIPT_ID = UUID.fromString("89eddcb8-7fe5-4cd1-b18b-78858f0789fb");
     public static final String USER_ID = OperatorTest.MOBILE_MX;
+    public static final UUID CUSTOMER_ID = UUID.randomUUID();
 
     private final Map<Pattern, Keyword> keywordMap = new HashMap<>();
     private final Map<UUID, Node> nodesByScriptId = new HashMap<>();
@@ -82,6 +83,8 @@ class TestingPersistenceManager implements PersistenceManager {
         platformIds.put(Platform.SMS, USER_ID);
         Map<Platform, Instant> platformCreatedAt = new HashMap<>();
         platformCreatedAt.put(Platform.SMS, NanoClock.utcInstant());
-        return new User(UUID.randomUUID(), platformIds, platformCreatedAt, "US", List.of("ENG"));
+        Map<Platform, String> userNickNames = new LinkedHashMap<>();
+        userNickNames.put(Platform.SMS, "Bozo");
+        return new User(UUID.randomUUID(), platformIds, platformCreatedAt, userNickNames, "US", List.of("ENG"), CUSTOMER_ID);
     }
 }
