@@ -85,6 +85,6 @@ class TestingPersistenceManager implements PersistenceManager {
         platformCreatedAt.put(Platform.SMS, NanoClock.utcInstant());
         Map<Platform, String> userNickNames = new LinkedHashMap<>();
         userNickNames.put(Platform.SMS, "Bozo");
-        return new User(UUID.randomUUID(), platformIds, platformCreatedAt, userNickNames, "US", List.of("ENG"), CUSTOMER_ID);
+        return new User(UUID.randomUUID(), platformIds, platformCreatedAt, "US", List.of("ENG"), CUSTOMER_ID, userNickNames, null);
     }
 }

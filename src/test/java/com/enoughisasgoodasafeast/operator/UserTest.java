@@ -30,7 +30,7 @@ public class UserTest {
     @Test
     void idNull() {
         Exception exception = assertThrows(IllegalArgumentException.class, () -> {
-            new User(null, platformIds, platformsCreated, userNickNames, countryCode, languages, customerId);
+            new User(null, platformIds, platformsCreated, countryCode, languages, customerId, userNickNames, null);
         });
 
         assertTrue(exception.getMessage().contains("id"));
@@ -39,7 +39,7 @@ public class UserTest {
     @Test
     void platformIdsNull() {
         Exception exception = assertThrows(IllegalArgumentException.class, () -> {
-            new User(id, null, platformsCreated, userNickNames, countryCode, languages, customerId);
+            new User(id, null, platformsCreated, countryCode, languages, customerId, userNickNames, null);
         });
         assertTrue(exception.getMessage().contains("platformIds"));
     }
@@ -47,7 +47,7 @@ public class UserTest {
     @Test
     void platformIdsEmpty() {
         Exception exception = assertThrows(IllegalArgumentException.class, () -> {
-            new User(id, new HashMap<>(),platformsCreated, userNickNames, countryCode, languages, customerId);
+            new User(id, new HashMap<>(),platformsCreated, countryCode, languages, customerId, userNickNames, null);
         });
         assertTrue(exception.getMessage().contains("platformIds"));
     }
@@ -55,7 +55,7 @@ public class UserTest {
     @Test
     void countryCodeNull() {
         Exception exception = assertThrows(IllegalArgumentException.class, () -> {
-            new User(id, platformIds, platformsCreated, userNickNames, null, languages, customerId);
+            new User(id, platformIds, platformsCreated, null, languages, customerId, userNickNames, null);
         });
         assertTrue(exception.getMessage().contains("countryCode"));
     }
@@ -63,7 +63,7 @@ public class UserTest {
     @Test
     void countryCodeUnsupported() {
         Exception exception = assertThrows(IllegalArgumentException.class, () -> {
-            new User(id, platformIds, platformsCreated, userNickNames, "RU", languages, customerId);
+            new User(id, platformIds, platformsCreated, "RU", languages, customerId, userNickNames, null);
         });
         assertTrue(exception.getMessage().contains("countryCode"));
     }
@@ -71,7 +71,7 @@ public class UserTest {
     @Test
     void languagesNull() {
         Exception exception = assertThrows(IllegalArgumentException.class, () -> {
-            new User(id, platformIds, platformsCreated, userNickNames, countryCode, null, customerId);
+            new User(id, platformIds, platformsCreated, countryCode, null, customerId, userNickNames, null);
         });
         assertTrue(exception.getMessage().contains("language"));
     }
@@ -79,7 +79,7 @@ public class UserTest {
     @Test
     void languagesEmpty() {
         Exception exception = assertThrows(IllegalArgumentException.class, () -> {
-            new User(id, platformIds, platformsCreated, userNickNames, countryCode, new ArrayList<>(), customerId);
+            new User(id, platformIds, platformsCreated, countryCode, new ArrayList<>(), customerId, userNickNames, null);
         });
         assertTrue(exception.getMessage().contains("language"));
     }
@@ -89,7 +89,7 @@ public class UserTest {
         Exception exception = assertThrows(IllegalArgumentException.class, () -> {
             List<String> unsupported = new ArrayList<>();
             unsupported.add("ru");
-            new User(id, platformIds, platformsCreated, userNickNames, countryCode, unsupported, customerId);
+            new User(id, platformIds, platformsCreated, countryCode, unsupported, customerId, userNickNames, null);
         });
         assertTrue(exception.getMessage().contains("language"));
     }

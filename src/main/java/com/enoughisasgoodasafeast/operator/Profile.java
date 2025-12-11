@@ -1,5 +1,6 @@
 package com.enoughisasgoodasafeast.operator;
 
+import java.io.IO;
 import java.time.Instant;
 import java.util.UUID;
 
@@ -17,5 +18,11 @@ import java.util.UUID;
        Referenced by:
            TABLE "customers" CONSTRAINT "fk_customer_profile_group_id" FOREIGN KEY (profile_id) REFERENCES profiles(group_id)
  */
-public record Profile(UUID groupId, String surname, String givenName, String otherLanguages, Instant createdAt, Instant updatedAt) {}
+public record Profile(UUID groupId, String surname, String givenName, String otherLanguages, Instant createdAt, Instant updatedAt) {
+
+    public Profile(String surname, String givenName, String otherLanguages) {
+        var now = Instant.now();
+        this(UUID.randomUUID(), surname, givenName, otherLanguages, now, now);
+    }
+}
 

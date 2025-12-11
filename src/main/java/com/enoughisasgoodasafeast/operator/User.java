@@ -16,24 +16,26 @@ import java.util.UUID;
  * <p>
  * The validation of country codes is limited to what the platform supports.
  * TODO Currently, this is hardcoded and we need to change it.
+ *  @param id the identifier used within the Brbl ecosystem.
  *
- * @param id the identifier used within the Brbl ecosystem.
- * @param platformIds the identifiers for this User on other messaging platforms.
+ * @param platformIds           the identifiers for this User on other messaging platforms.
  * @param platformCreationTimes the creation time for this User for each messaging platform.
- * @param platformNickNames the nicknames for this User on other messaging platforms.
- * @param countryCode the ISO country of the nation where the User lives.
- * @param languages the list of ISO language codes spoken by the User.
- * @param customerId the Customer that acquired this User instance.
+ * @param countryCode           the ISO country of the nation where the User lives.
+ * @param languages             the list of ISO language codes spoken by the User.
+ * @param customerId            the Customer that acquired this User instance.
+ * @param platformNickNames     the optional nicknames for this User on other messaging platforms.
+ * @param profile               the optional Profile that provides the User's identity.
  */
 
 public record User(
         UUID id, // aka group_id
         Map<Platform, String> platformIds,
         Map<Platform, Instant> platformCreationTimes,
-        Map<Platform, String> platformNickNames,
         String countryCode,
         List<String> languages,
-        UUID customerId) implements Serializable
+        UUID customerId,
+        Map<Platform, String> platformNickNames,
+        Profile profile) implements Serializable
 {
 
     private static final Logger LOG = LoggerFactory.getLogger(User.class);
@@ -52,7 +54,6 @@ public record User(
             fail("platformCreationTimes cannot be null or empty.");
         }
 
-        // Perfectly fair for the User to not have any nicknames.
 
         if (countryCode == null) {
             fail("countryCode cannot be null");
@@ -78,7 +79,15 @@ public record User(
             fail("customerId cannot be null");
         }
 
+        // NB: Perfectly fair for the User to not have any nicknames or be associated with a Profile.
+
         LOG.debug("Created new User (id:{})", id);
+    }
+
+    // Convenience constructor.
+    // TODO Create a countryCode enum class, matching our schema type already defines (US, CA, MX)
+    public User(Map<Platform, String> platformIds, Map<Platform, Instant> platformCreationTimes, List<String> languages, UUID customerId) {
+        this(UUID.randomUUID(), platformIds, platformCreationTimes, "US", languages, customerId, Map.of(), null);
     }
 
     void fail(String message) {

@@ -275,13 +275,16 @@ public class Operator implements MessageProcessor {
         User user = persistenceManager.getUser(sessionKey);
         if (user == null) {
             LOG.info("User not found.");
-            user = new User(UUID.randomUUID(),
+            user = new User(
+                    UUID.randomUUID(),
                     defaultPlatformIdMap(sessionKey.from()),
                     defaultPlatformTimeCreatedMap(NanoClock.utcInstant()),
-                    defaultNickNameMap(),
                     deriveCountryCodeFromId(sessionKey.from()),
                     defaultLanguageList(sessionKey.from(), sessionKey.to()),
-                    findCustomerIdByRoute(sessionKey));
+                    findCustomerIdByRoute(sessionKey),
+                    defaultNickNameMap(),
+                    null
+            );
             boolean isInserted = persistenceManager.insertUser(user);
             if (!isInserted) {
                 LOG.error("findOrCreateUser failed to insert user. Caching it anyway: {}", user);

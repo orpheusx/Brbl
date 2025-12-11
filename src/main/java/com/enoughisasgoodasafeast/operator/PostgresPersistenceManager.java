@@ -105,9 +105,18 @@ public class PostgresPersistenceManager implements PersistenceManager {
     public static final String USER_PROFILE_BY_PLATFORM_ID_ROUTE =
             """
                     SELECT
-                    	u.group_id, u.platform_id, u.platform_code,
-                    	u.country, u.language, u.nickname, u.created_at,
-                    	p.surname, p.given_name, p.other_languages,
+                    	u.group_id,
+                    	u.platform_id,
+                    	u.platform_code,
+                    	u.country,
+                    	u.language,
+                    	u.nickname,
+                    	u.created_at,
+                    	p.surname,
+                    	p.given_name,
+                    	p.other_languages,
+                    	p.created_at,
+                    	p.updated_at,
                     	r.customer_id
                     FROM
                         brbl_users.users u
@@ -840,18 +849,22 @@ public class PostgresPersistenceManager implements PersistenceManager {
 
             final ResultSet rs = ps.executeQuery();
 
-            UUID id = null;//UUID.randomUUID();
+            UUID id = null; //UUID.randomUUID();
             String country = "US";
-            String nickName, surname, givenName;
+            String nickName;
             Map<Platform, String> platformMap = new HashMap<>();
             Map<Platform, Instant> platformCreatedMap = new HashMap<>();
             Map<Platform, String> platformNickNames = new HashMap<>();
             Set<String> languages = new LinkedHashSet<>();
-            Set<String> otherLanguages = new LinkedHashSet<>();
+            String profileSurname = null, profileGivenName = null;
+            Instant profileCreated = null, profileUpdated = null;
             UUID customerId = null;
+
+            Profile optionalProfile = null;
 
             int rowCount = 0;
 
+            String profileLanguages = null;
             while (rs.next()) {
 
                 id = (UUID) rs.getObject(1); // u.group_id
@@ -874,15 +887,15 @@ public class PostgresPersistenceManager implements PersistenceManager {
                 platformCreatedMap.put(platform, createdAt);
 
                 // TODO Add these to an optional Profile
-                surname = rs.getString(7); // p.surname
-                givenName = rs.getString(8); // p.given_name
+                profileSurname = rs.getString(8); // p.surname
+                profileGivenName = rs.getString(9); // p.given_name
 
-                String otherLangStr = rs.getString(10); // p.other_languages
-                if (otherLangStr != null) {
-                    Collections.addAll(otherLanguages, otherLangStr.split(","));
-                }
+                profileLanguages = rs.getString(10); // p.other_languages
 
-                customerId = (UUID) rs.getObject(11);
+                profileCreated = rs.getTimestamp(11).toInstant();
+                profileUpdated = rs.getTimestamp(12).toInstant();
+
+                customerId = (UUID) rs.getObject(13);
 
                 ++rowCount;
             }
@@ -894,12 +907,18 @@ public class PostgresPersistenceManager implements PersistenceManager {
                 return null; // FIXME should we insert a User at this point or leave it to the caller?
             }
 
+            // FIXME Not sure it makes sense to merge these now that we're attaching a Profile object.
             // Merge the set of languages, attempting to preserve the user's preferred order
-            languages.addAll(otherLanguages);
+            // languages.addAll(otherLanguages);
             List<String> userLanguages = new ArrayList<>(languages);
             LOG.info("Languages for user: {}", languages);
 
-            return new User(id, platformMap, platformCreatedMap, platformNickNames, country, userLanguages, customerId);
+            // Use just the name fields as sentinels to detect enough data to create a Profile record
+            if (profileGivenName != null || profileSurname != null) {
+                optionalProfile = new Profile(id, profileSurname, profileGivenName, profileLanguages, profileCreated, profileUpdated);
+            }
+
+            return new User(id, platformMap, platformCreatedMap, country, userLanguages, customerId, platformNickNames, optionalProfile);
 
         } catch (SQLException e) {
             LOG.error("getUser failed", e);
@@ -938,7 +957,6 @@ public class PostgresPersistenceManager implements PersistenceManager {
             ps.setObject(3, onlyPlatform.getKey().code(), OTHER); // platform_code
             ps.setObject(4, user.countryCode(), OTHER); // country
             ps.setObject(5, user.languages().getFirst(), OTHER); // language
-//            ps.setString(6, null); // nickname // FIXME move nickname to Profile?
             ps.setObject(6, user.platformNickNames().get(onlyPlatform.getKey()));
             ps.setTimestamp(7, Timestamp.from(createdAt));
             ps.setObject(8, user.customerId());

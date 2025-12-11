@@ -18,7 +18,7 @@ public class CustomerTest {
     final static List<String> languages = List.of("SPA", "FRA");
     final static UUID customerId = UUID.randomUUID();
 
-    final static User user = new User(id, platformIds, platformCreatedMap, userNickNames, countryCode, languages, customerId);
+    final static User user = new User(id, platformIds, platformCreatedMap, countryCode, languages, customerId, userNickNames, null);
 
     // final String firstName = "Fred";
     // final String surname = "Flintstone";

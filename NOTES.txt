@@ -2237,7 +2237,7 @@ SessionKeys should continue to work fine since they already include the "to" (ak
 
 While adding customer_id to the User's primary key I re-remembered that the existing query was left joining with Profiles but the created User model was not using any of the data it provides. It does bundle all the combined set of languages and build a map of the other User associated by the shared Profile. Should we include the Profile as a property of the User? Or vice versa? Or create a tuple-like record that holds them both.
 
-We knew the object model and schema were intentionally asymmetric but the addition of the Customer id might change how we decide to manage it. The latter creates a more limited scope; the profile and the user records now all belong to the customer. I think this is more sensible than imagining a single Profile spanning multiple customers.
+We knew the object model and schema were intentionally asymmetric but the addition of the Customer id might change how we decide to manage it. The latter creates a more limited scope; the profile and the user records now all belong to the customer. I think this is more sensible than imagining a single Profile shared between multiple customers.
 
 Added customerId and map of nickNames to User. Add Profile, too?
 
@@ -2246,4 +2246,15 @@ Added customerId and map of nickNames to User. Add Profile, too?
 TODO
 X create test for PostgresPersistenceManager.getUser
 X create tests for Operator.findCustomerIdByRoute and findDefaultScriptByRoute
+
+===== 2025-12-10 ====
+
+We're getting to the point where we really need to clean up our test data set.
+One more bit to add before we do that:
+    adding the optional Profile to the User record...
+
+Presumably we will provide a script/script fragment function that allows a Customer to capture the Profile info, attach it to the user and persist it.
+
+
+
 
