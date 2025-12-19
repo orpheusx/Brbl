@@ -2254,7 +2254,89 @@ One more bit to add before we do that:
     adding the optional Profile to the User record...
 
 Presumably we will provide a script/script fragment function that allows a Customer to capture the Profile info, attach it to the user and persist it.
+Also, update some of the scripts to use the optional Profile properties in their processing.
+
+===== 2025-12-12 ====
+
+Thinking about the way we handle push messaging.
+- Scheduling & how push messaging interacts with a system like Quartz or JobRunr.
+    - scenarios more complex than simply sending an MT at a specific time to a specific set of users require custom state management. So the interaction with the scheduler needs to be at a functional level rather than at a data level. No single user scheduling. State management will likely be customized by use case. Triggering different scripts to be sent sequentially (as we considered at N*v*) would be cool but is super complex.
+- session handling (what to do when there's an active session for a targeted user, and generally how to "expire" a session.)
+    If a User is in the midst of interacting with a Customer script (ie their session is active) we should provide the option to _not_ overwrite their session with the push messaging.
+- User segmentation possibilities.
+    How do we
+- Notions of a campaign (is "season" a useful term for a collection of campaigns?)
+    Maybe define subtypes of campaigns, starting with the simple one which is allowing a Customer to push an offer/notification (just a script) to a subset of their Users one time but at a specified date-time in the future.
+    Obvious follow on work to present a simple report of the results.
+
+Schema sketch...
+
+create table push_campaigns (
+    id              uuid,
+    customer_id     uuid,       --> brbl_users.customers.id, also referenced by brbl_logic.scripts
+    description     varchar(64)
+    script_id       uuid,       --> brbl_logic.scripts
+    created_at      timestamp,
+    updated_at      timestamp,
+    completed_at    timestamp   --> set when all messages are sent regardless of success
+);
+create table campaign_users (
+    campaign_id     uuid, --> campaign.id
+    user_id         uuid, --> brbl_users.users.group_id
+    platform_code   public.platform, --> Caveat: different platforms have different rules which could impact
+                                        the execution of the campaign. Better to create separate campaigns/segments?
+    delivered       status enum (PENDING, INFLIGHT, COMPLETE) or timestamp?
+
+);
+
+Issues:
+    If campaign_users also uses a composite key we end up storing them twice.
+    Add a long int primary key to users? Or just add a long column used just for the connection to campaign_users?
+
+Possible Solutions:
+    Use just the group_id in campaign_users, dropping platform_code and moving it to campaign. The business rules for each platform are different (as mentioned above) so keeping the segment separate seems a reasonable simplification. It also reduces the amount of denormalization.
+
+User segments won't be reusable across campaigns--because the users' opt-in state can change quickly--but the definition of the segment should be.
+Segment definition stored as a constrained set of pseudo-SQL conditions that could be appended to a WHERE clause?
+Examples:
+    Customer wanting to send their best offer to users who had previously replied in the last N days/weeks/months to previous campaigns.
+    Or only to new, unknown (no Profile) users.
+    Or who had replied with a specific answer to a poll.
+
+See dev.ddl for 12/14/25.
+    How do we correlate the push campaign message and the MT log that's generated for it?
+    More generally how do we report on script playback?
 
 
+===== 2025-12-16 ====
+
+Outline for scheduled push campaigns:
+
+The scheduler
+ |
+ V
+CampaignManager.execAndReport
+    |--> read the Campaign from PUSH_CAMPAIGNS, read the specified script graph, read TargetUsers (joined with data from USERS) from associated CAMPAIGN_USERS (possibly in batches)
+    |--> for each TargetUser
+    |  |--> check if user has an active session (in cache). Configurable decision: clear the session or skip this user.
+    |  |--> check User status, skip if their status is not IN. If KNOWN or OUT, log this for the report.
+    |  |--> populate a new instance of Session but don't add it to the cache.
+    |  |--> execute the first node of the script, using the associated session, generating an MT and pushing it onto the regular, rate-limited output queue with a lower priority.
+    |  |--> update the delivered column of the TargetUser record (CAMPAIGN_USERS table)
+    |--> update the completed_at column of PUSH_CAMPAIGNS table:
+    |--> generate the run report. Is this a table? push_campaign_report?
+
+
+===== 2025-12-17 ====
+
+TODO
+X Get per-message session updating working.
+X Define the SQL/JDBC method for fetching push_campaign records: PostgresPersistenceManager.getPushCampaign(uuid)
+X Define the SQL/JDBC method for pulling/joining campaign_users with users: PostgresPersistenceManager.getUsersForPushCampaign(uuid)
+_ Get integration tests working again.
+
+===== 2025-12-19 ====
+
+"They were careless people...they smashed up things and creatures and then retreated back into their money or their vast carelessness or whatever it was that kept them together, and let other people clean up the mess they had made." F. Scott Fitzgerald, The Great Gatsby
 
 

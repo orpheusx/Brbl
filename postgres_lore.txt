@@ -70,5 +70,7 @@ FROM step_one s1, step_two s2, my_data m
 Clever :-)
 
 
+-- Using temp tables
+CREATE TEMP TABLE temp_users (LIKE users); --> creates a temp table with the same schema as the table referenced by the LIKE clause.
 
 

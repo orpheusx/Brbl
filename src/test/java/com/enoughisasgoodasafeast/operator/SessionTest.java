@@ -258,9 +258,7 @@ public class SessionTest {
             // FIXME add the new method to the interface so the cast isn't needed.
             final Session session = newSession(sessionId);
 
-            if (!ppm.saveSession(session)) {
-                throw new RuntimeException("saveSession failed");
-            }
+            ppm.saveSession(session);
 
             // Now fetch it back and check values
             final Session clone = ppm.loadSession(sessionId);
@@ -271,10 +269,11 @@ public class SessionTest {
             LOG.info(session.toString());
             LOG.info(clone.toString());
 
+            assertNotEquals(session, clone);
+
             assertEquals(session.getId().toString(), clone.getId().toString());
             assertEquals(session.currentNode, clone.currentNode);
 
-            assertNotEquals(session, clone);
 
             clone.postDeserialize(queueProducer, persistenceManager);
             assertEquals(session, clone);

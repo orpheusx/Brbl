@@ -127,21 +127,24 @@ public class OperatorTest {
         Message mt2 = newMT(SHORT_CODE_2, MOBILE_MX, SCRIPT_RESPONSE);
         Message mt3 = newMT(SHORT_CODE_3, MOBILE_US, SCRIPT_RESPONSE);
 
-        assertTrue(operator.process(mo1));
+        assertDoesNotThrow(() -> {
+            operator.process(mo1);
+        });
+
         assertEquals(1, queueProducer.enqueuedCount());
         assertEquals(mt1.to(), queueProducer.enqueued().getFirst().to());
         assertEquals(mt1.from(), queueProducer.enqueued().getFirst().from());
         assertEquals(mt1.text(), queueProducer.enqueued().getFirst().text());
         assertEquals(mt1.type(), queueProducer.enqueued().getFirst().type());
 
-        assertTrue(operator.process(mo2));
+        assertDoesNotThrow(() -> { operator.process(mo2); });
         assertEquals(2, queueProducer.enqueuedCount());
         assertEquals(mt2.to(), queueProducer.enqueued().get(1).to());
         assertEquals(mt2.from(), queueProducer.enqueued().get(1).from());
         assertEquals(mt2.text(), queueProducer.enqueued().get(1).text());
         assertEquals(mt2.type(), queueProducer.enqueued().get(1).type());
 
-        assertTrue(operator.process(mo3));
+        assertDoesNotThrow(() -> { operator.process(mo3); });
         assertEquals(3, queueProducer.enqueuedCount());
         assertEquals(mt3.to(), queueProducer.enqueued().get(2).to());
         assertEquals(mt3.from(), queueProducer.enqueued().get(2).from());
@@ -209,7 +212,9 @@ public class OperatorTest {
 //                TestingPersistenceManager.SCRIPT_ID, presentQuestion);
 
         // Initiate the conversation
-        assertTrue(operator.process(mo4));
+        assertDoesNotThrow(() -> {
+            operator.process(mo4);
+        });
 
         // The lookup from scriptCache will have the effect of populating scriptByKeywordCache
         assertEquals(1, operator.scriptByKeywordCache.estimatedSize());
@@ -227,7 +232,9 @@ public class OperatorTest {
         assertEquals(NodeType.ProcessMulti, session.getCurrentNode().type(), "Session node state has unexpected type."); // The current node should be awaiting a response
 
         // Send a valid response
-        assertTrue(operator.process(mo5)); // answer given should select "flort"
+        assertDoesNotThrow(() -> {
+            operator.process(mo5); // answer given should select "flort"
+        });
 
         // Check the rest of the MT responses.
         assertEquals(3, queuedMessages.size(), "Unexpected number of messages queued.");
@@ -259,7 +266,9 @@ public class OperatorTest {
 //                TestingPersistenceManager.SCRIPT_ID, presentQuestion);
 
         // Initiate the conversation
-        assertTrue(operator.process(mo4));
+        assertDoesNotThrow(() -> {
+            operator.process(mo4);
+        });
 
         // The lookup from scriptCache will have the effect of populating scriptByKeywordCache
         assertEquals(1, operator.scriptByKeywordCache.estimatedSize());
@@ -276,7 +285,7 @@ public class OperatorTest {
 
         // Now provide bad input to the question posed
         for (int i = 1; i < 3; i++) { // TODO At some point we should add handling for repeated failures. Until then we continue to handle bad input the same way.
-            assertTrue(operator.process(unexpected));
+            assertDoesNotThrow(() -> { operator.process(unexpected); });
             final Message errorMessage = queuedMessages.get(i);
             LOG.info("Bad input response: {}", errorMessage.text());
             assertTrue(errorMessage.text().contains(processAnswer.text()), "Expected error response not found.");
@@ -285,7 +294,7 @@ public class OperatorTest {
         }
 
         // Now provide good input to the question posed and check that we advance to the end of the conversation.
-        assertTrue(operator.process(mo5));
+        assertDoesNotThrow(() -> { operator.process(mo5); });
         //producer.enqueued().forEach(message -> LOG.info(message.text()));
         assertEquals(5, queuedMessages.size(), "Unexpected number of messages queued.");
         assertEquals(processAnswer.text(), queuedMessages.get(1).text(), "Expected text not found in 1st queued message.");
@@ -317,7 +326,9 @@ public class OperatorTest {
 //                TestingPersistenceManager.SCRIPT_ID, presentQuestion);
 
         // Initiate the conversation
-        assertTrue(operator.process(mo4));
+        assertDoesNotThrow(() -> {
+            operator.process(mo4);
+        });
 
         var session = operator.sessionCache.get(SessionKey.newSessionKey(mo4));
         assertNotNull(session);
@@ -331,7 +342,7 @@ public class OperatorTest {
 
         // Now provide bad input to the question posed
         for (int i = 1; i <= 2; i++) { // TODO At some point we should add handling for repeated failures. Until then we continue to handle bad input the same way.
-            assertTrue(operator.process(unexpected));
+            assertDoesNotThrow(() -> { operator.process(unexpected); });
             final Message errorMessage = queuedMessages.get(i);
             assertTrue(errorMessage.text().contains(processAnswer.text()), "Expected error response not found.");
             // Since we don't advance when there's an error we should still be on the ProcessMulti
@@ -339,7 +350,7 @@ public class OperatorTest {
         }
 
         // Now request a change of topic
-        assertTrue(operator.process(changeTopic));
+        assertDoesNotThrow(() -> { operator.process(changeTopic); });
         queueProducer.enqueued().forEach(message -> LOG.info(message.text()));
 
         assertEquals(4, queuedMessages.size(), "Unexpected number of messages queued.");

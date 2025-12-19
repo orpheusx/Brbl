@@ -37,10 +37,18 @@ public interface PersistenceManager {
 
     //Node getScriptForKeyword(Platform platform, String keyword);
 
+    void saveSession(Session session) throws PersistenceManagerException;
+
+    Session loadSession(UUID id) throws PersistenceManagerException;
+
     /*
      * This exception exists simply to slightly abstract the internal details involved.
      */
     class PersistenceManagerException extends Exception {
+        public PersistenceManagerException(Exception e) {
+            super(e);
+        }
+
         public PersistenceManagerException(String message, Exception e) {
             super(message, e);
         }

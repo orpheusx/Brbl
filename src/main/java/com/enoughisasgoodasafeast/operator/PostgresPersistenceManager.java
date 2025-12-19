@@ -4,6 +4,8 @@ import com.enoughisasgoodasafeast.ConfigLoader;
 import com.enoughisasgoodasafeast.Message;
 import com.mchange.v2.c3p0.ComboPooledDataSource;
 import io.jenetics.util.NanoClock;
+import org.jspecify.annotations.NonNull;
+import org.jspecify.annotations.Nullable;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -14,6 +16,8 @@ import java.time.Instant;
 import java.util.*;
 import java.util.regex.Pattern;
 
+import static com.enoughisasgoodasafeast.operator.SessionSerde.bytesToSession;
+import static com.enoughisasgoodasafeast.operator.SessionSerde.sessionToBytes;
 import static java.sql.Types.*;
 
 public class PostgresPersistenceManager implements PersistenceManager {
@@ -178,18 +182,18 @@ public class PostgresPersistenceManager implements PersistenceManager {
                         s.group_id = ?;
                     """;
 
-    public static final String SELECT_SCRIPT_GRAPH =
-            """
-                    SELECT
-                        s.id, s.label, s.text,
-                        e.match_text, e.response_text, e.dst
-                    FROM
-                        brbl_logic.nodes s
-                    INNER JOIN
-                        brbl_logic.edges e ON s.id = e.src
-                    WHERE
-                        s.id = ?;
-                    """;
+//    public static final String SELECT_SCRIPT_GRAPH =
+//            """
+//                    SELECT
+//                        s.id, s.label, s.text,
+//                        e.match_text, e.response_text, e.dst
+//                    FROM
+//                        brbl_logic.nodes s
+//                    INNER JOIN
+//                        brbl_logic.edges e ON s.id = e.src
+//                    WHERE
+//                        s.id = ?;
+//                    """;
 
 //    public static final String SELECT_SCRIPT_GRAPH_FULL =
 //            """
@@ -237,34 +241,34 @@ public class PostgresPersistenceManager implements PersistenceManager {
                         s.id = rgraph.node_id
                         AND
                         rgraph.is_cycle IS FALSE
-                        ORDER BY s.id ;
+                    ORDER BY s.id ;
                     """; // FIXME redundant to include 's.id = rgraph.node_id' in the where clause when its already an inner join.
 
-    public static final String SELECT_SCRIPT_GRAPH_RECURSIVE_FOR_KEYWORD =
-            """
-                    WITH RECURSIVE rgraph AS (
-                            SELECT script_id FROM brbl_logic.keywords WHERE platform= ?::platform AND pattern = ?
-                        UNION ALL
-                        SELECT e.dst
-                        FROM brbl_logic.edges AS e
-                        JOIN rgraph ON
-                            rgraph.script_id = e.src
-                    ) CYCLE script_id SET is_cycle USING path
-                    SELECT
-                        s.id, s.created_at, s.text, s.type, s.label,
-                        e.id, e.created_at, e.match_text, e.response_text, e.src, e.dst
-                    FROM
-                        brbl_logic.nodes s
-                    INNER JOIN
-                        brbl_logic.edges e ON s.id = e.src
-                    INNER JOIN
-                        rgraph ON s.id = rgraph.script_id
-                    WHERE
-                        s.id = rgraph.script_id
-                        AND
-                        rgraph.is_cycle IS FALSE
-                        ORDER BY s.id ;
-                    """;
+//     public static final String SELECT_SCRIPT_GRAPH_RECURSIVE_FOR_KEYWORD =
+//             """
+//                     WITH RECURSIVE rgraph AS (
+//                             SELECT script_id FROM brbl_logic.keywords WHERE platform= ?::platform AND pattern = ?
+//                         UNION ALL
+//                         SELECT e.dst
+//                         FROM brbl_logic.edges AS e
+//                         JOIN rgraph ON
+//                             rgraph.script_id = e.src
+//                     ) CYCLE script_id SET is_cycle USING path
+//                     SELECT
+//                         s.id, s.created_at, s.text, s.type, s.label,
+//                         e.id, e.created_at, e.match_text, e.response_text, e.src, e.dst
+//                     FROM
+//                         brbl_logic.nodes s
+//                     INNER JOIN
+//                         brbl_logic.edges e ON s.id = e.src
+//                     INNER JOIN
+//                         rgraph ON s.id = rgraph.script_id
+//                     WHERE
+//                         s.id = rgraph.script_id
+//                         AND
+//                         rgraph.is_cycle IS FALSE
+//                         ORDER BY s.id ;
+//                     """;
 
     public static final String SELECT_ALL_KEYWORDS =
             """
@@ -291,6 +295,39 @@ public class PostgresPersistenceManager implements PersistenceManager {
                         r.status = ?::route_status
                     """;
 
+    public static final String SELECT_PUSH_CAMPAIGN_USERS =
+            """
+                    SELECT
+                        u.id, u.platform_id, u.status, u.country, u.nickname, u.language, s.delivered, p.given_name, p.surname
+                    FROM
+                        brbl_logic.campaign_users cu
+                    INNER JOIN
+                        brbl_users.users u ON u.id = cu.user_id
+                    INNER JOIN
+                        brbl_logic.push_campaigns pc ON pc.id = cu.campaign_id
+                    LEFT JOIN
+                        brbl_users.profiles p ON p.group_id = u.group_id
+                    WHERE
+                        pc.id = ?
+                    """;
+
+    public static final String SELECT_PUSH_CAMPAIGN =
+            """
+                    SELECT
+                        pc.id,
+                        pc.customer_id,
+                        pc.description,
+                        pc.script_id,
+                        pc.created_at,
+                        pc.updated_at,
+                        pc.completed_at
+                    FROM
+                        brbl_logic.push_campaigns pc
+                    INNER JOIN
+                        brbl_users.customers c ON c.id = pc.customer_id
+                    WHERE
+                        pc.id = ?
+                    """;
 
     private Connection fetchConnection() throws SQLException {
         //Instant before = NanoClock.utcInstant();
@@ -492,42 +529,41 @@ public class PostgresPersistenceManager implements PersistenceManager {
         return true;
     }
 
-    public boolean saveSession(Session session) {
+    public void saveSession(Session session) throws PersistenceManagerException {
         try (Connection connection = fetchConnection()) {
             assert connection != null;
-            return saveSession(connection, session);
+            saveSession(connection, session);
         } catch (SQLException e) {
-            LOG.error("upsertSession: fetchConnection failed", e);
-            return false;
+            LOG.error("saveSession: fetchConnection failed", e);
+            throw new PersistenceManagerException(e);
         }
     }
 
-    private boolean saveSession(Connection connection, Session session) {
+    private void saveSession(Connection connection, Session session) throws PersistenceManagerException {
         try (PreparedStatement ps = connection.prepareStatement(SESSION_UPSERT)) {
             ps.setObject(1, session.getId());
             ps.setBytes(2, sessionToBytes(session));
             ps.setTimestamp(3, Timestamp.from(session.getStartTimeNanos()));
             ps.setTimestamp(4, Timestamp.from(session.getLastUpdatedNanos()));
             ps.execute();
-            return true;
         } catch (SQLException | IOException e) {
             LOG.error(e.getMessage(), e);
-            return false;
+            throw new PersistenceManagerException(e);
         }
     }
 
-    public Session loadSession(UUID id) {
+    public Session loadSession(UUID id) throws PersistenceManagerException {
         LOG.info("Fetching session data for {}", id);
         try (Connection connection = fetchConnection()) {
             assert connection != null;
             return loadSession(connection, id);
         } catch (SQLException e) {
-            LOG.error("getSession: fetchConnection failed", e);
-            return null;
+            LOG.error("loadSession: fetchConnection failed", e);
+            throw new PersistenceManagerException(e);
         }
     }
 
-    private Session loadSession(Connection connection, UUID id) {
+    private Session loadSession(Connection connection, UUID id) throws PersistenceManagerException {
         LOG.info("Retrieving session {}", id);
         try (PreparedStatement ps = connection.prepareStatement(SELECT_SESSION)) {
             ps.setObject(1, id);
@@ -540,33 +576,14 @@ public class PostgresPersistenceManager implements PersistenceManager {
                 LOG.error("Session {} not found.", id);
                 return null;
             }
-        } catch (Exception e) {
-            LOG.error("Error retrieving Session object for {}", id, e);
-            return null;
+        } catch (SQLException | IOException | ClassNotFoundException e) {
+            throw new PersistenceManagerException(e);
         }
-    }
-
-    private byte[] sessionToBytes(Session session) throws IOException {
-        try (ByteArrayOutputStream baos = new ByteArrayOutputStream();
-             ObjectOutputStream oos = new ObjectOutputStream(baos)) {
-            oos.writeObject(session);
-            return baos.toByteArray();
-        }
-    }
-
-    private Session bytesToSession(byte[] data) throws IOException, ClassNotFoundException {
-        try (ByteArrayInputStream bais = new ByteArrayInputStream(data);
-             ObjectInputStream ois = new ObjectInputStream(bais)) {
-            return (Session) ois.readObject();
-        } /*catch (IOException | ClassNotFoundException e) {
-            LOG.error("Exception in bytesToSession", e);
-            return null;
-        }*/
     }
 
 
     @Override
-    public Map<Pattern, Keyword> getKeywords() {
+    public @Nullable Map<Pattern, Keyword> getKeywords() {
         LOG.info("(Re)Loading keyword cache...");
         try (Connection connection = fetchConnection()) {
             assert connection != null;
@@ -577,7 +594,7 @@ public class PostgresPersistenceManager implements PersistenceManager {
         }
     }
 
-    public Map<Pattern, Keyword> getKeywords(Connection connection) {
+    public @Nullable Map<Pattern, Keyword> getKeywords(Connection connection) {
         Map<Pattern, Keyword> allKeywordMap = new HashMap<>();
         try (PreparedStatement ps = connection.prepareStatement(SELECT_ALL_KEYWORDS)) {
             final ResultSet rs = ps.executeQuery();
@@ -605,12 +622,17 @@ public class PostgresPersistenceManager implements PersistenceManager {
             throw new RuntimeException(e);
         }
 
-        return allKeywordMap;
+        if (allKeywordMap.isEmpty()) {
+            LOG.error("No keywords found!");
+            return null;
+        } else {
+            return allKeywordMap;
+        }
     }
 
 
     @Override
-    public Route[] getActiveRoutes() {
+    public @Nullable Route[] getActiveRoutes() {
         LOG.info("(Re)Loading route cache...");
         try (Connection connection = fetchConnection()) {
             assert connection != null;
@@ -621,7 +643,7 @@ public class PostgresPersistenceManager implements PersistenceManager {
         }
     }
 
-    public Route[] getActiveRoutes(Connection connection) {
+    public @Nullable Route[] getActiveRoutes(Connection connection) {
         List<Route> allRoutes = new ArrayList<>();
         try (PreparedStatement ps = connection.prepareStatement(SELECT_ALL_ROUTES_WITH_STATUS)) {
             ps.setObject(1, "ACTIVE");
@@ -647,7 +669,11 @@ public class PostgresPersistenceManager implements PersistenceManager {
                 Route route = new Route(id, platform, channel, nodeId, customerId, status, createdAt, updatedAt);
                 allRoutes.add(route);
             }
-            return allRoutes.toArray(new Route[0]);
+            if (allRoutes.isEmpty()) {
+                return null;
+            } else {
+                return allRoutes.toArray(new Route[0]);
+            }
         }
 
         catch (SQLException e) {
@@ -666,7 +692,6 @@ public class PostgresPersistenceManager implements PersistenceManager {
 //            return null;
 //        }
 //    }
-
 //    public Node getScriptForKeyword(Connection connection, Platform platform, String keyword) {
 //        Map<UUID, Node> scriptMap = new HashMap<>(); // FIXME does the ordering matter?
 //        try (PreparedStatement ps = connection.prepareStatement(SELECT_SCRIPT_GRAPH_RECURSIVE_FOR_KEYWORD)) {
@@ -749,7 +774,7 @@ public class PostgresPersistenceManager implements PersistenceManager {
 //    }
 
     @Override
-    public Node getScript(UUID scriptId) {
+    public @Nullable Node getScript(UUID scriptId) {
         try (Connection connection = fetchConnection()) {
             assert connection != null;
             return getScript(connection, scriptId);
@@ -759,7 +784,7 @@ public class PostgresPersistenceManager implements PersistenceManager {
         }
     }
 
-    public Node getScript(Connection connection, UUID nodeId) {
+    public @Nullable Node getScript(Connection connection, UUID nodeId) {
         Map<UUID, Node> scriptMap = new HashMap<>(); // FIXME does the ordering matter?
         try (PreparedStatement ps = connection.prepareStatement(SELECT_SCRIPT_GRAPH_RECURSIVE)) {
             ps.setObject(1, nodeId);
@@ -830,7 +855,7 @@ public class PostgresPersistenceManager implements PersistenceManager {
     }
 
     @Override
-    public User getUser(SessionKey sessionKey) {
+    public @Nullable User getUser(SessionKey sessionKey) {
         try (Connection connection = fetchConnection()) {
             assert connection != null;
             return getUser(connection, sessionKey);
@@ -840,7 +865,7 @@ public class PostgresPersistenceManager implements PersistenceManager {
         }
     }
 
-    public User getUser(Connection connection, SessionKey sessionKey) {
+    public @Nullable User getUser(Connection connection, SessionKey sessionKey) {
         try (PreparedStatement ps = connection.prepareStatement(USER_PROFILE_BY_PLATFORM_ID_ROUTE)) {
 
             ps.setString(1, sessionKey.platform().code()); // platform
@@ -972,15 +997,121 @@ public class PostgresPersistenceManager implements PersistenceManager {
 
     }
 
-    static void main(String[] args) throws /*InterruptedException,*/ IOException, PersistenceManagerException {
+    private List<CampaignUser> getUsersForPushCampaign(@NonNull UUID pushCampaignId) {
+        try (Connection connection = fetchConnection()) {
+            assert connection != null;
+            return getUsersForPushCampaign(connection, pushCampaignId);
+        } catch (SQLException e) {
+            LOG.error("getUsersForPushCampaign: fetchConnection failed", e);
+            return null;
+        }
+    }
+
+    private List<CampaignUser> getUsersForPushCampaign(Connection connection, @NonNull UUID pushCampaignId) {
+        try (PreparedStatement ps = connection.prepareStatement(SELECT_PUSH_CAMPAIGN_USERS)) {
+            ps.setObject(1, pushCampaignId);
+            final ResultSet rs = ps.executeQuery();
+
+            List<CampaignUser> userList = new ArrayList<>();
+
+            while (rs.next()) {
+                // u.id
+                UUID userId = (UUID) rs.getObject(1);
+                // u.platform_id
+                String platformId = rs.getString(2);
+                // u.status
+                UserStatus userStatus = UserStatus.valueOf(rs.getString(3));
+                // u.country
+                CountryCode countryCode = CountryCode.valueOf(rs.getString(4));
+                // u.nickname
+                String nickName = rs.getString(5);
+                // u.language
+                LanguageCode languageCode = LanguageCode.valueOf(rs.getString(6)) ;
+                // s.delivered
+                DeliveryStatus deliveryStatus = DeliveryStatus.valueOf(rs.getString(7));
+                // p.given_name
+                String givenName = rs.getString(8);
+                // p.surname
+                String surname = rs.getString(9);
+
+                userList.add(new CampaignUser(userId, platformId, userStatus, countryCode, nickName, languageCode, deliveryStatus, givenName, surname));
+            }
+            return userList;
+
+        } catch (SQLException e) {
+            LOG.error("getUsersForPushCampaign failed", e);
+            return null;
+        }
+    }
+
+    private PushCampaign getPushCampaign(UUID pushCampaignId) {
+        try (Connection connection = fetchConnection()) {
+            assert connection != null;
+            return getPushCampaign(connection, pushCampaignId);
+        } catch (SQLException e) {
+            LOG.error("getPushCampaign: fetchConnection failed", e);
+            return null;
+        }
+    }
+
+    private PushCampaign getPushCampaign(Connection connection, UUID campaignId) {
+        try (PreparedStatement ps = connection.prepareStatement(SELECT_PUSH_CAMPAIGN)) {
+            ps.setObject(1, campaignId);
+
+            final ResultSet rs = ps.executeQuery();
+            if (!rs.next()) {
+                LOG.info("getPushCampaign: No campaigns found for {}", campaignId);
+                return null;
+            }
+
+            //id
+            UUID id = (UUID) rs.getObject(1);
+            //customer_id
+            UUID customerId = (UUID) rs.getObject(2);
+            //description
+            String description = rs.getString(3);
+            //script_id
+            UUID scriptId = (UUID) rs.getObject(4);
+            //created_at
+            Instant createdAt = rs.getTimestamp(5).toInstant();
+            //updated_at
+            Instant updatedAt = rs.getTimestamp(6).toInstant();
+            //completed_at (this is nullable)
+            Timestamp ts = rs.getTimestamp(7);
+            Instant completedAt = null;
+            if (ts != null) {
+                completedAt = ts.toInstant();
+            }
+
+            return new PushCampaign(id, customerId, description, scriptId, createdAt, updatedAt, completedAt);
+
+        } catch (SQLException e) {
+            LOG.error("getPushCampaign failed", e);
+            return null;
+        }
+    }
+
+
+    static void main(String[] args) throws IOException, PersistenceManagerException {
         PostgresPersistenceManager pm = new PostgresPersistenceManager(ConfigLoader.readConfig("persistence_manager_test.properties"));
         //var routes = pm.getActiveRoutes();
         //for (var route : routes) {
         //    LOG.info(route.toString());
         //}
 
-        final Map<Pattern, Keyword> keywords = pm.getKeywords();
-        keywords.forEach((key, value) -> LOG.info("{} -> {}", key, value.wordPattern()));
+        var pushCampaign = pm.getPushCampaign(UUID.fromString("eb7aa81a-b314-420c-8f3d-df4755faa9bb"));
+        LOG.info("PC: {}", pushCampaign);
+
+//        final Map<Pattern, Keyword> keywords = pm.getKeywords();
+//        keywords.forEach((key, value) -> LOG.info("{} -> {}", key, value.wordPattern()));
+
+//        final List<CampaignUser> usersForPushCampaign = pm.getUsersForPushCampaign(UUID.fromString("eb7aa81a-b314-420c-8f3d-df4755faa9bb"));
+//        if (usersForPushCampaign != null && !usersForPushCampaign.isEmpty()) {
+//            usersForPushCampaign.forEach(cu -> LOG.info("> {}", cu));
+//        } else {
+//            LOG.info("Ack, no results");
+//        }
+
     }
 
 }

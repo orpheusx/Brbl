@@ -2,13 +2,19 @@ package com.enoughisasgoodasafeast.operator;
 
 import com.enoughisasgoodasafeast.Message;
 import io.jenetics.util.NanoClock;
+import org.jspecify.annotations.Nullable;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
+import java.io.IOException;
 import java.time.Instant;
 import java.util.*;
 import java.util.regex.Pattern;
 
 public
 class TestingPersistenceManager implements PersistenceManager {
+
+    private static final Logger LOG = LoggerFactory.getLogger(TestingPersistenceManager.class);
 
     public static final UUID KEYWORD_ID = UUID.randomUUID();
     public static final UUID SCRIPT_ID = UUID.fromString("89eddcb8-7fe5-4cd1-b18b-78858f0789fb");
@@ -70,6 +76,29 @@ class TestingPersistenceManager implements PersistenceManager {
     @Override
     public Route[] getActiveRoutes() {
         return null;
+    }
+
+    private final Map<UUID, byte[]> savedSessions = new HashMap<>();
+
+    @Override
+    public void saveSession(Session session) throws PersistenceManagerException {
+        try {
+            savedSessions.put(session.getId(), SessionSerde.sessionToBytes(session));
+        } catch (IOException e) {
+            LOG.error("Failed to serialize session for {}", session.getId(), e);
+            throw new PersistenceManagerException(e);
+        }
+    }
+
+    @Override
+    public @Nullable Session loadSession(UUID id) throws PersistenceManagerException {
+        final byte[] bytes = savedSessions.get(id);
+        try {
+            return SessionSerde.bytesToSession(bytes);
+        } catch (IOException | ClassNotFoundException e) {
+            LOG.error("Failed to deserialize session for {}", id, e);
+            throw new PersistenceManagerException(e);
+        }
     }
 
 //    @Override

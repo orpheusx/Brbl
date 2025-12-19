@@ -151,8 +151,12 @@ public class Operator implements MessageProcessor {
                 }
 
                 session.flush(); // FIXME ideally should be in a finally block but writing to db can throw. Hmm...
+
+                persistenceManager.saveSession(session);
+
                 return true; // when would this be false?
-            } catch (IOException e) {
+
+            } catch (IOException | PersistenceManagerException e) {
                 LOG.error("Processing error", e); // TODO need to consider options for better handling of error scenarios.
                 return false;
             }
@@ -349,7 +353,7 @@ public class Operator implements MessageProcessor {
         return null;
     }
 
-    Node getScript(UUID nodeId) {
+    @Nullable Node getScript(UUID nodeId) {
         return persistenceManager.getScript(nodeId);
     }
 

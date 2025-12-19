@@ -626,7 +626,7 @@ ALTER TABLE keywords ADD PRIMARY KEY(id);
 
 
 -- ===============================================================================================
---Updated 12/7/2025:
+-- Updated 12/7/2025:
 
 -- Working on getting db persistence of sessions working round-trip in code.
 -- Need to add customer_id to USERS table.
@@ -637,3 +637,106 @@ UPDATE brbl_users SET customer_id = '4d351c0e-5ce5-456e-8de0-70e04bd5c0fd'; -- b
 ALTER TABLE brbl_users.users ADD PRIMARY KEY  (platform_id, customer_id, platform_code);
 ALTER TABLE brbl_users.users ADD CONSTRAINT fk_customer_id FOREIGN KEY(customer_id) REFERENCES brbl_users.customers(id);
 -- Completed these changes.
+
+-- ===============================================================================================
+-- Updated 12/14/2025:
+
+--> Campaigns and their referenced campaign_users track the intent and status/progress of push messages
+CREATE TABLE brbl_logic.push_campaigns (
+    id              UUID PRIMARY KEY,
+    customer_id     UUID,
+    description     VARCHAR(64),
+    script_id       UUID,
+    created_at      TIMESTAMP WITH TIME ZONE NOT NULL,
+    updated_at      TIMESTAMP WITH TIME ZONE NOT NULL,
+    completed_at    TIMESTAMP WITH TIME ZONE,           --> status type instead?
+    CONSTRAINT fk_campaign_customers_id
+        FOREIGN KEY(customer_id) REFERENCES brbl_users.customers(id),
+    CONSTRAINT fk_campaign_scripts_id
+        FOREIGN KEY(script_id) REFERENCES brbl_logic.scripts(id)
+);
+
+CREATE TYPE brbl_logic.delivery_status AS ENUM('PENDING', 'INFLIGHT', 'SENT', 'FAILED');
+
+--> Segments are disposable.
+CREATE TABLE brbl_logic.campaign_users (
+    campaign_id     UUID,
+    user_id         UUID,
+    delivered       brbl_logic.delivery_status,
+    CONSTRAINT fk_campaign_users_campaign_id
+        FOREIGN KEY(campaign_id) REFERENCES brbl_logic.push_campaigns(id),
+    CONSTRAINT fk_campaign_users_user_id
+        FOREIGN KEY(user_id) REFERENCES brbl_users.users(id)
+);
+
+--> We had to add a surrogate primary key to the users table and switch the current composition to be a unique. The group_id can't be used because FK can only reference a PK.
+--> This is marginally preferable to just leaving out any constraint.
+--> We could use a composite FK to point at the composite PK on users but that's a too much duplicated data for my liking.
+--> NB: I'm using a UUID for the new primary key on users simply to be consistent. If/when we switch this practice we can do it here as well.
+
+ALTER TABLE brbl_users.users DROP CONSTRAINT users_pkey;
+ALTER TABLE brbl_users.users ADD CONSTRAINT users_platform_customer_id_unique UNIQUE(platform_code, customer_id, platform_id);
+ALTER TABLE brbl_users.users ADD COLUMN id UUID;
+UPDATE brbl_users.users
+    SET id = gen_random_uuid()
+    WHERE id IS NULL;
+ALTER TABLE brbl_users.users ADD PRIMARY KEY(id);
+
+
+--> Create some test data.
+INSERT INTO push_campaigns (
+id,customer_id,description,script_id,created_at,updated_at,completed_at)
+VALUES(
+    gen_random_uuid(),
+    '4d351c0e-5ce5-456e-8de0-70e04bd5c0fd',
+    'A test campaign that delivers the MachaCupcake poll.',
+    'ffbcdde8-0e95-497b-9a9e-38934fb2d91f', -- this script points at nodes.id = '35ab8b42-fbdf-47e1-ac62-bae86c3c7178'
+    NOW(), NOW(), NULL
+); --> 'eb7aa81a-b314-420c-8f3d-df4755faa9bb'
+
+INSERT INTO campaign_users(campaign_id, user_id, delivered)
+    SELECT '57313fde-4caa-424c-a902-5cae09219153'::UUID AS campaign_id, id, 'PENDING'::delivery_status FROM users WHERE platform_code = 'B'; -- ~11 rows
+
+INSERT INTO push_campaigns (
+    id, customer_id, description, script_id, created_at, updated_at, completed_at)
+VALUES(
+    gen_random_uuid(),
+    '4d351c0e-5ce5-456e-8de0-70e04bd5c0fd',
+    'Test campaign that asks many silly poll questions.',
+    '57313fde-4caa-424c-a902-5cae09219153', -- this script points at nodes.id = '89eddcb8-7fe5-4cd1-b18b-78858f0789fb'
+    NOW(), NOW(), NULL
+); --> 95497de1-a092-430d-a37c-25ef35d7d208
+
+INSERT INTO campaign_users(campaign_id, user_id, delivered)
+    SELECT '95497de1-a092-430d-a37c-25ef35d7d208'::UUID AS campaign_id, id, 'PENDING'::delivery_status FROM users WHERE platform_code = 'B'; -- ~11 rows
+
+--> Now the query to pull the work set
+SELECT
+    u.nickname, u.language, s.*
+FROM campaign_users s
+INNER JOIN users u
+    ON u.id = s.user_id
+INNER JOIN push_campaigns pc
+    ON pc.id = s.campaign_id
+WHERE pc.id='eb7aa81a-b314-420c-8f3d-df4755faa9bb';
+
+-- Add profile data where possible?
+SELECT
+    u.id, u.platform_id, u.status, u.country, u.nickname, u.language, s.*, p.given_name, p.surname
+FROM campaign_users s
+INNER JOIN users u
+    ON u.id = s.user_id
+INNER JOIN push_campaigns pc
+    ON pc.id = s.campaign_id
+LEFT JOIN profiles p
+    ON p.group_id = u.group_id
+WHERE pc.id='eb7aa81a-b314-420c-8f3d-df4755faa9bb';
+
+
+-- Add a state to push_campaign to track whether its ready to be scheduled?
+
+-- Something to have a think about sooner than later:
+--   How do we correlate the push campaign message and the MT log that's generated for it?
+--  The MT log table currently references the script that generates it and the session it was a part of.
+--  No such linkage in the MO log table.
+-- More generally how do we report on script execution?
