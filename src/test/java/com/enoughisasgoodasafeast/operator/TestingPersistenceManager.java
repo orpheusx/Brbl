@@ -2,6 +2,7 @@ package com.enoughisasgoodasafeast.operator;
 
 import com.enoughisasgoodasafeast.Message;
 import io.jenetics.util.NanoClock;
+import org.jspecify.annotations.NonNull;
 import org.jspecify.annotations.Nullable;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -11,8 +12,7 @@ import java.time.Instant;
 import java.util.*;
 import java.util.regex.Pattern;
 
-public
-class TestingPersistenceManager implements PersistenceManager {
+public class TestingPersistenceManager implements PersistenceManager {
 
     private static final Logger LOG = LoggerFactory.getLogger(TestingPersistenceManager.class);
 
@@ -55,7 +55,7 @@ class TestingPersistenceManager implements PersistenceManager {
     }
 
     @Override
-    public boolean insertUser(User user) {
+    public boolean insertNewUser(User user) {
         return true;
     }
 
@@ -101,6 +101,16 @@ class TestingPersistenceManager implements PersistenceManager {
         }
     }
 
+    @Override
+    public List<CampaignUser> getUsersForPushCampaign(@NonNull UUID campaignId) {
+        return List.of(); // FIXME implement!
+    }
+
+    @Override
+    public PushCampaign getPushCampaign(@NonNull UUID campaignId) {
+        return null; // FIXME implement!
+    }
+
 //    @Override
 //    public Node getScriptForKeyword(Platform platform, String keyword) {
 //        return null;
@@ -114,6 +124,8 @@ class TestingPersistenceManager implements PersistenceManager {
         platformCreatedAt.put(Platform.SMS, NanoClock.utcInstant());
         Map<Platform, String> userNickNames = new LinkedHashMap<>();
         userNickNames.put(Platform.SMS, "Bozo");
-        return new User(UUID.randomUUID(), platformIds, platformCreatedAt, "US", List.of("ENG"), CUSTOMER_ID, userNickNames, null);
+        Map<Platform, UserStatus> userStatuses = new LinkedHashMap<>();
+        userStatuses.put(Platform.SMS, UserStatus.IN);
+        return new User(UUID.randomUUID(), UUID.randomUUID(), platformIds, platformCreatedAt, "US", List.of("ENG"), CUSTOMER_ID, userNickNames, null, userStatuses);
     }
 }

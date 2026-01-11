@@ -281,17 +281,22 @@ public class Operator implements MessageProcessor {
             LOG.info("User not found.");
             user = new User(
                     UUID.randomUUID(),
+                    UUID.randomUUID(),
                     defaultPlatformIdMap(sessionKey.from()),
                     defaultPlatformTimeCreatedMap(NanoClock.utcInstant()),
                     deriveCountryCodeFromId(sessionKey.from()),
                     defaultLanguageList(sessionKey.from(), sessionKey.to()),
                     findCustomerIdByRoute(sessionKey),
                     defaultNickNameMap(),
-                    null
+                    null,
+                    defaultPlatformStatusMap(UserStatus.IN) // FIXME is this right value?
             );
-            boolean isInserted = persistenceManager.insertUser(user);
+
+            boolean isInserted = persistenceManager.insertNewUser(user);
             if (!isInserted) {
-                LOG.error("findOrCreateUser failed to insert user. Caching it anyway: {}", user);
+                LOG.error("findOrCreateUser failed to insert new user: {}", user);
+                return null;
+                // LOG.error("findOrCreateUser failed to insert user. Caching it anyway: {}", user);
                 // Queue or write it to a file so it can be loaded later (when the database is back up)?
             } else {
                 LOG.info("New User created: {}", user);
@@ -413,6 +418,10 @@ public class Operator implements MessageProcessor {
 
     private Map<Platform, Instant> defaultPlatformTimeCreatedMap(Instant createdAt) {
         return Map.of(defaultPlatform, createdAt);
+    }
+
+    private Map<Platform, UserStatus> defaultPlatformStatusMap(UserStatus userStatus) {
+        return Map.of(defaultPlatform, userStatus);
     }
 
     private Map<Platform, String> defaultNickNameMap() {

@@ -1,5 +1,6 @@
 package com.enoughisasgoodasafeast.operator;
 
+import java.io.Serializable;
 import java.util.List;
 import java.util.UUID;
 
@@ -10,7 +11,7 @@ import java.util.UUID;
  * @param matchText
  * @param targetNode
  */
-public record Edge(UUID id, String text, List<String> matchText, Node targetNode) {
+public record Edge(UUID id, String text, List<String> matchText, Node targetNode) implements Serializable {
 
     public Edge(List<String> matchText, Node node) {
         this(UUID.randomUUID(), null, matchText, node);

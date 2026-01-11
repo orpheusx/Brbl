@@ -32,7 +32,7 @@ public class SessionTest {
             Session session = new Session(
                     UUID.randomUUID(),
                     new Node("do nothing", EchoWithPrefix, null),
-                    new User(UUID.randomUUID(), platformIds, platformsCreated, countryCode, languages, customerId, userNickNames, null),
+                    new User(UUID.randomUUID(), UUID.randomUUID(), platformIds, platformsCreated, countryCode, languages, customerId, userNickNames, null, platformStatuses),
                     new InMemoryQueueProducer(),
                     null);
             int numElements = MAX_INPUT_HISTORY + 1;
@@ -200,7 +200,7 @@ public class SessionTest {
         return new Session(
                 id,
                 new Node("The quick brown fox jumps over the lazy dog.", NodeType.SendMessage, "A test Node"),
-                new User(UUID.randomUUID(), platformIds, platformsCreated, countryCode, languages, customerId, userNickNames, null),
+                new User(UUID.randomUUID(), UUID.randomUUID(), platformIds, platformsCreated, countryCode, languages, customerId, userNickNames, null, platformStatuses),
                 queueProducer,
                 persistenceManager);
     }

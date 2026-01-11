@@ -1,7 +1,9 @@
 package com.enoughisasgoodasafeast.operator;
 
 import com.enoughisasgoodasafeast.Message;
+import org.jspecify.annotations.NonNull;
 
+import java.util.List;
 import java.util.Map;
 import java.util.UUID;
 import java.util.regex.Pattern;
@@ -24,7 +26,7 @@ public interface PersistenceManager {
     User getUser(SessionKey sessionKey);
 
     // Called by Operator
-    boolean insertUser(User user);
+    boolean insertNewUser(User user);
 
     // Called by Operator
     Map<Pattern, Keyword> getKeywords();
@@ -40,6 +42,10 @@ public interface PersistenceManager {
     void saveSession(Session session) throws PersistenceManagerException;
 
     Session loadSession(UUID id) throws PersistenceManagerException;
+
+    List<CampaignUser> getUsersForPushCampaign(@NonNull UUID campaignId);
+
+    PushCampaign getPushCampaign(@NonNull UUID campaignId);
 
     /*
      * This exception exists simply to slightly abstract the internal details involved.

@@ -16,8 +16,9 @@ import java.util.UUID;
  * <p>
  * The validation of country codes is limited to what the platform supports.
  * TODO Currently, this is hardcoded and we need to change it.
- *  @param id the identifier used within the Brbl ecosystem.
  *
+ * @param id                    the identifier used within the Brbl ecosystem.
+ * @param groupId               the identifier used to link the same user on different platforms together.
  * @param platformIds           the identifiers for this User on other messaging platforms.
  * @param platformCreationTimes the creation time for this User for each messaging platform.
  * @param countryCode           the ISO country of the nation where the User lives.
@@ -25,17 +26,22 @@ import java.util.UUID;
  * @param customerId            the Customer that acquired this User instance.
  * @param platformNickNames     the optional nicknames for this User on other messaging platforms.
  * @param profile               the optional Profile that provides the User's identity.
+ * @param platformStatus        the User controlled opt-in status for each Platform.
  */
 
 public record User(
-        UUID id, // aka group_id
+        UUID id,
+        UUID groupId,
         Map<Platform, String> platformIds,
         Map<Platform, Instant> platformCreationTimes,
         String countryCode,
         List<String> languages,
         UUID customerId,
         Map<Platform, String> platformNickNames,
-        Profile profile) implements Serializable
+        Profile profile,
+        Map<Platform,UserStatus> platformStatus
+    ) implements Serializable
+
 {
 
     private static final Logger LOG = LoggerFactory.getLogger(User.class);
@@ -70,13 +76,17 @@ public record User(
 
         for (String language : languages) {
             switch (language) {
-                case "SPA","FRA","ENG" -> {} // TODO create a Language enum and use it here somehow?
+                case "FRA", "ENG", "RUS", "SPA", "CMN", "YUE", "HAT", "POR" -> {} // convert the string
                 default -> fail("Unsupported language.");
             }
         }
 
         if (customerId == null) {
             fail("customerId cannot be null");
+        }
+
+        if (platformStatus == null || platformStatus.isEmpty()) {
+            fail("platformStatus cannot be null or empty.");
         }
 
         // NB: Perfectly fair for the User to not have any nicknames or be associated with a Profile.
@@ -86,8 +96,8 @@ public record User(
 
     // Convenience constructor.
     // TODO Create a countryCode enum class, matching our schema type already defines (US, CA, MX)
-    public User(Map<Platform, String> platformIds, Map<Platform, Instant> platformCreationTimes, List<String> languages, UUID customerId) {
-        this(UUID.randomUUID(), platformIds, platformCreationTimes, "US", languages, customerId, Map.of(), null);
+    public User(Map<Platform, String> platformIds, Map<Platform, Instant> platformCreationTimes, List<String> languages, UUID customerId, Map<Platform, UserStatus> platformStatus) {
+        this(UUID.randomUUID(), UUID.randomUUID(), platformIds, platformCreationTimes, "US", languages, customerId, Map.of(), null, platformStatus);
     }
 
     void fail(String message) {

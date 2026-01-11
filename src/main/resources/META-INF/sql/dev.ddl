@@ -499,7 +499,7 @@ ALTER TABLE brbl_users.users ADD COLUMN status user_status NOT NULL DEFAULT 'KNO
 -- ===============================================================================================
 Updated 10/7/2025:
 
-CREATE TABLE brbl_logic.schedule (
+CREATE TABLE brbl_logic.schedules (
     id                      UUID PRIMARY KEY,
     expression              VARCHAR(24) NOT NULL,
     is_recurring            boolean NOT NULL DEFAULT FALSE, -- convenience flag to distinguish one time and recurring schedules.
@@ -509,9 +509,9 @@ CREATE TABLE brbl_logic.schedule (
     CONSTRAINT fk_scripts_id FOREIGN KEY(script_id)
         REFERENCES brbl_logic.scripts(id)
 );
-COMMENT ON COLUMN brbl_logic.schedule.expression   IS 'The cron string describing the schedule.';
-COMMENT ON COLUMN brbl_logic.schedule.is_recurring IS 'TRUE is recurring, FALSE is one-time execution';
-COMMENT ON COLUMN brbl_logic.schedule.script_id    IS 'The script to be processed.';
+COMMENT ON COLUMN brbl_logic.schedules.expression   IS 'The cron string describing the schedule.';
+COMMENT ON COLUMN brbl_logic.schedules.is_recurring IS 'TRUE is recurring, FALSE is one-time execution';
+COMMENT ON COLUMN brbl_logic.schedules.script_id    IS 'The script to be processed.';
 
 Temporarily removed NOT NULL constraints:
     ALTER TABLE brbl_logic.scripts
@@ -740,3 +740,18 @@ WHERE pc.id='eb7aa81a-b314-420c-8f3d-df4755faa9bb';
 --  The MT log table currently references the script that generates it and the session it was a part of.
 --  No such linkage in the MO log table.
 -- More generally how do we report on script execution?
+
+
+CREATE TEMP TABLE users (LIKE users);
+INSERT INTO users SELECT * FROM users;
+ALTER TABLE users DROP COLUMN group_id;
+
+CREATE TABLE user_group (
+    group_id    UUID,
+    user_id     UUID,
+    PRIMARY KEY (group_id, user_id)
+)
+
+CREATE TEMP TABLE profiles (LIKE profiles);
+
+CREATE TEMP TABLE routes_t (LIKE profiles);

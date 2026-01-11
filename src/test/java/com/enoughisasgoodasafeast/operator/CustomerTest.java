@@ -11,14 +11,16 @@ import static org.junit.jupiter.api.Assertions.*;
 
 public class CustomerTest {
     final static UUID id = UUID.randomUUID();
+    final static UUID groupId = UUID.randomUUID();
     final static Map<Platform, String> platformIds = Map.of(Platform.SMS, "17815551234");
     final static Map<Platform, Instant> platformCreatedMap = Map.of(Platform.SMS, NanoClock.utcInstant());
     final static Map<Platform, String> userNickNames = new LinkedHashMap<>();
     final static String countryCode = Locale.getDefault().getCountry();
     final static List<String> languages = List.of("SPA", "FRA");
     final static UUID customerId = UUID.randomUUID();
+    final static Map<Platform, UserStatus> userStatuses = Map.of(Platform.SMS, UserStatus.IN);
 
-    final static User user = new User(id, platformIds, platformCreatedMap, countryCode, languages, customerId, userNickNames, null);
+    final static User user = new User(id, groupId, platformIds, platformCreatedMap, countryCode, languages, customerId, userNickNames, null, userStatuses);
 
     // final String firstName = "Fred";
     // final String surname = "Flintstone";
@@ -26,7 +28,7 @@ public class CustomerTest {
 
     @Test
     public void createOk() {
-        assertDoesNotThrow(() -> new Customer(null, user/*, companyName*/, null, null));
+        assertDoesNotThrow(() -> new Customer(null, user, null, null));
     }
 
     @Test
@@ -40,7 +42,7 @@ public class CustomerTest {
     @Test
     public void userNull() {
         Exception exception = assertThrows(IllegalArgumentException.class, () -> {
-            new Customer(null, null, /*firstName, surname, companyName*/null, null);
+            new Customer(null, null, null, null);
         });
         assertTrue(exception.getMessage().contains("user"));
     }

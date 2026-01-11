@@ -2317,6 +2317,7 @@ The scheduler
  V
 CampaignManager.execAndReport
     |--> read the Campaign from PUSH_CAMPAIGNS, read the specified script graph, read TargetUsers (joined with data from USERS) from associated CAMPAIGN_USERS (possibly in batches)
+    |       (We might want to call scriptCache.refresh(scriptID) to insure we have the latest variant.)
     |--> for each TargetUser
     |  |--> check if user has an active session (in cache). Configurable decision: clear the session or skip this user.
     |  |--> check User status, skip if their status is not IN. If KNOWN or OUT, log this for the report.
@@ -2340,3 +2341,380 @@ _ Get integration tests working again.
 "They were careless people...they smashed up things and creatures and then retreated back into their money or their vast carelessness or whatever it was that kept them together, and let other people clean up the mess they had made." F. Scott Fitzgerald, The Great Gatsby
 
 
+===== 2025-12-21 ====
+
+_ Have a (re)think about user/session scopes...
+
+Currently we're using the Session's id property (a randomly generated UUID) as the Postgres table's primary key (see loadSession()/saveSession()). This is fine when we're persisting a new session but won't work when searching the database for a given CampaignUser.
+
+For push campaigns, as well as MOs when checking for sessions that aged out of cache, could we use a SessionKey (platform, user's platform id, and **channel**)?
+
+What are the consequences of that choice?
+    If we include the platform code we could have different sessions for each User even if the channel is the same. (A customer's WhatsApp business numbers is not likely to be the same as their SMS long code but its theoretically possible.)
+    We want to support migrating a conversation from one platform to another so the platform/channel uniqueness means we'd need to copy the origin session to a new one on the destination platform/channel, overwriting anything that already exists. More work but, rare as it would likely be, not too bad. If they migrate back we'd do the same thing.
+
+On the other hand, the table schema names the primary key, "group_id." This suggest that the session is per logical user, including all the user records that share the group_id.
+For MO initiated conversations it would mean that we'd need to find the user before looking for their record in SESSIONS.
+
+I'm leaning towards this latter decision. It reinforces the notion of a single Customer <--> User relationship. It would also show off the platform migration feature more clearly.
+
+Speaking of platform migration, how do we handle the case where we've created two unconnected Users, then discover they are, in fact, the same user and want to connect them? How do we preserve their history?
+    --> Users, Profile, and Sessions are the only tables that reference group_id.
+
+    The brute force approach is to update the group_id in each of these tables. Their foreign keys relationships make this challenging; they need to get updated simultaneously,
+
+It might be better to make the grouping mechanism its own table that would be outer joined to the users. The implementation would be fairly lightweight and gets us out of having to update records to link Users.
+
+What would be affected by this change?
+
+The User record is structured as an aggregate of records in the USERS table left joined with PROFILES (on group_id) and ROUTES (on customer_id.)
+The group_id column in PROFILE is its primary key but there's no foreign key relationship linking to the group_id column in USERS.
+
+The use case for Profile doesn't require more than a single User and we don't have a means of creating them programmatically at all.
+Thinking ahead, I'm assuming we'll have special scripts or web apps that take input from the user and create a Profile. The Customer would
+Because of this, we could end up with a profile for each user even and have to consider merging the profiles
+
+Our current data set is pretty junky:
+
+    SELECT p.group_id, given_name, surname, platform_code, platform_id FROM profiles p RIGHT OUTER JOIN users u ON u.group_id = p.group_id order by p.group_id;
+
+    ...reveals that we have a bunch of profiles without a single matching user record. The lack of the foreign key makes this possible even though it makes no sense to allow it.
+    We could handle this the same way we do for multiple Users, merging the entries into maps keyed by the platform/id.
+
+
+Query in PostgresPersistenceManager: USER_PROFILE_BY_PLATFORM_ID_ROUTE
+
+# To extract the schemas from the database into a form that can be re-used (with additional massaging.)
+pg_dump -U brbl_admin -h localhost brbl_db_dev -s --schema=brbl_user -f brbl_users.ddl
+pg_dump -U brbl_admin -h localhost brbl_db_dev -s --schema=brbl_logic -f brbl_logic.ddl
+Note: The ordering of the DDL is a little random.
+
+
+Experimenting with brbl_users.* tables using a user_groups to model the linking of user records.
+Populating the modified schemas (copies of the originals with _t appended to their name):
+
+    INSERT INTO brbl_users.companies_t      (SELECT * FROM companies);
+    INSERT INTO brbl_users.profiles_t       (SELECT distinct(p.group_id), surname,given_name,other_languages,p.created_at,p.updated_at, roles FROM profiles p
+                                                INNER JOIN users u ON u.group_id = p.group_id order by p.created_at);
+    INSERT INTO brbl_users.customers_t      (SELECT c.* FROM customers c INNER JOIN profiles_t p ON p.group_id = c.profile_id);
+    INSERT INTO brbl_users.users_t          (SELECT id, platform_code, platform_id, customer_id, country, language, nickname, status, created_at, updated_at FROM USERS);
+    INSERT INTO brbl_users.user_groups_t    (SELECT p.group_id, u.id, NOW() from users u join profiles p on p.group_id = u.group_id);
+
+Okay, so now let's figure out what the new query looks for USER_PROFILE_BY_PLATFORM_ID_ROUTE (called by PersistenceManager.getUser())...
+
+There's only one logical record in our current data set that could be returned. The platform is 'S', the channel is 21249, and the platform_id is '17817299468'
+
+SELECT
+    u.id,u.group_id,u.platform_id,u.platform_code,u.country,u.language,u.nickname,u.created_at,p.surname,p.given_name,p.other_languages as profile_other_languages,p.created_at as profile_created_at,p.updated_at as profile_updated_at,r.customer_id as routes_customer_id
+FROM
+    brbl_users.users u
+LEFT JOIN
+    brbl_users.profiles p
+    ON u.group_id = p.group_id
+LEFT JOIN
+    brbl_logic.routes r
+    ON r.customer_id = u.customer_id
+WHERE
+    r.platform = 'S'::public.platform
+    AND
+    r.channel = '21249'
+    AND
+	u.group_id = (
+		SELECT group_id
+		FROM brbl_users.users
+		WHERE platform_id = '17817299468'
+	);
+
+This returns three records which are merged into a single User.
+The updated query should add users_groups as the link between users and profiles.
+
+To link two users together fully we need to
+1) update user_groups.group_id for newer User
+2) update profiles.group_id for the newer User if any profile exists
+3) update the customer.group_id matching the updated profile.
+
+Wasn't this approach meant to be simpler than the original?
+
+What if we added columns to user_groups for the profile_id and customer_id? Making it more like a fact table in a star schema.
+When creating a new user we'd initially enter provide the user_id and group_id (both randomly generated) then set profile_id and customer_id as needed.
+To link users together we just update the record's group_id column in this fact table. The other tables don't need to change.
+NB: the admin web app can reasonably constrain multiple Customers from being created. Multiple Profiles can be merged as we do for some of the User details.
+
+
+-- Populating clone of brbl_logic.routes table:
+    INSERT INTO brbl_logic.routes_t (SELECT * FROM brbl_logic.routes WHERE customer_id = '4d351c0e-5ce5-456e-8de0-70e04bd5c0fd');
+
+
+
+SELECT
+    u.id,u.group_id,u.platform_id,u.platform_code,u.country,u.language,u.nickname,u.created_at,
+    p.surname,p.given_name,p.other_languages as profile_other_languages,p.created_at as profile_created_at,p.updated_at as profile_updated_at,
+    r.customer_id as routes_customer_id
+FROM
+    brbl_users.users_t u
+INNER JOIN
+    brbl_users.amalgams a
+        ON a.user_id = u.id
+LEFT JOIN
+    brbl_users.profiles_t p
+        ON p.id = a.profile_id
+LEFT JOIN
+    brbl_users.customers_id c
+        ON c.id = a.customer_id
+LEFT JOIN
+    brbl_logic.routes r
+    ON r.customer_id = c.id
+;
+
+Given all this work and the insane effort required to massage the existing data to fit the new model I think it's finally time to develop some data generation tools.
+
+
+===== 2025-12-28 ====
+
+Used DataFaker and EasyRandom to develop Generator. Requires a set of additional record classes that more directly map to the updated Postgres tables.
+
+Created copies of several tables appending "_t" to their names.
+We're going to need to update a bunch of SQL to support use of the new amalgams table.
+
+Starting with USER_PROFILE_BY_PLATFORM_ID_ROUTE query.
+
+SELECT
+    u.id,
+    a.group_id,
+    u.platform_id,
+    u.platform_code,
+    u.country,
+    u.language,
+    u.nickname,
+    u.created_at,
+    p.surname,
+    p.given_name,
+    p.other_languages as profile_other_languages,
+    p.created_at      as profile_created_at,
+    p.updated_at      as profile_updated_at,
+    r.channel,
+    a.customer_id as routes_customer_i
+FROM
+    amalgams_t a
+INNER JOIN users_t u
+    ON a.user_id = u.id
+INNER JOIN profiles_t p
+    ON p.id = a.profile_id
+INNER JOIN customers_t c
+    ON c.id = a.customer_id
+INNER JOIN routes_t r
+    ON r.customer_id = c.id
+WHERE
+    u.platform_code = 'S'
+    AND u.platform_id = '13054379229'
+    AND r.channel = '21249';
+
+Happily this doesn't seem to require rewriting the code that reads the result set and turns it into a User record.
+
+select * from amalgams_t where user_id = 'df31cb95-1492-82bc-61ba-56c9b21660f1'
+
+Inserts into the new version of the USERS table need to be done in conjunction with an insert into the new AMALGAMS table.
+How about using something like this:
+
+WITH new_user_cte AS (
+        INSERT INTO brbl_users.users_t
+            (id, status, platform_id, platform_code, country, language, nickname, created_at, updated_at)
+        VALUES
+            (?::UUID, ?::user_status, ?, ?::platform, ?, ?, ?, ?, ?)
+        RETURNING
+            id AS nuc_id, created_at AS nuc_created_at
+)
+INSERT INTO brbl_users.amalgams_t
+    (group_id, user_id, profile_id, customer_id, created_at, updated_at)
+SELECT
+    ?::UUID, nuc_id, NULL, ?::UUID, nuc_created_at, nuc_created_at
+FROM
+    new_user_cte
+RETURNING
+    group_id
+;
+
+Ack! Discovered that the Generator is produced records with created_at in the future. MUST FIX!
+Ack! Realized I'd created the routes_t table in brbl_logs instead of brbl_logic where it belongs. Fixed.
+
+NB: Just realized that we don't really need a group_id when we've decided that customers owns a given instance of a User and any other records created with a channel owned by said customer. Hmm...would it still be useful to have a single column to track the grouping? Well, yes, the session data upsert benefits from being able to reference a single column.
+So let's keep it for now, at least.
+
+
+
+===== 2026-01-02 ====
+
+All the current queries in PostgresPersistenceManager appear to be working as intended with the updated *_t tables.
+
+The following still reference the older version of brbl_users.customers, however:
+
+    brbl_logic.push_campaigns
+        |
+        +--> brbl_logic.scripts
+        |       |
+        |       V
+        +--> brbl_users.customers
+
+Let's complete the cleanup work and get push_campaigns pointing to customers_t and scripts_t and scripts_t pointing to customers_t.
+
+Apparently I'd also made a copy of scripts in the brbl_logs schema. The data there is linked to brbl_users.customers_t so let's just move it there...
+
+    ALTER TABLE brbl_logs.scripts_t SET SCHEMA brbl_logic;
+
+    -- Add the constraints for the scripts_t table.
+    ALTER TABLE ONLY brbl_logic.scripts_t
+        ADD CONSTRAINT scripts_t_pkey1 PRIMARY KEY (id);
+
+    ALTER TABLE ONLY brbl_logic.scripts_t
+        ADD CONSTRAINT fk_customers_t_id FOREIGN KEY (customer_id) REFERENCES brbl_users.customers_t(id);
+
+    ALTER TABLE ONLY brbl_logic.scripts_t
+        ADD CONSTRAINT fk_nodes_id FOREIGN KEY (node_id) REFERENCES brbl_logic.nodes(id);
+
+The data in brbl_logic.push_campaign doesn't point at the customers_t or scripts_t tables.
+Recreate the fk constraints:
+
+    ALTER TABLE ONLY brbl_logic.push_campaigns DROP CONSTRAINT fk_campaign_customers_id ;
+    ALTER TABLE ONLY brbl_logic.push_campaigns DROP CONSTRAINT fk_campaign_scripts_id ;
+    UPDATE push_campaigns SET customer_id = '762a353b-0597-0a15-b57d-389b21686463' <a row in customers_t> ...for all two existing rows
+    ALTER TABLE ONLY brbl_logic.push_campaigns
+        ADD CONSTRAINT fk_campaign_customers_id FOREIGN KEY (customer_id) REFERENCES customers_t(id) ;
+    ALTER TABLE ONLY brbl_logic.push_campaigns
+        ADD CONSTRAINT fk_campaign_scripts_id FOREIGN KEY (script_id) REFERENCES scripts_t(id) ;
+
+Got all the unit tests working again with the new variants of the brbl_user and brbl_logic tables (the ones with the _t suffix.)
+
+
+===== 2026-01-03 ====
+
+
+TODO
+X "finalize" the schema changes
+
+ok
+brbl_biz   | addresses          --> OK
+brbl_biz   | customer_address   --> repoint to customers_t, recreate composite primary key, no rows to migrate
+
+    ALTER TABLE brbl_biz.customer_addresses DROP CONSTRAINT customer_addresses_pkey ;
+    ALTER TABLE brbl_biz.customer_addresses DROP CONSTRAINT customer_addresses_customer_id_fkey ;
+    ALTER TABLE brbl_biz.customer_addresses ADD CONSTRAINT customer_addresses_pkey PRIMARY KEY(customer_id, address_id) ;
+    ALTER TABLE brbl_biz.customer_addresses ADD CONSTRAINT customer_addresses_customer_id_fkey FOREIGN KEY (customer_id) REFERENCES brbl_users.customers_t(id) ;
+
+brbl_biz   | payment_cc         --> OK
+
+brbl_logic | campaign_users     --> users_t
+    DELETE FROM brbl_logic.campaign_users;
+    ALTER TABLE brbl_logic.campaign_users DROP CONSTRAINT fk_campaign_users_user_id;
+    ALTER TABLE brbl_logic.campaign_users ADD CONSTRAINT fk_campaign_users_user_id FOREIGN KEY(user_id) REFERENCES brbl_users.users_t(id);
+    INSERT INTO brbl_logic.campaign_users SELECT 'eb7aa81a-b314-420c-8f3d-df4755faa9bb', id, 'PENDING' from users_t where status = 'IN' and platform_code = 'S' and language = 'POR';
+    INSERT INTO brbl_logic.campaign_users SELECT '95497de1-a092-430d-a37c-25ef35d7d208', id, 'PENDING' from users_t where status = 'IN' and language= 'ENG' and platform_code = 'W';
+
+brbl_logic | default_scripts    --> customer_id, add fk constraint. no rows to migrate; same values are already in new table.
+    ALTER TABLE brbl_logic.default_scripts ADD CONSTRAINT fk_default_scripts_customer_id FOREIGN KEY(customer_id) REFERENCES brbl_users.customers(id);
+
+brbl_logic | edges              --> OK
+brbl_logic | keywords           --> OK
+brbl_logic | nodes              --> OK
+brbl_logic | push_campaigns     --> OK (already points to customers_t and scripts_t)
+brbl_logic | routes             --> OK ready to drop
+brbl_logic | routes_t           --> create matching constraints
+
+    ALTER TABLE brbl_logic.routes_t ADD CONSTRAINT routes_pkey PRIMARY KEY(id) ;
+    ALTER TABLE brbl_logic.routes_t ADD CONSTRAINT unique_routes_t_platform_channel UNIQUE(platform, channel) ;
+    ALTER TABLE brbl_logic.routes_t ADD CONSTRAINT fk_routes_t_customers_id FOREIGN KEY(customer_id) REFERENCES customers_t(id) ;
+    ALTER TABLE brbl_logic.routes_t ADD CONSTRAINT fk_routes_nodes_id FOREIGN KEY(default_node_id) REFERENCES nodes(id) ;
+
+brbl_logic | schedule           --> drop and rename to plural form, repointing fk to scripts_t
+
+    DROP TABLE brbl_logic.schedule ;
+    CREATE TABLE brbl_logic.schedules (
+        id                      UUID PRIMARY KEY,
+        expression              VARCHAR(24) NOT NULL,
+        is_recurring            boolean NOT NULL DEFAULT FALSE, -- convenience flag to distinguish one time and recurring schedules.
+        script_id               UUID NOT NULL,
+        created_at              TIMESTAMP WITH TIME ZONE NOT NULL,
+        updated_at              TIMESTAMP WITH TIME ZONE NOT NULL,
+        CONSTRAINT fk_scripts_id FOREIGN KEY(script_id)
+            REFERENCES brbl_logic.scripts_t(id)
+    );
+    COMMENT ON COLUMN brbl_logic.schedules.expression   IS 'The cron string describing the schedule.';
+    COMMENT ON COLUMN brbl_logic.schedules.is_recurring IS 'TRUE is recurring, FALSE is one-time execution';
+    COMMENT ON COLUMN brbl_logic.schedules.script_id    IS 'The script to be processed.';
+
+brbl_logic | scripts            --> OK ready to drop
+brbl_logic | scripts_t          --> OK
+brbl_logic | sessions           --> OK (consider adding FK to amalgams)
+
+brbl_logs  | messages_mo        --> OK
+brbl_logs  | messages_mo_prcd   --> OK
+brbl_logs  | messages_mt        --> OK
+brbl_logs  | messages_mt_dlvr   --> OK
+brbl_users | amalgams_t         --> OK
+brbl_users | companies          --> OK
+brbl_users | companies_t        --> OK
+brbl_users | customers          --> OK
+brbl_users | customers_t        --> OK
+brbl_users | profiles           --> OK
+brbl_users | profiles_t         --> OK
+brbl_users | users              --> OK
+brbl_users | users_t            --> OK
+
+Rename tables that have a replacement (_t) version then rename the _t to its predecessor.
+
+ALTER TABLE brbl_logic.routes      RENAME TO old_routes   ;
+ALTER TABLE brbl_logic.scripts     RENAME TO old_scripts  ;
+ALTER TABLE brbl_users.companies   RENAME TO old_companies;
+ALTER TABLE brbl_users.customers   RENAME TO old_customers;
+ALTER TABLE brbl_users.profiles    RENAME TO old_profiles ;
+ALTER TABLE brbl_users.users       RENAME TO old_users    ;
+ALTER TABLE brbl_logic.routes_t    RENAME TO routes     ;
+ALTER TABLE brbl_logic.scripts_t   RENAME TO scripts    ;
+ALTER TABLE brbl_users.companies_t RENAME TO companies  ;
+ALTER TABLE brbl_users.customers_t RENAME TO customers  ;
+ALTER TABLE brbl_users.profiles_t  RENAME TO profiles   ;
+ALTER TABLE brbl_users.users_t     RENAME TO users      ;
+ALTER TABLE brbl_users.amalgams_t  RENAME TO amalgams   ;
+
+
+===== 2026-01-04 ====
+
+TODO
+_ Add support for the remaining tables in Generator.
+
+brbl_biz   . addresses
+brbl_biz   . customer_addresses
+brbl_biz   . payment_cc
+
+brbl_logic . nodes          >> \copy brbl_logic.nodes TO 'dml/nodes.csv' CSV HEADER ;
+brbl_logic . edges          >> \copy brbl_logic.edges TO 'dml/edges.csv' CSV HEADER ;
+brbl_logic . scripts
+brbl_logic . push_campaigns
+brbl_logic . campaign_users
+brbl_logic . routes
+brbl_logic . default_scripts >> not sure we need this given we already have routes.
+brbl_logic . keywords
+brbl_logic . schedules
+brbl_logic . sessions
+
+Then, given all the previously generated data in brbl_users and brbl_logic, simulate messages being sent/received by those entities:
+
+brbl_logs  . messages_mo
+brbl_logs  . messages_mo_prcd
+brbl_logs  . messages_mt
+brbl_logs  . messages_mt_dlvr
+
+NB:
+Super easy to store and load data from .csv files locally:
+
+    \copy brbl_logic.nodes TO   'dml/nodes.csv' CSV HEADER ;
+    \copy brbl_logic.nodes FROM 'dml/users.csv' CSV HEADER ;
+
+
+
+===== 2026-01-07 ====
+
+Completed (despite it being ugly as sin) ConversationGenerator which formats random questions & answers generated by Gemini into SQL.
+
+TODO
+_ add Routes and Scripts connecting them to Nodes and Customers.
+006900a5-e8e2-41d6-be71-d7de9d113d30

@@ -1,8 +1,8 @@
 +----------------+
 | Project Facets |
 +----------------+
-0) placeholder receiver/enqueue and dequeue/sender
-1) core message processing (ordered, robust error handling for common cases like multiple responses)
+0) placeholder receiver/enqueue (Rcvr) and dequeue/sender (Sndr)
+1) core message processing (ordered, robust error handling for common cases like multiple responses) (Opr8r)
 1.1) write-only persistence for messages (MOs received/enqueued, MTs delivered).
     - size of timestamps (microseconds enough or do we need nanos?)... actually microseconds is fine.
 2) persistence for scripts, sessions, users.
@@ -35,11 +35,11 @@ Post-alpha:
      |                                      |
      V                                      V
 +-----------+                         +------------+
-| Operator  |----------------------> | Monitoring  |
+|  Opr8r    |-----------------------> | Monitoring |
 +-----------+                         +------------+
-     |    |      +-----------+              ^
-     |    +----> | Database  |              |
-     |           +-----------+              |
+     |    |      +------------+             ^
+     |    +----> |  Database  |             |
+     |           +- ----------+             |
      V                                      |
 +-----------+                               |
 | Brkr (MT) |-------------------------------+

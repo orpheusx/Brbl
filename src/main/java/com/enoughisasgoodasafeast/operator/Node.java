@@ -82,7 +82,7 @@ public record Node(UUID id, String text, NodeType type, SequencedSet<Edge> edges
             printIndent(edge, level);
             Node childNode = edge.targetNode();
 
-            if (startNode != childNode) {
+            if (childNode != null && startNode != childNode) {
                 printGraph(startNode, childNode, level + 1);
             }
         }
@@ -94,5 +94,16 @@ public record Node(UUID id, String text, NodeType type, SequencedSet<Edge> edges
             System.out.print("\t");
         }
         System.out.println(object);
+    }
+
+    @Override
+    public String toString() {
+        return new StringJoiner(", ", Node.class.getSimpleName() + "[", "]")
+                .add("id=" + id)
+                .add("text='" + text + "'")
+                .add("type=" + type)
+                .add("edges=" + edges.size())
+                .add("label='" + label + "'")
+                .toString();
     }
 }
