@@ -1,0 +1,62 @@
+id,created_at,text,type,label,updated_at
+aec8789f-546f-42c2-b1d5-c80bd10014f0,2025-05-30 10:18:37.249297-04,Error message for AnotherEndOfConversation_Process,5,AnotherEndOfConversation_Process,2025-05-30 10:18:37.249297-04
+89eddcb8-7fe5-4cd1-b18b-78858f0789fb,2025-05-15 23:11:54.752604-04,What is your favorite color? 1) red 2) blue 3) flort,3,ColorQuiz,2025-05-15 23:11:54.752604-04
+2ed4ceed-a229-4e82-ab89-668a15835058,2025-05-15 23:11:54.754376-04,"Oops, that is not one of the options. Try again with one of the listed numbers or say ""change topic"" to start talking about something else.",4,EvaluateColorAnswer,2025-05-15 23:11:54.754376-04
+0b2861b6-a16a-4197-910a-158610967dd9,2025-05-17 19:09:08.262802-04,"Third question. Which is the best third Stooge: 1) Shemp, 2) Curly or 3) Iggy",3,StoogeQuiz,2025-05-17 19:09:08.262802-04
+385a1f99-d844-42e6-9fa3-a0e3a116757d,2025-05-17 18:57:47.352533-04,"Second question. What is your fave utensil: 1) fork, 2) knife or 3) spoon",3,UtensilQuiz,2025-05-17 18:57:47.352533-04
+4b63c720-0d10-4554-92ed-f0c22143e329,2025-10-09 10:53:58.153591-04,text for createNodeWithEdge,8,BeginEnd,2025-10-09 10:53:58.153591-04
+b48d36ce-2512-4ee0-a9b9-b743d72e95e9,2025-05-17 18:44:52.150316-04,"Another question. What is your fave shape: 1) triangle, 2) square or 3) circle",3,ShapeQuiz,2025-05-17 18:44:52.150316-04
+45f3908d-3786-43d3-965a-241ef9127cda,2025-10-10 10:19:04.849722-04,text for createNodeWithEdge,8,BeginEnd,2025-10-10 10:19:04.849722-04
+525028ae-0a33-4c80-a22f-868f77bb9531,2025-05-25 11:07:24.344176-04,True or false: people are the worst?,3,BadPeople,2025-05-25 11:07:24.344176-04
+cf72ce06-50fc-4bf1-852b-dbdbd9f97f66,2025-05-25 11:07:24.348591-04,There is nothing left to say.,3,AnotherEndOfConversation,2025-05-25 11:07:24.348591-04
+95441b9a-3636-4f45-bd0a-ec35e84dd5f7,2025-05-30 10:13:10.46838-04,Error message for ColorQuizProcess,4,ColorQuizProcess,2025-05-30 10:13:10.46838-04
+3f467ee3-4874-4ad1-82b1-99be06f575ab,2025-05-30 10:17:10.57795-04,Error message for StoogeQuiz_Process,4,StoogeQuiz_Process,2025-05-30 10:17:10.57795-04
+1bda7846-31b4-4983-92ec-161eba46c758,2025-05-30 10:17:48.939489-04,Error message for UtensilQuiz_Process,4,UtensilQuiz_Process,2025-05-30 10:17:48.939489-04
+23f00a69-55b7-4c29-b777-5c278b7088ed,2025-05-30 10:18:06.414058-04,Error message for ShapeQuiz_Process,4,ShapeQuiz_Process,2025-05-30 10:18:06.414058-04
+ae28c0e3-9303-4807-979f-694bc9981dd7,2025-05-30 10:18:23.686057-04,Error message for BadPeople_Process,4,BadPeople_Process,2025-05-30 10:18:23.686057-04
+f9420f0c-81ca-4f9a-b1d4-7e25fd280399,2025-05-15 23:11:58.523965-04,That is all. Bye.,5,EndOfConversation,2025-05-15 23:11:58.523965-04
+35ab8b42-fbdf-47e1-ac62-bae86c3c7178,2025-06-05 13:59:45.867049-04,How did you like our new matcha cupcake?,6,CupcakePoll,2025-06-05 13:59:45.867049-04
+669eea27-2dc1-4dff-bd0f-bc7d029bf714,2025-06-05 13:59:45.867183-04,Thanks for letting us know! We hope to see you again soon,5,CyaLater,2025-06-05 13:59:45.867183-04
+f0e48c6b-a637-4889-8707-ad9a2607b29f,2025-10-08 13:07:03.064055-04,Talk to you tomorrow.,1,3:EndOfChat,2025-10-08 13:07:03.064057-04
+d1ecd32a-72ad-413a-bda5-49e5bc0a65b8,2025-10-08 13:07:03.064124-04,"Sorry, that's not one of the food choices. Try again?",1,0:FoodQuizProcess,2025-10-08 13:07:03.064125-04
+aaeff8e2-3497-47b8-a958-854e1efa284f,2025-10-08 13:07:03.064105-04,What kind of food? 1) vegetables 2) meat 3) fruit,1,0:FoodQuiz,2025-10-08 13:07:03.064105-04
+00caf78f-1856-41e4-8deb-665c039d3aff,2025-10-08 13:07:03.064187-04,"Sorry, that's not one of the veggie choices. Try again?",1,1:BestVegProcess,2025-10-08 13:07:03.064188-04
+f3c2c323-25e2-4ed0-ad97-6c8fd55cca35,2025-10-08 13:07:03.064145-04,"What's your fave vegetable? 1) carrots 2) broccoli, 3) peppers",1,1:BestVegPresent,2025-10-08 13:07:03.064145-04
+93dada9c-884b-4264-8025-03751ea53c44,2025-10-08 13:07:03.064279-04,"Sorry, that's not one of the meat choices. Try again?",1,1:BestMeatProcess,2025-10-08 13:07:03.064279-04
+9a477f6d-1a03-4177-a1b7-228ce52ae8e0,2025-10-08 13:07:03.06426-04,"What's your fave meat? 1) beef 2) pork, 3) chicken",1,1:BestMeat,2025-10-08 13:07:03.06426-04
+353cf69d-de2a-4f44-a76c-c13fb056a7a7,2025-10-08 13:07:03.064387-04,"Sorry, that's not one of the fruit choices. Try again?",1,1:BestFruitProcess,2025-10-08 13:07:03.064388-04
+cc0f528d-6569-423d-94d7-5e5e9fe2ea1a,2025-10-08 13:07:03.064359-04,"What's your fave fruit? 1) apples 2) bananas, 3) grapes",1,1:BestFruit,2025-10-08 13:07:03.064359-04
+9cf29d9e-a001-4353-af0a-a1556002a2de,2025-10-08 16:38:37.676841-04,probably not,1,BeginEnd,2025-10-08 16:38:37.676841-04
+aa073012-f506-4343-97f4-e8ce84933835,2025-10-09 10:57:10.229326-04,text for createNodeWithEdge,8,BeginEnd,2025-10-09 10:57:10.229326-04
+abfd6e3c-b71d-445d-87fd-89744e66e5d1,2025-06-05 13:59:45.855378-04,Thanks for dropping by our bakery!,8,ThanksForVisit,2025-06-05 13:59:45.855378-04
+23b09d2a-18f7-46ac-bff2-3968bd3a4dbe,2025-06-05 15:03:17.992195-04,Got it.,7,ProcessCupcakePoll,2025-06-05 15:03:17.992195-04
+a5323479-fc4b-4968-8606-9f8c64ca157d,2025-06-09 20:39:54.991016-04,This is a node,2,BestVeg,2025-06-09 20:39:54.991016-04
+8da657ae-32d2-4fc1-8d27-2cfcd48858f6,2025-06-11 09:26:03.674015-04,Talk to you tomorrow.,5,3:EndOfChat,2025-06-11 09:26:03.674015-04
+ed0fbc0d-a3e3-40b4-91a4-9be24803e2db,2025-06-11 09:26:03.674126-04,"Sorry, that's not one of the food choices. Try again?",4,0:FoodQuizProcess,2025-06-11 09:26:03.674126-04
+0fc4ef6c-082f-4e90-b2f4-e14dbac78623,2025-06-11 09:26:03.674101-04,What kind of food? 1) vegetables 2) meat 3) fruit,3,0:FoodQuiz,2025-06-11 09:26:03.674101-04
+35b8b472-fe8c-4201-895c-d2b128fdde32,2025-06-11 09:26:03.674185-04,"Sorry, that's not one of the veggie choices. Try again?",4,1:BestVegProcess,2025-06-11 09:26:03.674185-04
+5a9b2cd2-49c4-4650-b7d4-90e2c287cc79,2025-06-12 10:44:34.618979-04,Talk to you tomorrow.,5,3:EndOfChat,2025-06-12 10:44:34.618979-04
+ec4bb0f2-124f-4755-8331-40f64ce24940,2025-06-11 09:26:03.67416-04,"What's your fave vegetable? 1) carrots 2) broccoli, 3) peppers",3,1:BestVegPresent,2025-06-11 09:26:03.67416-04
+1b76e670-f683-4863-a30d-9262c3664a82,2025-06-11 09:26:03.674292-04,"Sorry, that's not one of the meat choices. Try again?",4,1:BestMeatProcess,2025-06-11 09:26:03.674292-04
+a77300e2-d7a7-40ea-bd0a-0d957a3ff5b5,2025-06-11 09:26:03.674259-04,"What's your fave meat? 1) beef 2) pork, 3) chicken",3,1:BestMeat,2025-06-11 09:26:03.674259-04
+eff5596e-c39a-432c-8dd5-7fd596d8182d,2025-06-11 09:26:03.674411-04,"Sorry, that's not one of the fruit choices. Try again?",4,1:BestFruitProcess,2025-06-11 09:26:03.674411-04
+369d49d1-6c17-4afe-a6c1-ba01026798f3,2025-06-11 09:26:03.674381-04,"What's your fave fruit? 1) apples 2) bananas, 3) grapes",3,1:BestFruit,2025-06-11 09:26:03.674381-04
+63bfe781-0f63-4ae8-84f0-a3eb9e61e574,2025-06-12 10:44:34.619001-04,"Sorry, that's not one of the food choices. Try again?",4,0:FoodQuizProcess,2025-06-12 10:44:34.619001-04
+0d334f30-1982-4818-8769-c99b838d2b36,2025-06-12 10:44:34.618999-04,What kind of food? 1) vegetables 2) meat 3) fruit,3,0:FoodQuiz,2025-06-12 10:44:34.618999-04
+09ba29bc-af3b-4a41-a40b-38d8f8b2581e,2025-06-12 10:44:34.619015-04,"Sorry, that's not one of the veggie choices. Try again?",4,1:BestVegProcess,2025-06-12 10:44:34.619015-04
+29a74002-4118-46d3-bb9e-a54dc18e504c,2025-06-12 10:44:34.619005-04,"What's your fave vegetable? 1) carrots 2) broccoli, 3) peppers",3,1:BestVegPresent,2025-06-12 10:44:34.619005-04
+7e0c452b-37a0-4780-816a-4bbcb5bea419,2025-06-12 10:44:34.619032-04,"Sorry, that's not one of the meat choices. Try again?",4,1:BestMeatProcess,2025-06-12 10:44:34.619032-04
+e006ee12-18f5-4403-bc33-431842ed8e86,2025-06-12 10:44:34.619025-04,"What's your fave meat? 1) beef 2) pork, 3) chicken",3,1:BestMeat,2025-06-12 10:44:34.619025-04
+9004b960-1bf2-4b80-8424-bc7f949a172a,2025-06-12 10:44:34.619041-04,"Sorry, that's not one of the fruit choices. Try again?",4,1:BestFruitProcess,2025-06-12 10:44:34.619041-04
+2e264145-9d36-4fb7-9ff1-cc25dc931bd2,2025-06-12 10:44:34.619038-04,"What's your fave fruit? 1) apples 2) bananas, 3) grapes",3,1:BestFruit,2025-06-12 10:44:34.619038-04
+c7f241ec-4f4c-4216-81c8-6301824308cd,2025-06-13 11:05:04.618798-04,Talk to you tomorrow.,5,3:EndOfChat,2025-06-13 11:05:04.618798-04
+31732282-6c04-45d5-a71e-9c78c81c08c5,2025-06-13 11:05:04.618817-04,"Sorry, that's not one of the food choices. Try again?",4,0:FoodQuizProcess,2025-06-13 11:05:04.618817-04
+e65e0c87-92a2-481d-adb5-e2c9b24c6dc8,2025-06-13 11:05:04.618831-04,"Sorry, that's not one of the veggie choices. Try again?",4,1:BestVegProcess,2025-06-13 11:05:04.618831-04
+8ca8ebbf-0e88-40a1-be11-94f93dd3d12f,2025-06-13 11:05:04.618821-04,"What's your fave vegetable? 1) carrots 2) broccoli, 3) peppers",3,1:BestVegPresent,2025-06-13 11:05:04.618821-04
+22a6c794-a3e2-41f1-86e3-d3869ec14497,2025-06-13 11:05:04.618848-04,"Sorry, that's not one of the meat choices. Try again?",4,1:BestMeatProcess,2025-06-13 11:05:04.618848-04
+3a1ae0a8-8c7a-4fc6-8567-041c59c9aa3f,2025-06-13 11:05:04.618841-04,"What's your fave meat? 1) beef 2) pork, 3) chicken",3,1:BestMeat,2025-06-13 11:05:04.618841-04
+cef61574-bb80-4843-8fbf-648f8596f95f,2025-06-13 11:05:04.618858-04,"Sorry, that's not one of the fruit choices. Try again?",4,1:BestFruitProcess,2025-06-13 11:05:04.618858-04
+d1701968-9831-41cb-82ca-0e75495583d0,2025-06-13 11:05:04.618855-04,"What's your fave fruit? 1) apples 2) bananas, 3) grapes",3,1:BestFruit,2025-06-13 11:05:04.618855-04
+ceea4bee-806d-43d9-b5ec-909f4cb740e2,2025-06-23 14:47:27.147078-04,EDITED: What kind of food shall we chat about? 1) vegetables 2) meat 3) fruit,3,0:FoodQuiz,2025-07-01 12:10:54.526754-04
+1b3e7a11-5b2b-4212-8fac-29bafd5d5b56,2025-10-08 16:57:21.65125-04,Incomplete message for notification script.,1,BeginEnd,2025-10-08 16:57:21.65125-04
+a78e07b4-1cb2-4de3-8cf8-24d49d2a99b2,2025-10-10 10:05:49.434693-04,text for createNodeWithEdge,8,BeginEnd,2025-10-10 10:05:49.434693-04

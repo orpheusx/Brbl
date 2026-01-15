@@ -1,0 +1,3 @@
+id,name,description,customer_id,node_id,status,language,created_at,updated_at
+57313fde-4caa-424c-a902-5cae09219153,Quiz collection,A chained set of quizzes aimed at customer engagement,762a353b-0597-0a15-b57d-389b21686463,89eddcb8-7fe5-4cd1-b18b-78858f0789fb,DRAFT,ENG,2025-08-27 10:13:12.839571-04,2025-08-27 10:13:12.839571-04
+ffbcdde8-0e95-497b-9a9e-38934fb2d91f,MachaCupcakePoll,A simple poll to see how people like our new macha flavored cupcake.,762a353b-0597-0a15-b57d-389b21686463,35ab8b42-fbdf-47e1-ac62-bae86c3c7178,DRAFT,ENG,2025-08-27 10:13:12.839571-04,2025-08-27 10:13:12.839571-04

@@ -3,14 +3,12 @@ package com.enoughisasgoodasafeast.datagen;
 import com.enoughisasgoodasafeast.operator.CountryCode;
 import net.datafaker.Faker;
 
-import java.io.IO;
 import java.io.IOException;
-import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Paths;
 import java.util.*;
 
-import static com.enoughisasgoodasafeast.datagen.BrblUsersGenerator.adjustPlatformId;
+import static com.enoughisasgoodasafeast.datagen.Functions.adjustPlatformId;
 import static java.io.IO.println;
 
 /**
@@ -19,7 +17,6 @@ import static java.io.IO.println;
 public class BrblLogicGenerator {
 
     public String INPUT_FILE  = "generated_conversations_en.tsv";
-    public String OUTPUT_FILE = "generated_conversations_en.sql";
     public String TAB = "\t";
 
     private final Faker faker = new Faker(Locale.ENGLISH);

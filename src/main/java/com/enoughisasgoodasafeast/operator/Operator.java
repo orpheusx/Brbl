@@ -282,8 +282,8 @@ public class Operator implements MessageProcessor {
             user = new User(
                     UUID.randomUUID(),
                     UUID.randomUUID(),
-                    defaultPlatformIdMap(sessionKey.from()),
-                    defaultPlatformTimeCreatedMap(NanoClock.utcInstant()),
+                    Map.of(sessionKey.platform(), sessionKey.from()),
+                    Map.of(sessionKey.platform(), NanoClock.utcInstant()),
                     deriveCountryCodeFromId(sessionKey.from()),
                     defaultLanguageList(sessionKey.from(), sessionKey.to()),
                     findCustomerIdByRoute(sessionKey),

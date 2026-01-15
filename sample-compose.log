@@ -1,0 +1,401 @@
+mark@yakko sndrRcvr % docker compose up
+WARN[0000] Found orphan containers ([sndrrcvr-fakeOperator-1]) for this project. If you removed or renamed this service in your compose file, you can run this command with the --remove-orphans flag to clean it up. 
+[+] Running 4/0
+ ✔ Container sndrrcvr-brkr-1      Created                                                                                                                0.0s 
+ ✔ Container sndrrcvr-rcvr-1      Created                                                                                                                0.0s 
+ ✔ Container sndrrcvr-operator-1  Created                                                                                                                0.0s 
+ ✔ Container sndrrcvr-sndr-1      Created                                                                                                                0.0s 
+Attaching to brkr-1, operator-1, rcvr-1, sndr-1
+brkr-1      | 2025-05-13 19:00:23.697287+00:00 [notice] <0.45.0> Application syslog exited with reason: stopped
+brkr-1      | 2025-05-13 19:00:23.701973+00:00 [notice] <0.216.0> Logging: switching to configured handler(s); following messages may not be visible in this log output
+brkr-1      | 2025-05-13 19:00:23.702417+00:00 [notice] <0.216.0> Logging: configured log handlers are now ACTIVE
+brkr-1      | 2025-05-13 19:00:23.709009+00:00 [info] <0.216.0> ra: starting system quorum_queues
+brkr-1      | 2025-05-13 19:00:23.709069+00:00 [info] <0.216.0> starting Ra system: quorum_queues in directory: /var/lib/rabbitmq/mnesia/rabbit@f2fca672f24e/quorum/rabbit@f2fca672f24e
+brkr-1      | 2025-05-13 19:00:23.750845+00:00 [info] <0.229.0> ra system 'quorum_queues' running pre init for 0 registered servers
+brkr-1      | 2025-05-13 19:00:23.758262+00:00 [info] <0.230.0> ra: meta data store initialised for system quorum_queues. 0 record(s) recovered
+brkr-1      | 2025-05-13 19:00:23.769385+00:00 [notice] <0.235.0> WAL: ra_log_wal init, open tbls: ra_log_open_mem_tables, closed tbls: ra_log_closed_mem_tables
+brkr-1      | 2025-05-13 19:00:23.780067+00:00 [info] <0.237.0> ra_system_recover: ra system 'quorum_queues' server recovery strategy rabbit_quorum_queue:system_recover
+brkr-1      | 2025-05-13 19:00:23.780113+00:00 [info] <0.237.0> [rabbit_quorum_queue:system_recover/1] rabbit not booted, skipping queue recovery
+brkr-1      | 2025-05-13 19:00:23.780205+00:00 [info] <0.216.0> ra: starting system coordination
+brkr-1      | 2025-05-13 19:00:23.780249+00:00 [info] <0.216.0> starting Ra system: coordination in directory: /var/lib/rabbitmq/mnesia/rabbit@f2fca672f24e/coordination/rabbit@f2fca672f24e
+brkr-1      | 2025-05-13 19:00:23.780974+00:00 [info] <0.243.0> ra system 'coordination' running pre init for 1 registered servers
+brkr-1      | 2025-05-13 19:00:23.789526+00:00 [info] <0.244.0> ra: meta data store initialised for system coordination. 1 record(s) recovered
+brkr-1      | 2025-05-13 19:00:23.789661+00:00 [notice] <0.249.0> WAL: ra_coordination_log_wal init, open tbls: ra_coordination_log_open_mem_tables, closed tbls: ra_coordination_log_closed_mem_tables
+brkr-1      | 2025-05-13 19:00:23.792072+00:00 [info] <0.216.0> ra: starting system coordination
+brkr-1      | 2025-05-13 19:00:23.792136+00:00 [info] <0.216.0> starting Ra system: coordination in directory: /var/lib/rabbitmq/mnesia/rabbit@f2fca672f24e/coordination/rabbit@f2fca672f24e
+brkr-1      | 2025-05-13 19:00:24.142569+00:00 [notice] <0.254.0> RabbitMQ metadata store: candidate -> leader in term: 48 machine version: 1
+brkr-1      | 2025-05-13 19:00:24.305067+00:00 [info] <0.216.0> 
+brkr-1      | 2025-05-13 19:00:24.305067+00:00 [info] <0.216.0>  Starting RabbitMQ 4.0.5 on Erlang 27.2 [jit]
+brkr-1      | 2025-05-13 19:00:24.305067+00:00 [info] <0.216.0>  Copyright (c) 2007-2024 Broadcom Inc and/or its subsidiaries
+brkr-1      | 2025-05-13 19:00:24.305067+00:00 [info] <0.216.0>  Licensed under the MPL 2.0. Website: https://rabbitmq.com
+brkr-1      | 
+brkr-1      |   ##  ##      RabbitMQ 4.0.5
+brkr-1      |   ##  ##
+brkr-1      |   ##########  Copyright (c) 2007-2024 Broadcom Inc and/or its subsidiaries
+brkr-1      |   ######  ##
+brkr-1      |   ##########  Licensed under the MPL 2.0. Website: https://rabbitmq.com
+brkr-1      | 
+brkr-1      |   Erlang:      27.2 [jit]
+brkr-1      |   TLS Library: OpenSSL - OpenSSL 3.3.2 3 Sep 2024
+brkr-1      |   Release series support status: see https://www.rabbitmq.com/release-information
+brkr-1      | 
+brkr-1      |   Doc guides:  https://www.rabbitmq.com/docs
+brkr-1      |   Support:     https://www.rabbitmq.com/docs/contact
+brkr-1      |   Tutorials:   https://www.rabbitmq.com/tutorials
+brkr-1      |   Monitoring:  https://www.rabbitmq.com/docs/monitoring
+brkr-1      |   Upgrading:   https://www.rabbitmq.com/docs/upgrade
+brkr-1      | 
+brkr-1      |   Logs: <stdout>
+brkr-1      | 
+brkr-1      |   Config file(s): /etc/rabbitmq/conf.d/10-defaults.conf
+brkr-1      | 
+brkr-1      |   Starting broker...2025-05-13 19:00:24.306172+00:00 [info] <0.216.0> 
+brkr-1      | 2025-05-13 19:00:24.306172+00:00 [info] <0.216.0>  node           : rabbit@f2fca672f24e
+brkr-1      | 2025-05-13 19:00:24.306172+00:00 [info] <0.216.0>  home dir       : /var/lib/rabbitmq
+brkr-1      | 2025-05-13 19:00:24.306172+00:00 [info] <0.216.0>  config file(s) : /etc/rabbitmq/conf.d/10-defaults.conf
+brkr-1      | 2025-05-13 19:00:24.306172+00:00 [info] <0.216.0>  cookie hash    : VJzn5vJinaZUl04sowCLnw==
+brkr-1      | 2025-05-13 19:00:24.306172+00:00 [info] <0.216.0>  log(s)         : <stdout>
+brkr-1      | 2025-05-13 19:00:24.306172+00:00 [info] <0.216.0>  data dir       : /var/lib/rabbitmq/mnesia/rabbit@f2fca672f24e
+brkr-1      | 2025-05-13 19:00:24.523178+00:00 [info] <0.216.0> Running boot step pre_boot defined by app rabbit
+brkr-1      | 2025-05-13 19:00:24.523227+00:00 [info] <0.216.0> Running boot step rabbit_global_counters defined by app rabbit
+brkr-1      | 2025-05-13 19:00:24.523510+00:00 [info] <0.216.0> Running boot step rabbit_osiris_metrics defined by app rabbit
+brkr-1      | 2025-05-13 19:00:24.523605+00:00 [info] <0.216.0> Running boot step rabbit_core_metrics defined by app rabbit
+brkr-1      | 2025-05-13 19:00:24.524263+00:00 [info] <0.216.0> Running boot step rabbit_alarm defined by app rabbit
+brkr-1      | 2025-05-13 19:00:24.531085+00:00 [info] <0.349.0> Memory high watermark set to 4702 MiB (4930950758 bytes) of 7837 MiB (8218251264 bytes) total
+brkr-1      | 2025-05-13 19:00:24.532900+00:00 [info] <0.351.0> Enabling free disk space monitoring (disk free space: 40830808064, total memory: 8218251264)
+brkr-1      | 2025-05-13 19:00:24.532922+00:00 [info] <0.351.0> Disk free limit set to 50MB
+brkr-1      | 2025-05-13 19:00:24.534126+00:00 [info] <0.216.0> Running boot step code_server_cache defined by app rabbit
+brkr-1      | 2025-05-13 19:00:24.534154+00:00 [info] <0.216.0> Running boot step file_handle_cache defined by app rabbit
+brkr-1      | 2025-05-13 19:00:24.539090+00:00 [info] <0.354.0> Limiting to approx 927 file handles (832 sockets)
+brkr-1      | 2025-05-13 19:00:24.539183+00:00 [info] <0.355.0> FHC read buffering: OFF
+brkr-1      | 2025-05-13 19:00:24.539198+00:00 [info] <0.355.0> FHC write buffering: ON
+brkr-1      | 2025-05-13 19:00:24.539625+00:00 [warning] <0.216.0> Available file handles: 1024. Please consider increasing system limits
+brkr-1      | 2025-05-13 19:00:24.539650+00:00 [info] <0.216.0> Running boot step worker_pool defined by app rabbit
+brkr-1      | 2025-05-13 19:00:24.539688+00:00 [info] <0.296.0> Will use 8 processes for default worker pool
+brkr-1      | 2025-05-13 19:00:24.539707+00:00 [info] <0.296.0> Starting worker pool 'worker_pool' with 8 processes in it
+brkr-1      | 2025-05-13 19:00:24.539955+00:00 [info] <0.216.0> Running boot step database defined by app rabbit
+brkr-1      | 2025-05-13 19:00:24.540283+00:00 [info] <0.216.0> Peer discovery: configured backend: rabbit_peer_discovery_classic_config
+brkr-1      | 2025-05-13 19:00:24.541397+00:00 [info] <0.216.0> Waiting for Mnesia tables for 30000 ms, 9 retries left
+brkr-1      | 2025-05-13 19:00:24.543514+00:00 [info] <0.216.0> Successfully synced tables from a peer
+brkr-1      | 2025-05-13 19:00:24.546509+00:00 [info] <0.216.0> Waiting for Mnesia tables for 30000 ms, 9 retries left
+brkr-1      | 2025-05-13 19:00:24.546581+00:00 [info] <0.216.0> Successfully synced tables from a peer
+brkr-1      | 2025-05-13 19:00:24.546670+00:00 [info] <0.216.0> Running boot step tracking_metadata_store defined by app rabbit
+brkr-1      | 2025-05-13 19:00:24.546719+00:00 [info] <0.373.0> Setting up a table for connection tracking on this node: tracked_connection
+brkr-1      | 2025-05-13 19:00:24.546749+00:00 [info] <0.373.0> Setting up a table for per-vhost connection counting on this node: tracked_connection_per_vhost
+brkr-1      | 2025-05-13 19:00:24.546782+00:00 [info] <0.373.0> Setting up a table for per-user connection counting on this node: tracked_connection_per_user
+brkr-1      | 2025-05-13 19:00:24.546805+00:00 [info] <0.373.0> Setting up a table for channel tracking on this node: tracked_channel
+brkr-1      | 2025-05-13 19:00:24.546823+00:00 [info] <0.373.0> Setting up a table for channel tracking on this node: tracked_channel_per_user
+brkr-1      | 2025-05-13 19:00:24.546847+00:00 [info] <0.216.0> Running boot step networking_metadata_store defined by app rabbit
+brkr-1      | 2025-05-13 19:00:24.546874+00:00 [info] <0.216.0> Running boot step feature_flags defined by app rabbit
+brkr-1      | 2025-05-13 19:00:24.547024+00:00 [info] <0.216.0> Running boot step codec_correctness_check defined by app rabbit
+brkr-1      | 2025-05-13 19:00:24.547058+00:00 [info] <0.216.0> Running boot step external_infrastructure defined by app rabbit
+brkr-1      | 2025-05-13 19:00:24.547076+00:00 [info] <0.216.0> Running boot step rabbit_event defined by app rabbit
+brkr-1      | 2025-05-13 19:00:24.547144+00:00 [info] <0.216.0> Running boot step rabbit_registry defined by app rabbit
+brkr-1      | 2025-05-13 19:00:24.547192+00:00 [info] <0.216.0> Running boot step rabbit_auth_mechanism_amqplain defined by app rabbit
+brkr-1      | 2025-05-13 19:00:24.547246+00:00 [info] <0.216.0> Running boot step rabbit_auth_mechanism_anonymous defined by app rabbit
+brkr-1      | 2025-05-13 19:00:24.547268+00:00 [info] <0.216.0> Running boot step rabbit_auth_mechanism_cr_demo defined by app rabbit
+brkr-1      | 2025-05-13 19:00:24.547293+00:00 [info] <0.216.0> Running boot step rabbit_auth_mechanism_plain defined by app rabbit
+brkr-1      | 2025-05-13 19:00:24.547339+00:00 [info] <0.216.0> Running boot step rabbit_exchange_type_direct defined by app rabbit
+brkr-1      | 2025-05-13 19:00:24.547393+00:00 [info] <0.216.0> Running boot step rabbit_exchange_type_fanout defined by app rabbit
+brkr-1      | 2025-05-13 19:00:24.547449+00:00 [info] <0.216.0> Running boot step rabbit_exchange_type_headers defined by app rabbit
+brkr-1      | 2025-05-13 19:00:24.547469+00:00 [info] <0.216.0> Running boot step rabbit_exchange_type_local_random defined by app rabbit
+brkr-1      | 2025-05-13 19:00:24.547498+00:00 [info] <0.216.0> Running boot step rabbit_exchange_type_topic defined by app rabbit
+brkr-1      | 2025-05-13 19:00:24.547534+00:00 [info] <0.216.0> Running boot step rabbit_priority_queue defined by app rabbit
+brkr-1      | 2025-05-13 19:00:24.547550+00:00 [info] <0.216.0> Priority queues enabled, real BQ is rabbit_variable_queue
+brkr-1      | 2025-05-13 19:00:24.547575+00:00 [info] <0.216.0> Running boot step kernel_ready defined by app rabbit
+brkr-1      | 2025-05-13 19:00:24.547585+00:00 [info] <0.216.0> Running boot step pg_local_amqp_connection defined by app rabbit
+brkr-1      | 2025-05-13 19:00:24.552739+00:00 [info] <0.216.0> Running boot step pg_local_amqp_session defined by app rabbit
+brkr-1      | 2025-05-13 19:00:24.552795+00:00 [info] <0.216.0> Running boot step rabbit_sysmon_minder defined by app rabbit
+brkr-1      | 2025-05-13 19:00:24.552896+00:00 [info] <0.216.0> Running boot step rabbit_epmd_monitor defined by app rabbit
+brkr-1      | 2025-05-13 19:00:24.553757+00:00 [info] <0.383.0> epmd monitor knows us, inter-node communication (distribution) port: 25672
+brkr-1      | 2025-05-13 19:00:24.553820+00:00 [info] <0.216.0> Running boot step guid_generator defined by app rabbit
+brkr-1      | 2025-05-13 19:00:24.554990+00:00 [info] <0.216.0> Running boot step rabbit_node_monitor defined by app rabbit
+brkr-1      | 2025-05-13 19:00:24.555166+00:00 [info] <0.387.0> Starting rabbit_node_monitor (in ignore mode)
+brkr-1      | 2025-05-13 19:00:24.555217+00:00 [info] <0.216.0> Running boot step delegate_sup defined by app rabbit
+brkr-1      | 2025-05-13 19:00:24.555487+00:00 [info] <0.216.0> Running boot step rabbit_fifo_dlx_sup defined by app rabbit
+brkr-1      | 2025-05-13 19:00:24.555516+00:00 [info] <0.216.0> Running boot step core_initialized defined by app rabbit
+brkr-1      | 2025-05-13 19:00:24.555525+00:00 [info] <0.216.0> Running boot step rabbit_channel_tracking_handler defined by app rabbit
+brkr-1      | 2025-05-13 19:00:24.555704+00:00 [info] <0.216.0> Running boot step rabbit_classic_queue defined by app rabbit
+brkr-1      | 2025-05-13 19:00:24.555821+00:00 [info] <0.216.0> Running boot step rabbit_connection_tracking_handler defined by app rabbit
+brkr-1      | 2025-05-13 19:00:24.555922+00:00 [info] <0.216.0> Running boot step rabbit_definitions_hashing defined by app rabbit
+brkr-1      | 2025-05-13 19:00:24.556014+00:00 [info] <0.216.0> Running boot step rabbit_exchange_parameters defined by app rabbit
+brkr-1      | 2025-05-13 19:00:24.562124+00:00 [info] <0.216.0> Running boot step rabbit_policies defined by app rabbit
+brkr-1      | 2025-05-13 19:00:24.562330+00:00 [info] <0.216.0> Running boot step rabbit_policy defined by app rabbit
+brkr-1      | 2025-05-13 19:00:24.562357+00:00 [info] <0.216.0> Running boot step rabbit_quorum_memory_manager defined by app rabbit
+brkr-1      | 2025-05-13 19:00:24.562401+00:00 [info] <0.216.0> Running boot step rabbit_quorum_queue defined by app rabbit
+brkr-1      | 2025-05-13 19:00:24.562481+00:00 [info] <0.216.0> Running boot step rabbit_stream_coordinator defined by app rabbit
+brkr-1      | 2025-05-13 19:00:24.562657+00:00 [info] <0.216.0> Running boot step rabbit_vhost_limit defined by app rabbit
+brkr-1      | 2025-05-13 19:00:24.562710+00:00 [info] <0.216.0> Running boot step rabbit_mgmt_reset_handler defined by app rabbitmq_management
+brkr-1      | 2025-05-13 19:00:24.562768+00:00 [info] <0.216.0> Running boot step rabbit_mgmt_db_handler defined by app rabbitmq_management_agent
+brkr-1      | 2025-05-13 19:00:24.562786+00:00 [info] <0.216.0> Management plugin: using rates mode 'basic'
+brkr-1      | 2025-05-13 19:00:24.563065+00:00 [info] <0.216.0> Running boot step recovery defined by app rabbit
+brkr-1      | 2025-05-13 19:00:24.576118+00:00 [info] <0.419.0> Making sure data directory '/var/lib/rabbitmq/mnesia/rabbit@f2fca672f24e/msg_stores/vhosts/628WB79CIFDYO9LJI6DKMI09L' for vhost '/' exists
+brkr-1      | 2025-05-13 19:00:24.584116+00:00 [info] <0.419.0> Starting message stores for vhost '/'
+brkr-1      | 2025-05-13 19:00:24.585744+00:00 [info] <0.419.0> Started message store of type transient for vhost '/'
+brkr-1      | 2025-05-13 19:00:24.587165+00:00 [info] <0.419.0> Started message store of type persistent for vhost '/'
+brkr-1      | 2025-05-13 19:00:24.589053+00:00 [info] <0.419.0> Recovering 2 queues of type rabbit_classic_queue took 12ms
+brkr-1      | 2025-05-13 19:00:24.589112+00:00 [info] <0.419.0> Recovering 0 queues of type rabbit_quorum_queue took 0ms
+brkr-1      | 2025-05-13 19:00:24.589125+00:00 [info] <0.419.0> Recovering 0 queues of type rabbit_stream_queue took 0ms
+brkr-1      | 2025-05-13 19:00:24.590829+00:00 [info] <0.216.0> Running boot step empty_db_check defined by app rabbit
+brkr-1      | 2025-05-13 19:00:24.590886+00:00 [info] <0.216.0> Will not seed default virtual host and user: have definitions to load...
+brkr-1      | 2025-05-13 19:00:24.590898+00:00 [info] <0.216.0> Running boot step rabbit_observer_cli defined by app rabbit
+brkr-1      | 2025-05-13 19:00:24.590989+00:00 [info] <0.216.0> Running boot step rabbit_core_metrics_gc defined by app rabbit
+brkr-1      | 2025-05-13 19:00:24.591070+00:00 [info] <0.216.0> Running boot step background_gc defined by app rabbit
+brkr-1      | 2025-05-13 19:00:24.591161+00:00 [info] <0.216.0> Running boot step routing_ready defined by app rabbit
+brkr-1      | 2025-05-13 19:00:24.591228+00:00 [info] <0.216.0> Running boot step pre_flight defined by app rabbit
+brkr-1      | 2025-05-13 19:00:24.591263+00:00 [info] <0.216.0> Running boot step notify_cluster defined by app rabbit
+brkr-1      | 2025-05-13 19:00:24.591293+00:00 [info] <0.216.0> Running boot step networking defined by app rabbit
+brkr-1      | 2025-05-13 19:00:24.591322+00:00 [info] <0.216.0> Running boot step rabbit_quorum_queue_periodic_membership_reconciliation defined by app rabbit
+brkr-1      | 2025-05-13 19:00:24.591410+00:00 [info] <0.216.0> Running boot step definition_import_worker_pool defined by app rabbit
+brkr-1      | 2025-05-13 19:00:24.591453+00:00 [info] <0.296.0> Starting worker pool 'definition_import_pool' with 8 processes in it
+brkr-1      | 2025-05-13 19:00:24.591688+00:00 [info] <0.216.0> Running boot step cluster_name defined by app rabbit
+brkr-1      | 2025-05-13 19:00:24.591734+00:00 [info] <0.216.0> Running boot step virtual_host_reconciliation defined by app rabbit
+brkr-1      | 2025-05-13 19:00:24.591855+00:00 [info] <0.216.0> Running boot step direct_client defined by app rabbit
+brkr-1      | 2025-05-13 19:00:24.591896+00:00 [info] <0.216.0> Running boot step cluster_tags defined by app rabbit
+brkr-1      | 2025-05-13 19:00:24.593095+00:00 [info] <0.216.0> Running boot step rabbit_management_load_definitions defined by app rabbitmq_management
+brkr-1      | 2025-05-13 19:00:24.593207+00:00 [info] <0.487.0> Resetting node maintenance status
+brkr-1      | 2025-05-13 19:00:24.701122+00:00 [warning] <0.509.0> Deprecated features: `management_metrics_collection`: Feature `management_metrics_collection` is deprecated.
+brkr-1      | 2025-05-13 19:00:24.701122+00:00 [warning] <0.509.0> By default, this feature can still be used for now.
+brkr-1      | 2025-05-13 19:00:24.701122+00:00 [warning] <0.509.0> Its use will not be permitted by default in a future minor RabbitMQ version and the feature will be removed from a future major RabbitMQ version; actual versions to be determined.
+brkr-1      | 2025-05-13 19:00:24.701122+00:00 [warning] <0.509.0> To continue using this feature when it is not permitted by default, set the following parameter in your configuration:
+brkr-1      | 2025-05-13 19:00:24.701122+00:00 [warning] <0.509.0>     "deprecated_features.permit.management_metrics_collection = true"
+brkr-1      | 2025-05-13 19:00:24.701122+00:00 [warning] <0.509.0> To test RabbitMQ as if the feature was removed, set this in your configuration:
+brkr-1      | 2025-05-13 19:00:24.701122+00:00 [warning] <0.509.0>     "deprecated_features.permit.management_metrics_collection = false"
+brkr-1      | 2025-05-13 19:00:24.725578+00:00 [info] <0.545.0> Management plugin: HTTP (non-TLS) listener started on port 15672
+brkr-1      | 2025-05-13 19:00:24.725695+00:00 [info] <0.573.0> Statistics database started.
+brkr-1      | 2025-05-13 19:00:24.725735+00:00 [info] <0.572.0> Starting worker pool 'management_worker_pool' with 3 processes in it
+brkr-1      | 2025-05-13 19:00:24.733797+00:00 [info] <0.584.0> Prometheus metrics: HTTP (non-TLS) listener started on port 15692
+brkr-1      | 2025-05-13 19:00:24.733847+00:00 [info] <0.487.0> Ready to start client connection listeners
+brkr-1      | 2025-05-13 19:00:24.735022+00:00 [info] <0.628.0> started TCP listener on [::]:5672
+brkr-1      |  completed with 4 plugins.
+brkr-1      | 2025-05-13 19:00:24.806198+00:00 [info] <0.487.0> Server startup complete; 4 plugins started.
+brkr-1      | 2025-05-13 19:00:24.806198+00:00 [info] <0.487.0>  * rabbitmq_prometheus
+brkr-1      | 2025-05-13 19:00:24.806198+00:00 [info] <0.487.0>  * rabbitmq_management
+brkr-1      | 2025-05-13 19:00:24.806198+00:00 [info] <0.487.0>  * rabbitmq_management_agent
+brkr-1      | 2025-05-13 19:00:24.806198+00:00 [info] <0.487.0>  * rabbitmq_web_dispatch
+brkr-1      | 2025-05-13 19:00:25.000259+00:00 [info] <0.10.0> Time to start RabbitMQ: 2906 ms
+rcvr-1      | 2025-05-13 15:00:27,667 INFO  [] [main] com.enoughisasgoodasafeast.Burble - Executing Rcvr with arguments: [] 
+rcvr-1      | 2025-05-13 15:00:27,692 INFO  [92c5c5f4-81ae-4a93-b62b-4a7131d7d570] [main] c.e.ConfigLoader - Reading config from rcvr.properties... 
+rcvr-1      | 2025-05-13 15:00:27,694 INFO  [92c5c5f4-81ae-4a93-b62b-4a7131d7d570] [main] c.e.ConfigLoader - rcvr.properties: producer.queue.durable=true 
+rcvr-1      | 2025-05-13 15:00:27,694 INFO  [92c5c5f4-81ae-4a93-b62b-4a7131d7d570] [main] c.e.ConfigLoader - rcvr.properties: webserver.listener.port=4242 
+rcvr-1      | 2025-05-13 15:00:27,694 INFO  [92c5c5f4-81ae-4a93-b62b-4a7131d7d570] [main] c.e.ConfigLoader - rcvr.properties: producer.queue.host=192.168.1.155 
+rcvr-1      | 2025-05-13 15:00:27,694 INFO  [92c5c5f4-81ae-4a93-b62b-4a7131d7d570] [main] c.e.ConfigLoader - rcvr.properties: ssl=false 
+rcvr-1      | 2025-05-13 15:00:27,694 INFO  [92c5c5f4-81ae-4a93-b62b-4a7131d7d570] [main] c.e.ConfigLoader - rcvr.properties: producer.queue.name=test.mo 
+rcvr-1      | 2025-05-13 15:00:27,694 INFO  [92c5c5f4-81ae-4a93-b62b-4a7131d7d570] [main] c.e.ConfigLoader - rcvr.properties: password=brbl_rcvr 
+rcvr-1      | 2025-05-13 15:00:27,694 INFO  [92c5c5f4-81ae-4a93-b62b-4a7131d7d570] [main] c.e.ConfigLoader - rcvr.properties: minPoolSize=2 
+rcvr-1      | 2025-05-13 15:00:27,694 INFO  [92c5c5f4-81ae-4a93-b62b-4a7131d7d570] [main] c.e.ConfigLoader - rcvr.properties: acquireIncrement=2 
+rcvr-1      | 2025-05-13 15:00:27,694 INFO  [92c5c5f4-81ae-4a93-b62b-4a7131d7d570] [main] c.e.ConfigLoader - rcvr.properties: producer.queue.port=5672 
+rcvr-1      | 2025-05-13 15:00:27,695 INFO  [92c5c5f4-81ae-4a93-b62b-4a7131d7d570] [main] c.e.ConfigLoader - rcvr.properties: driverClass=org.postgresql.Driver 
+rcvr-1      | 2025-05-13 15:00:27,695 INFO  [92c5c5f4-81ae-4a93-b62b-4a7131d7d570] [main] c.e.ConfigLoader - rcvr.properties: preparedStatementCacheQueries=10 
+rcvr-1      | 2025-05-13 15:00:27,695 INFO  [92c5c5f4-81ae-4a93-b62b-4a7131d7d570] [main] c.e.ConfigLoader - rcvr.properties: jdbcUrl=jdbc:postgresql://host.docker.internal:5432/brbl_db_dev 
+rcvr-1      | 2025-05-13 15:00:27,695 INFO  [92c5c5f4-81ae-4a93-b62b-4a7131d7d570] [main] c.e.ConfigLoader - rcvr.properties: producer.queue.routingKey=us.test.mo 
+rcvr-1      | 2025-05-13 15:00:27,695 INFO  [92c5c5f4-81ae-4a93-b62b-4a7131d7d570] [main] c.e.ConfigLoader - rcvr.properties: user=brbl_rcvr 
+rcvr-1      | 2025-05-13 15:00:27,695 INFO  [92c5c5f4-81ae-4a93-b62b-4a7131d7d570] [main] c.e.ConfigLoader - rcvr.properties: initialPoolSize=3 
+rcvr-1      | 2025-05-13 15:00:27,695 INFO  [92c5c5f4-81ae-4a93-b62b-4a7131d7d570] [main] c.e.ConfigLoader - rcvr.properties: maxPoolSize=4 
+rcvr-1      | 2025-05-13 15:00:27,697 INFO  [92c5c5f4-81ae-4a93-b62b-4a7131d7d570] [main] com.enoughisasgoodasafeast.Rcvr - Initializing RCVR 
+rcvr-1      | 2025-05-13 15:00:27,698 INFO  [92c5c5f4-81ae-4a93-b62b-4a7131d7d570] [main] c.e.RabbitQueueProducer - Creating RabbitQueueProducer: queueHost: '192.168.1.155', queuePort: '5672', exchangeName: 'test.mo', routingKey: 'us.test.mo', isDurable: true 
+brkr-1      | 2025-05-13 19:00:27.756168+00:00 [info] <0.636.0> accepting AMQP connection 172.18.0.1:60796 -> 172.18.0.2:5672
+operator-1  | 2025-05-13 15:00:27,812 INFO  [] [main] com.enoughisasgoodasafeast.Burble - Executing Operator with arguments: [] 
+brkr-1      | 2025-05-13 19:00:27.823153+00:00 [info] <0.636.0> connection 172.18.0.1:60796 -> 172.18.0.2:5672: user 'guest' authenticated and granted access to vhost '/'
+rcvr-1      | 2025-05-13 15:00:27,834 INFO  [92c5c5f4-81ae-4a93-b62b-4a7131d7d570] [main] c.e.RabbitQueueProducer - Declared exchange, test.mo: #method<exchange.declare-ok>() 
+rcvr-1      | 2025-05-13 15:00:27,839 INFO  [92c5c5f4-81ae-4a93-b62b-4a7131d7d570] [main] c.e.RabbitQueueProducer - Bound exchange, test.mo, to queue, test.mo. 
+rcvr-1      | 2025-05-13 15:00:27,839 INFO  [92c5c5f4-81ae-4a93-b62b-4a7131d7d570] [main] c.e.RabbitQueueProducer - Negotiated heartbeat: 20 seconds 
+rcvr-1      | 2025-05-13 15:00:27,841 INFO  [92c5c5f4-81ae-4a93-b62b-4a7131d7d570] [main] c.e.RabbitQueueProducer - Broker publisher thread running. 
+rcvr-1      | 2025-05-13 15:00:27,841 INFO  [92c5c5f4-81ae-4a93-b62b-4a7131d7d570] [main] c.e.RabbitQueueProducer - Start up complete. 
+operator-1  | 2025-05-13 15:00:27,859 INFO  [] [main] c.e.ConfigLoader - Reading config from operator.properties... 
+operator-1  | 2025-05-13 15:00:27,861 INFO  [] [main] c.e.ConfigLoader - operator.properties: consumer.queue.host=192.168.1.155 
+operator-1  | 2025-05-13 15:00:27,861 INFO  [] [main] c.e.ConfigLoader - operator.properties: producer.queue.durable=true 
+operator-1  | 2025-05-13 15:00:27,861 INFO  [] [main] c.e.ConfigLoader - operator.properties: consumer.queue.routingKey=us.test.mo 
+operator-1  | 2025-05-13 15:00:27,861 INFO  [] [main] c.e.ConfigLoader - operator.properties: producer.queue.host=192.168.1.155 
+operator-1  | 2025-05-13 15:00:27,861 INFO  [] [main] c.e.ConfigLoader - operator.properties: consumer.queue.port=5672 
+operator-1  | 2025-05-13 15:00:27,861 INFO  [] [main] c.e.ConfigLoader - operator.properties: consumer.queue.durable=true 
+operator-1  | 2025-05-13 15:00:27,861 INFO  [] [main] c.e.ConfigLoader - operator.properties: ssl=false 
+operator-1  | 2025-05-13 15:00:27,861 INFO  [] [main] c.e.ConfigLoader - operator.properties: producer.queue.name=test.mt 
+operator-1  | 2025-05-13 15:00:27,861 INFO  [] [main] c.e.ConfigLoader - operator.properties: password=brbl_operator 
+operator-1  | 2025-05-13 15:00:27,861 INFO  [] [main] c.e.ConfigLoader - operator.properties: minPoolSize=2 
+operator-1  | 2025-05-13 15:00:27,861 INFO  [] [main] c.e.ConfigLoader - operator.properties: acquireIncrement=2 
+operator-1  | 2025-05-13 15:00:27,861 INFO  [] [main] c.e.ConfigLoader - operator.properties: producer.queue.port=5672 
+operator-1  | 2025-05-13 15:00:27,861 INFO  [] [main] c.e.ConfigLoader - operator.properties: driverClass=org.postgresql.Driver 
+operator-1  | 2025-05-13 15:00:27,861 INFO  [] [main] c.e.ConfigLoader - operator.properties: preparedStatementCacheQueries=10 
+operator-1  | 2025-05-13 15:00:27,861 INFO  [] [main] c.e.ConfigLoader - operator.properties: jdbcUrl=jdbc:postgresql://host.docker.internal:5432/brbl_db_dev 
+operator-1  | 2025-05-13 15:00:27,861 INFO  [] [main] c.e.ConfigLoader - operator.properties: producer.queue.routingKey=us.test.mt 
+operator-1  | 2025-05-13 15:00:27,861 INFO  [] [main] c.e.ConfigLoader - operator.properties: consumer.queue.name=test.mo 
+operator-1  | 2025-05-13 15:00:27,861 INFO  [] [main] c.e.ConfigLoader - operator.properties: user=brbl_operator 
+operator-1  | 2025-05-13 15:00:27,861 INFO  [] [main] c.e.ConfigLoader - operator.properties: initialPoolSize=3 
+operator-1  | 2025-05-13 15:00:27,861 INFO  [] [main] c.e.ConfigLoader - operator.properties: maxPoolSize=4 
+operator-1  | 2025-05-13 15:00:27,863 INFO  [] [main] c.e.operator.Operator - Initializing Brbl Operator with provided Properties object 
+operator-1  | 2025-05-13 15:00:27,865 INFO  [] [main] c.e.RabbitQueueConsumer - Creating RabbitQueueConsumer: queueHost: '192.168.1.155', queueName: 'test.mo', routingKey: 'us.test.mo' 
+rcvr-1      | 2025-05-13 15:00:27,867 INFO  [] [MLog-Init-Reporter] com.mchange.v2.log.MLog - MLog clients using slf4j logging. 
+brkr-1      | 2025-05-13 19:00:27.898446+00:00 [info] <0.652.0> accepting AMQP connection 172.18.0.1:60812 -> 172.18.0.2:5672
+sndr-1      | 2025-05-13 15:00:27,896 INFO  [] [main] com.enoughisasgoodasafeast.Burble - Executing Sndr with arguments: [] 
+sndr-1      | 2025-05-13 15:00:27,900 INFO  [] [main] c.e.ConfigLoader - Reading config from sndr.properties... 
+sndr-1      | 2025-05-13 15:00:27,901 INFO  [] [main] c.e.ConfigLoader - sndr.properties: platform.mt.protocol=http 
+sndr-1      | 2025-05-13 15:00:27,901 INFO  [] [main] c.e.ConfigLoader - sndr.properties: consumer.queue.host=192.168.1.155 
+sndr-1      | 2025-05-13 15:00:27,901 INFO  [] [main] c.e.ConfigLoader - sndr.properties: consumer.queue.routingKey=us.test.mt 
+sndr-1      | 2025-05-13 15:00:27,901 INFO  [] [main] c.e.ConfigLoader - sndr.properties: consumer.queue.port=5672 
+sndr-1      | 2025-05-13 15:00:27,901 INFO  [] [main] c.e.ConfigLoader - sndr.properties: consumer.queue.durable=true 
+sndr-1      | 2025-05-13 15:00:27,901 INFO  [] [main] c.e.ConfigLoader - sndr.properties: ssl=false 
+sndr-1      | 2025-05-13 15:00:27,901 INFO  [] [main] c.e.ConfigLoader - sndr.properties: platform.mt.host=host.docker.internal 
+sndr-1      | 2025-05-13 15:00:27,901 INFO  [] [main] c.e.ConfigLoader - sndr.properties: platform.mt.port=2424 
+sndr-1      | 2025-05-13 15:00:27,901 INFO  [] [main] c.e.ConfigLoader - sndr.properties: password=brbl_sndr 
+sndr-1      | 2025-05-13 15:00:27,901 INFO  [] [main] c.e.ConfigLoader - sndr.properties: minPoolSize=2 
+sndr-1      | 2025-05-13 15:00:27,901 INFO  [] [main] c.e.ConfigLoader - sndr.properties: acquireIncrement=2 
+sndr-1      | 2025-05-13 15:00:27,901 INFO  [] [main] c.e.ConfigLoader - sndr.properties: platform.mt.pathInfo=/mtReceive 
+sndr-1      | 2025-05-13 15:00:27,901 INFO  [] [main] c.e.ConfigLoader - sndr.properties: driverClass=org.postgresql.Driver 
+sndr-1      | 2025-05-13 15:00:27,901 INFO  [] [main] c.e.ConfigLoader - sndr.properties: preparedStatementCacheQueries=10 
+sndr-1      | 2025-05-13 15:00:27,901 INFO  [] [main] c.e.ConfigLoader - sndr.properties: jdbcUrl=jdbc:postgresql://host.docker.internal:5432/brbl_db_dev 
+sndr-1      | 2025-05-13 15:00:27,901 INFO  [] [main] c.e.ConfigLoader - sndr.properties: consumer.queue.name=test.mt 
+sndr-1      | 2025-05-13 15:00:27,901 INFO  [] [main] c.e.ConfigLoader - sndr.properties: user=brbl_sndr 
+sndr-1      | 2025-05-13 15:00:27,901 INFO  [] [main] c.e.ConfigLoader - sndr.properties: initialPoolSize=3 
+sndr-1      | 2025-05-13 15:00:27,901 INFO  [] [main] c.e.ConfigLoader - sndr.properties: maxPoolSize=4 
+sndr-1      | 2025-05-13 15:00:27,903 INFO  [] [main] com.enoughisasgoodasafeast.Sndr - Initializing SNDR 
+brkr-1      | 2025-05-13 19:00:27.923176+00:00 [info] <0.652.0> connection 172.18.0.1:60812 -> 172.18.0.2:5672: user 'guest' authenticated and granted access to vhost '/'
+operator-1  | 2025-05-13 15:00:27,931 INFO  [] [main] c.e.RabbitQueueConsumer - AMQP.Exchange.DeclareOk: protocolClassId=40 protocolMethodId=11 protocolMethodName=exchange.declare-ok 
+operator-1  | 2025-05-13 15:00:27,933 INFO  [] [main] c.e.RabbitQueueConsumer - AMQP.Queue.DeclareOk: queue=test.mo consumerCount=0 messageCount=0 
+operator-1  | 2025-05-13 15:00:27,934 INFO  [] [main] c.e.RabbitQueueConsumer - AMQP.Queue.BindOk: protocolClassId=50 protocolMethodId=21 protocolMethodName=queue.bind-ok 
+operator-1  | 2025-05-13 15:00:27,935 INFO  [] [main] c.e.RabbitQueueConsumer - Bound exchange, test.mo, to queue, test.mo. 
+operator-1  | 2025-05-13 15:00:27,940 INFO  [] [main] c.e.RabbitQueueConsumer - Negotiated heartbeat: 20 seconds 
+operator-1  | 2025-05-13 15:00:27,940 WARN  [] [pool-1-thread-3] c.e.BrblConsumer - handleConsumeOk called with consumerTag amq.ctag-EXDhV2WptcRsbDQqWO_BtA 
+operator-1  | 2025-05-13 15:00:27,940 INFO  [] [main] c.e.RabbitQueueConsumer - ConsumerTag returned from basicConsume: amq.ctag-EXDhV2WptcRsbDQqWO_BtA 
+operator-1  | 2025-05-13 15:00:27,940 INFO  [] [main] c.e.RabbitQueueProducer - Creating RabbitQueueProducer: queueHost: '192.168.1.155', queuePort: '5672', exchangeName: 'test.mt', routingKey: 'us.test.mt', isDurable: true 
+brkr-1      | 2025-05-13 19:00:27.956081+00:00 [info] <0.667.0> accepting AMQP connection 172.18.0.1:60826 -> 172.18.0.2:5672
+brkr-1      | 2025-05-13 19:00:27.960590+00:00 [info] <0.667.0> connection 172.18.0.1:60826 -> 172.18.0.2:5672: user 'guest' authenticated and granted access to vhost '/'
+operator-1  | 2025-05-13 15:00:27,965 INFO  [] [main] c.e.RabbitQueueProducer - Declared exchange, test.mt: #method<exchange.declare-ok>() 
+operator-1  | 2025-05-13 15:00:27,968 INFO  [] [main] c.e.RabbitQueueProducer - Bound exchange, test.mt, to queue, test.mt. 
+operator-1  | 2025-05-13 15:00:27,968 INFO  [] [main] c.e.RabbitQueueProducer - Negotiated heartbeat: 20 seconds 
+operator-1  | 2025-05-13 15:00:27,970 INFO  [] [main] c.e.RabbitQueueProducer - Broker publisher thread running. 
+operator-1  | 2025-05-13 15:00:27,970 INFO  [] [main] c.e.RabbitQueueProducer - Start up complete. 
+operator-1  | 2025-05-13 15:00:27,985 INFO  [] [MLog-Init-Reporter] com.mchange.v2.log.MLog - MLog clients using slf4j logging. 
+rcvr-1      | 2025-05-13 15:00:28,020 INFO  [92c5c5f4-81ae-4a93-b62b-4a7131d7d570] [main] com.mchange.v2.c3p0.C3P0Registry - Initializing c3p0-0.11.0 [built 2025-04-23T19:34:19.488136Z; debug? true; trace: 10] 
+rcvr-1      | 2025-05-13 15:00:28,085 INFO  [92c5c5f4-81ae-4a93-b62b-4a7131d7d570] [main] c.m.v.c.i.AbstractPoolBackedDataSource - Initializing c3p0 pool... com.mchange.v2.c3p0.ComboPooledDataSource [ acquireIncrement -> 2, acquireRetryAttempts -> 30, acquireRetryDelay -> 1000, attemptResurrectOnCheckin -> false, autoCommitOnClose -> false, automaticTestTable -> null, breakAfterAcquireFailure -> false, cancelAutomaticallyClosedStatements -> false, checkoutTimeout -> 0, connectionCustomizerClassName -> null, connectionIsValidTimeout -> 0, connectionTesterClassName -> null, contextClassLoaderSource -> caller, dataSourceName -> 1bqrg1vba1kbwo0418z99z9|45dd4eda, debugUnreturnedConnectionStackTraces -> false, description -> null, driverClass -> org.postgresql.Driver, extensions -> {}, factoryClassLocation -> null, forceIgnoreUnresolvedTransactions -> false, forceSynchronousCheckins -> false, forceUseNamedDriverClass -> false, identityToken -> 1bqrg1vba1kbwo0418z99z9|45dd4eda, idleConnectionTestPeriod -> 0, initialPoolSize -> 3, jdbcUrl -> jdbc:postgresql://host.docker.internal:5432/brbl_db_dev, markSessionBoundaries -> always, maxAdministrativeTaskTime -> 0, maxConnectionAge -> 0, maxIdleTime -> 0, maxIdleTimeExcessConnections -> 0, maxPoolSize -> 4, maxStatements -> 0, maxStatementsPerConnection -> 0, minPoolSize -> 2, numHelperThreads -> 3, preferredTestQuery -> null, privilegeSpawnedThreads -> false, properties -> {PATH=/opt/java/openjdk/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin, producer.queue.durable=true, JAVA_HOME=/opt/java/openjdk, webserver.listener.port=4242, LANG=en_US.UTF-8, ssl=false, producer.queue.name=test.mo, password=******, acquireIncrement=2, JAR_FILE=sndrRcvr-1.0-SNAPSHOT-jar-with-dependencies.jar, driverClass=org.postgresql.Driver, LD_LIBRARY_PATH=/opt/java/openjdk/lib/server:/opt/java/openjdk/lib:/opt/java/openjdk/../lib, preparedStatementCacheQueries=10, producer.queue.routingKey=us.test.mo, DEST_DIR=/opt/app, JAVA_VERSION=jdk-23.0.1+11, initialPoolSize=3, LANGUAGE=en_US:en, producer.queue.host=192.168.1.155, minPoolSize=2, HOSTNAME=0ddd8fe33402, LC_ALL=en_US.UTF-8, producer.queue.port=5672, jdbcUrl=jdbc:postgresql://host.docker.internal:5432/brbl_db_dev, maxPoolSize=4, user=******, HOME=/root}, propertyCycle -> 0, statementCacheNumDeferredCloseThreads -> 0, taskRunnerFactoryClassName -> com.mchange.v2.c3p0.impl.DefaultTaskRunnerFactory, testConnectionOnCheckin -> false, testConnectionOnCheckout -> false, unreturnedConnectionTimeout -> 0, userOverrides -> {} ] 
+sndr-1      | 2025-05-13 15:00:28,103 INFO  [] [main] c.e.RabbitQueueConsumer - Creating RabbitQueueConsumer: queueHost: '192.168.1.155', queueName: 'test.mt', routingKey: 'us.test.mt' 
+brkr-1      | 2025-05-13 19:00:28.131503+00:00 [info] <0.682.0> accepting AMQP connection 172.18.0.1:60842 -> 172.18.0.2:5672
+operator-1  | 2025-05-13 15:00:28,140 INFO  [] [main] com.mchange.v2.c3p0.C3P0Registry - Initializing c3p0-0.11.0 [built 2025-04-23T19:34:19.488136Z; debug? true; trace: 10] 
+brkr-1      | 2025-05-13 19:00:28.151156+00:00 [info] <0.682.0> connection 172.18.0.1:60842 -> 172.18.0.2:5672: user 'guest' authenticated and granted access to vhost '/'
+sndr-1      | 2025-05-13 15:00:28,158 INFO  [] [main] c.e.RabbitQueueConsumer - AMQP.Exchange.DeclareOk: protocolClassId=40 protocolMethodId=11 protocolMethodName=exchange.declare-ok 
+sndr-1      | 2025-05-13 15:00:28,160 INFO  [] [main] c.e.RabbitQueueConsumer - AMQP.Queue.DeclareOk: queue=test.mt consumerCount=0 messageCount=0 
+sndr-1      | 2025-05-13 15:00:28,162 INFO  [] [main] c.e.RabbitQueueConsumer - AMQP.Queue.BindOk: protocolClassId=50 protocolMethodId=21 protocolMethodName=queue.bind-ok 
+sndr-1      | 2025-05-13 15:00:28,162 INFO  [] [main] c.e.RabbitQueueConsumer - Bound exchange, test.mt, to queue, test.mt. 
+sndr-1      | 2025-05-13 15:00:28,165 WARN  [] [pool-1-thread-3] c.e.BrblConsumer - handleConsumeOk called with consumerTag amq.ctag-o5hbgXa1W4exFa_znttsEw 
+sndr-1      | 2025-05-13 15:00:28,165 INFO  [] [main] c.e.RabbitQueueConsumer - Negotiated heartbeat: 20 seconds 
+sndr-1      | 2025-05-13 15:00:28,165 INFO  [] [main] c.e.RabbitQueueConsumer - ConsumerTag returned from basicConsume: amq.ctag-o5hbgXa1W4exFa_znttsEw 
+sndr-1      | 2025-05-13 15:00:28,184 INFO  [] [MLog-Init-Reporter] com.mchange.v2.log.MLog - MLog clients using slf4j logging. 
+operator-1  | 2025-05-13 15:00:28,205 INFO  [] [main] c.m.v.c.i.AbstractPoolBackedDataSource - Initializing c3p0 pool... com.mchange.v2.c3p0.ComboPooledDataSource [ acquireIncrement -> 2, acquireRetryAttempts -> 30, acquireRetryDelay -> 1000, attemptResurrectOnCheckin -> false, autoCommitOnClose -> false, automaticTestTable -> null, breakAfterAcquireFailure -> false, cancelAutomaticallyClosedStatements -> false, checkoutTimeout -> 0, connectionCustomizerClassName -> null, connectionIsValidTimeout -> 0, connectionTesterClassName -> null, contextClassLoaderSource -> caller, dataSourceName -> 1bqrg1wba1kbwo3qru8urm|17046283, debugUnreturnedConnectionStackTraces -> false, description -> null, driverClass -> org.postgresql.Driver, extensions -> {}, factoryClassLocation -> null, forceIgnoreUnresolvedTransactions -> false, forceSynchronousCheckins -> false, forceUseNamedDriverClass -> false, identityToken -> 1bqrg1wba1kbwo3qru8urm|17046283, idleConnectionTestPeriod -> 0, initialPoolSize -> 3, jdbcUrl -> jdbc:postgresql://host.docker.internal:5432/brbl_db_dev, markSessionBoundaries -> always, maxAdministrativeTaskTime -> 0, maxConnectionAge -> 0, maxIdleTime -> 0, maxIdleTimeExcessConnections -> 0, maxPoolSize -> 4, maxStatements -> 0, maxStatementsPerConnection -> 0, minPoolSize -> 2, numHelperThreads -> 3, preferredTestQuery -> null, privilegeSpawnedThreads -> false, properties -> {PATH=/opt/java/openjdk/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin, consumer.queue.host=192.168.1.155, producer.queue.durable=true, JAVA_HOME=/opt/java/openjdk, consumer.queue.durable=true, LANG=en_US.UTF-8, ssl=false, producer.queue.name=test.mt, password=******, acquireIncrement=2, JAR_FILE=sndrRcvr-1.0-SNAPSHOT-jar-with-dependencies.jar, driverClass=org.postgresql.Driver, LD_LIBRARY_PATH=/opt/java/openjdk/lib/server:/opt/java/openjdk/lib:/opt/java/openjdk/../lib, preparedStatementCacheQueries=10, producer.queue.routingKey=us.test.mt, consumer.queue.name=test.mo, DEST_DIR=/opt/app, JAVA_VERSION=jdk-23.0.1+11, initialPoolSize=3, LANGUAGE=en_US:en, producer.queue.host=192.168.1.155, consumer.queue.routingKey=us.test.mo, consumer.queue.port=5672, minPoolSize=2, HOSTNAME=0edc2340e33b, LC_ALL=en_US.UTF-8, producer.queue.port=5672, jdbcUrl=jdbc:postgresql://host.docker.internal:5432/brbl_db_dev, maxPoolSize=4, user=******, HOME=/root}, propertyCycle -> 0, statementCacheNumDeferredCloseThreads -> 0, taskRunnerFactoryClassName -> com.mchange.v2.c3p0.impl.DefaultTaskRunnerFactory, testConnectionOnCheckin -> false, testConnectionOnCheckout -> false, unreturnedConnectionTimeout -> 0, userOverrides -> {} ] 
+rcvr-1      | 2025-05-13 15:00:28,234 INFO  [92c5c5f4-81ae-4a93-b62b-4a7131d7d570] [main] c.e.o.PostgresPersistenceManager - Connection pool initialized 
+rcvr-1      | 2025-05-13 15:00:28,235 INFO  [92c5c5f4-81ae-4a93-b62b-4a7131d7d570] [main] com.enoughisasgoodasafeast.Rcvr - Listening on port 4242 
+rcvr-1      | 2025-05-13 15:00:28,268 INFO  [92c5c5f4-81ae-4a93-b62b-4a7131d7d570] [main] com.enoughisasgoodasafeast.Rcvr - Setup BrblMessageHandler 
+sndr-1      | 2025-05-13 15:00:28,328 INFO  [] [main] com.mchange.v2.c3p0.C3P0Registry - Initializing c3p0-0.11.0 [built 2025-04-23T19:34:19.488136Z; debug? true; trace: 10] 
+operator-1  | 2025-05-13 15:00:28,333 INFO  [] [main] c.e.o.PostgresPersistenceManager - Connection pool initialized 
+rcvr-1      | 2025-05-13 15:00:28,349 INFO  [] [features-thread] i.h.common.features.HelidonFeatures - Helidon SE 4.1.4 features: [WebServer] 
+rcvr-1      | 2025-05-13 15:00:28,350 INFO  [] [start @default (/0.0.0.0:4242)] io.helidon.webserver.ServerListener - [0x41957931] http://0.0.0.0:4242 bound for socket '@default' 
+rcvr-1      | 2025-05-13 15:00:28,353 INFO  [92c5c5f4-81ae-4a93-b62b-4a7131d7d570] [main] i.h.logging.slf4j.Slf4jProvider - Logging initialization. 
+rcvr-1      | 2025-05-13 15:00:28,357 INFO  [92c5c5f4-81ae-4a93-b62b-4a7131d7d570] [main] io.helidon.webserver.LoomServer - Started all channels in 9 milliseconds. 874 milliseconds since JVM startup. Java 23.0.1+11 
+sndr-1      | 2025-05-13 15:00:28,366 INFO  [] [main] c.m.v.c.i.AbstractPoolBackedDataSource - Initializing c3p0 pool... com.mchange.v2.c3p0.ComboPooledDataSource [ acquireIncrement -> 2, acquireRetryAttempts -> 30, acquireRetryDelay -> 1000, attemptResurrectOnCheckin -> false, autoCommitOnClose -> false, automaticTestTable -> null, breakAfterAcquireFailure -> false, cancelAutomaticallyClosedStatements -> false, checkoutTimeout -> 0, connectionCustomizerClassName -> null, connectionIsValidTimeout -> 0, connectionTesterClassName -> null, contextClassLoaderSource -> caller, dataSourceName -> 1bqrg1xba1kbwo8t1q1pmwl|6404f418, debugUnreturnedConnectionStackTraces -> false, description -> null, driverClass -> org.postgresql.Driver, extensions -> {}, factoryClassLocation -> null, forceIgnoreUnresolvedTransactions -> false, forceSynchronousCheckins -> false, forceUseNamedDriverClass -> false, identityToken -> 1bqrg1xba1kbwo8t1q1pmwl|6404f418, idleConnectionTestPeriod -> 0, initialPoolSize -> 3, jdbcUrl -> jdbc:postgresql://host.docker.internal:5432/brbl_db_dev, markSessionBoundaries -> always, maxAdministrativeTaskTime -> 0, maxConnectionAge -> 0, maxIdleTime -> 0, maxIdleTimeExcessConnections -> 0, maxPoolSize -> 4, maxStatements -> 0, maxStatementsPerConnection -> 0, minPoolSize -> 2, numHelperThreads -> 3, preferredTestQuery -> null, privilegeSpawnedThreads -> false, properties -> {PATH=/opt/java/openjdk/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin, consumer.queue.host=192.168.1.155, JAVA_HOME=/opt/java/openjdk, consumer.queue.durable=true, LANG=en_US.UTF-8, ssl=false, password=******, platform.mt.port=2424, acquireIncrement=2, JAR_FILE=sndrRcvr-1.0-SNAPSHOT-jar-with-dependencies.jar, driverClass=org.postgresql.Driver, LD_LIBRARY_PATH=/opt/java/openjdk/lib/server:/opt/java/openjdk/lib:/opt/java/openjdk/../lib, preparedStatementCacheQueries=10, consumer.queue.name=test.mt, DEST_DIR=/opt/app, JAVA_VERSION=jdk-23.0.1+11, initialPoolSize=3, LANGUAGE=en_US:en, platform.mt.protocol=http, consumer.queue.routingKey=us.test.mt, consumer.queue.port=5672, platform.mt.host=host.docker.internal, minPoolSize=2, HOSTNAME=6ba6c89f164f, platform.mt.pathInfo=/mtReceive, LC_ALL=en_US.UTF-8, jdbcUrl=jdbc:postgresql://host.docker.internal:5432/brbl_db_dev, maxPoolSize=4, user=******, HOME=/root}, propertyCycle -> 0, statementCacheNumDeferredCloseThreads -> 0, taskRunnerFactoryClassName -> com.mchange.v2.c3p0.impl.DefaultTaskRunnerFactory, testConnectionOnCheckin -> false, testConnectionOnCheckout -> false, unreturnedConnectionTimeout -> 0, userOverrides -> {} ] 
+sndr-1      | 2025-05-13 15:00:28,451 INFO  [] [main] c.e.o.PostgresPersistenceManager - Connection pool initialized 
+rcvr-1      | 2025-05-13 15:02:02,299 INFO  [] [[0x41957931 0x145f053a] WebServer socket] com.enoughisasgoodasafeast.Rcvr - /brblEnqueue requested 
+rcvr-1      | 2025-05-13 15:02:02,302 INFO  [] [[0x41957931 0x145f053a] WebServer socket] com.enoughisasgoodasafeast.Rcvr - /brblEnqueue request content: Message[id=3613bf0f-ad61-4bb3-8f3d-71fe7857ea19, receivedAt=2025-05-13T19:02:02.302013250Z, type=MO, platform=BRBL, from=19787299468, to=1234, text=1 hello] 
+rcvr-1      | 2025-05-13 15:02:02,319 INFO  [] [Thread-0] c.e.RabbitQueueProducer -  [x] Enqueued msg 'Message[id=3613bf0f-ad61-4bb3-8f3d-71fe7857ea19, receivedAt=2025-05-13T19:02:02.302013250Z, type=MO, platform=BRBL, from=19787299468, to=1234, text=1 hello]' 
+operator-1  | 2025-05-13 15:02:02,341 INFO  [] [pool-1-thread-4] c.e.operator.Operator - Process message: Message[id=3613bf0f-ad61-4bb3-8f3d-71fe7857ea19, receivedAt=2025-05-13T19:02:02.302013250Z, type=MO, platform=BRBL, from=19787299468, to=1234, text=1 hello] 
+rcvr-1      | 2025-05-13 15:02:02,361 INFO  [] [[0x41957931 0x145f053a] WebServer socket] com.enoughisasgoodasafeast.Rcvr - /brblEnqueue requested 
+rcvr-1      | 2025-05-13 15:02:02,361 INFO  [] [[0x41957931 0x145f053a] WebServer socket] com.enoughisasgoodasafeast.Rcvr - /brblEnqueue request content: Message[id=9b1c9981-05bd-4a6c-9a66-aa616f9c1315, receivedAt=2025-05-13T19:02:02.360623125Z, type=MO, platform=BRBL, from=19787299469, to=1234, text=2 hi] 
+rcvr-1      | 2025-05-13 15:02:02,362 INFO  [] [Thread-0] c.e.RabbitQueueProducer -  [x] Enqueued msg 'Message[id=9b1c9981-05bd-4a6c-9a66-aa616f9c1315, receivedAt=2025-05-13T19:02:02.360623125Z, type=MO, platform=BRBL, from=19787299469, to=1234, text=2 hi]' 
+operator-1  | 2025-05-13 15:02:02,367 INFO  [] [virtual-44] c.e.operator.Operator - No node found in cache for 1234. Using default for platform, BRBL.
+operator-1  | 2025-05-13 15:02:02,369 INFO  [] [virtual-44] c.e.operator.Script - Created Script (type:EchoWithPrefix, label:'1234', id:27a96b64-78d2-43ae-9960-7ac4c4726f82 
+rcvr-1      | 2025-05-13 15:02:02,368 INFO  [] [[0x41957931 0x145f053a] WebServer socket] com.enoughisasgoodasafeast.Rcvr - /brblEnqueue requested 
+rcvr-1      | 2025-05-13 15:02:02,368 INFO  [] [[0x41957931 0x145f053a] WebServer socket] com.enoughisasgoodasafeast.Rcvr - /brblEnqueue request content: Message[id=3de42842-0394-4027-a1b8-a57b65fb185c, receivedAt=2025-05-13T19:02:02.367478125Z, type=MO, platform=BRBL, from=19787299470, to=1234, text=3 heya] 
+rcvr-1      | 2025-05-13 15:02:02,368 INFO  [] [Thread-0] c.e.RabbitQueueProducer -  [x] Enqueued msg 'Message[id=3de42842-0394-4027-a1b8-a57b65fb185c, receivedAt=2025-05-13T19:02:02.367478125Z, type=MO, platform=BRBL, from=19787299470, to=1234, text=3 heya]' 
+rcvr-1      | 2025-05-13 15:02:02,373 INFO  [] [[0x41957931 0x145f053a] WebServer socket] com.enoughisasgoodasafeast.Rcvr - /brblEnqueue requested 
+rcvr-1      | 2025-05-13 15:02:02,373 INFO  [] [[0x41957931 0x145f053a] WebServer socket] com.enoughisasgoodasafeast.Rcvr - /brblEnqueue request content: Message[id=b3af86e9-b1e3-46d4-a69c-3d59626fd81b, receivedAt=2025-05-13T19:02:02.372638292Z, type=MO, platform=BRBL, from=19787299471, to=1234, text=4 hey here] 
+rcvr-1      | 2025-05-13 15:02:02,374 INFO  [] [Thread-0] c.e.RabbitQueueProducer -  [x] Enqueued msg 'Message[id=b3af86e9-b1e3-46d4-a69c-3d59626fd81b, receivedAt=2025-05-13T19:02:02.372638292Z, type=MO, platform=BRBL, from=19787299471, to=1234, text=4 hey here]' 
+operator-1  | 2025-05-13 15:02:02,375 INFO  [] [virtual-42] c.e.o.PostgresPersistenceManager - Processed 0 records for SessionKey[platform=BRBL, from=19787299468, to=1234] 
+operator-1  | 2025-05-13 15:02:02,377 INFO  [] [virtual-42] c.e.o.PostgresPersistenceManager - No Users found for SessionKey[platform=BRBL, from=19787299468, to=1234] 
+operator-1  | 2025-05-13 15:02:02,377 INFO  [] [virtual-42] c.e.operator.Operator - User not found. 
+rcvr-1      | 2025-05-13 15:02:02,379 INFO  [] [[0x41957931 0x145f053a] WebServer socket] com.enoughisasgoodasafeast.Rcvr - /brblEnqueue requested 
+rcvr-1      | 2025-05-13 15:02:02,379 INFO  [] [[0x41957931 0x145f053a] WebServer socket] com.enoughisasgoodasafeast.Rcvr - /brblEnqueue request content: Message[id=9467d801-db74-4a7c-a87d-68b5092291d9, receivedAt=2025-05-13T19:02:02.378868708Z, type=MO, platform=BRBL, from=19787299472, to=1234, text=5 greetings] 
+operator-1  | 2025-05-13 15:02:02,380 INFO  [] [virtual-42] c.e.operator.User - Created new User (id:23c2cbfe-2c4d-48d8-ad9b-b2cd231c359f) 
+rcvr-1      | 2025-05-13 15:02:02,380 INFO  [] [Thread-0] c.e.RabbitQueueProducer -  [x] Enqueued msg 'Message[id=9467d801-db74-4a7c-a87d-68b5092291d9, receivedAt=2025-05-13T19:02:02.378868708Z, type=MO, platform=BRBL, from=19787299472, to=1234, text=5 greetings]' 
+operator-1  | 2025-05-13 15:02:02,380 INFO  [] [virtual-42] c.e.o.PostgresPersistenceManager - insertUser: insert User[id=23c2cbfe-2c4d-48d8-ad9b-b2cd231c359f, platformIds={BRBL=19787299468}, platformCreationTimes={BRBL=2025-05-13T19:02:02.378013167Z}, countryCode=US, languages=[ENG]] 
+operator-1  | 2025-05-13 15:02:02,388 INFO  [] [virtual-42] c.e.o.PostgresPersistenceManager - insertUser: inserted 1 record(s). 
+operator-1  | 2025-05-13 15:02:02,388 INFO  [] [virtual-42] c.e.operator.Operator - New User created: User[id=23c2cbfe-2c4d-48d8-ad9b-b2cd231c359f, platformIds={BRBL=19787299468}, platformCreationTimes={BRBL=2025-05-13T19:02:02.378013167Z}, countryCode=US, languages=[ENG]] 
+operator-1  | 2025-05-13 15:02:02,390 INFO  [] [pool-1-thread-4] c.e.operator.Session - Created Session b28bcefa-2c5f-450e-b8f7-953a475933ae for User 23c2cbfe-2c4d-48d8-ad9b-b2cd231c359f 
+operator-1  | 2025-05-13 15:02:02,392 INFO  [] [pool-1-thread-4] c.e.operator.SimpleTestScript - Evaluated MO text '1 hello' -> MT text 'PrintWithPrefix: 1 hello' 
+operator-1  | 2025-05-13 15:02:02,392 INFO  [] [pool-1-thread-4] c.e.operator.Session - flushOutput: outputBuffer size = 1 
+operator-1  | 2025-05-13 15:02:02,395 INFO  [] [Thread-0] c.e.RabbitQueueProducer -  [x] Enqueued msg 'Message[id=3940932d-1582-495e-a3b7-20cea2fbafb1, receivedAt=2025-05-13T19:02:02.392570125Z, type=MT, platform=BRBL, from=1234, to=19787299468, text=PrintWithPrefix: 1 hello]' 
+operator-1  | 2025-05-13 15:02:02,395 INFO  [] [pool-1-thread-4] c.e.OperatorConsumer - Processed message: Message[id=3613bf0f-ad61-4bb3-8f3d-71fe7857ea19, receivedAt=2025-05-13T19:02:02.302013250Z, type=MO, platform=BRBL, from=19787299468, to=1234, text=1 hello] 
+operator-1  | 2025-05-13 15:02:02,403 INFO  [] [pool-1-thread-5] c.e.operator.Operator - Process message: Message[id=9b1c9981-05bd-4a6c-9a66-aa616f9c1315, receivedAt=2025-05-13T19:02:02.360623125Z, type=MO, platform=BRBL, from=19787299469, to=1234, text=2 hi] 
+operator-1  | 2025-05-13 15:02:02,403 INFO  [] [virtual-65] c.e.operator.Operator - No node found in cache for 1234. Using default for platform, BRBL.
+operator-1  | 2025-05-13 15:02:02,403 INFO  [] [virtual-65] c.e.operator.Script - Created Script (type:EchoWithPrefix, label:'1234', id:6af24998-5680-46ff-925a-ff807cf5ee1c 
+operator-1  | 2025-05-13 15:02:02,405 INFO  [] [virtual-64] c.e.o.PostgresPersistenceManager - Processed 0 records for SessionKey[platform=BRBL, from=19787299469, to=1234] 
+operator-1  | 2025-05-13 15:02:02,406 INFO  [] [virtual-64] c.e.o.PostgresPersistenceManager - No Users found for SessionKey[platform=BRBL, from=19787299469, to=1234] 
+operator-1  | 2025-05-13 15:02:02,406 INFO  [] [virtual-64] c.e.operator.Operator - User not found. 
+operator-1  | 2025-05-13 15:02:02,406 INFO  [] [virtual-64] c.e.operator.User - Created new User (id:b17c8abe-1347-4d70-8eec-b5e09304b2dc) 
+operator-1  | 2025-05-13 15:02:02,406 INFO  [] [virtual-64] c.e.o.PostgresPersistenceManager - insertUser: insert User[id=b17c8abe-1347-4d70-8eec-b5e09304b2dc, platformIds={BRBL=19787299469}, platformCreationTimes={BRBL=2025-05-13T19:02:02.406310042Z}, countryCode=US, languages=[ENG]] 
+operator-1  | 2025-05-13 15:02:02,410 INFO  [] [virtual-64] c.e.o.PostgresPersistenceManager - insertUser: inserted 1 record(s). 
+operator-1  | 2025-05-13 15:02:02,410 INFO  [] [virtual-64] c.e.operator.Operator - New User created: User[id=b17c8abe-1347-4d70-8eec-b5e09304b2dc, platformIds={BRBL=19787299469}, platformCreationTimes={BRBL=2025-05-13T19:02:02.406310042Z}, countryCode=US, languages=[ENG]] 
+operator-1  | 2025-05-13 15:02:02,410 INFO  [] [pool-1-thread-5] c.e.operator.Session - Created Session 0054979b-a055-4471-834b-0a33c757f264 for User b17c8abe-1347-4d70-8eec-b5e09304b2dc 
+operator-1  | 2025-05-13 15:02:02,410 INFO  [] [pool-1-thread-5] c.e.operator.SimpleTestScript - Evaluated MO text '2 hi' -> MT text 'PrintWithPrefix: 2 hi' 
+operator-1  | 2025-05-13 15:02:02,410 INFO  [] [pool-1-thread-5] c.e.operator.Session - flushOutput: outputBuffer size = 1 
+operator-1  | 2025-05-13 15:02:02,411 INFO  [] [Thread-0] c.e.RabbitQueueProducer -  [x] Enqueued msg 'Message[id=5f4e6cbe-344f-4416-ac17-e47242fad20e, receivedAt=2025-05-13T19:02:02.410689375Z, type=MT, platform=BRBL, from=1234, to=19787299469, text=PrintWithPrefix: 2 hi]' 
+operator-1  | 2025-05-13 15:02:02,412 INFO  [] [pool-1-thread-5] c.e.OperatorConsumer - Processed message: Message[id=9b1c9981-05bd-4a6c-9a66-aa616f9c1315, receivedAt=2025-05-13T19:02:02.360623125Z, type=MO, platform=BRBL, from=19787299469, to=1234, text=2 hi] 
+operator-1  | 2025-05-13 15:02:02,416 INFO  [] [pool-1-thread-5] c.e.operator.Operator - Process message: Message[id=3de42842-0394-4027-a1b8-a57b65fb185c, receivedAt=2025-05-13T19:02:02.367478125Z, type=MO, platform=BRBL, from=19787299470, to=1234, text=3 heya] 
+operator-1  | 2025-05-13 15:02:02,416 INFO  [] [virtual-67] c.e.operator.Operator - No node found in cache for 1234. Using default for platform, BRBL.
+operator-1  | 2025-05-13 15:02:02,416 INFO  [] [virtual-67] c.e.operator.Script - Created Script (type:EchoWithPrefix, label:'1234', id:2bc96462-41bf-4511-9045-1e776a96cc8d 
+operator-1  | 2025-05-13 15:02:02,419 INFO  [] [virtual-66] c.e.o.PostgresPersistenceManager - Processed 0 records for SessionKey[platform=BRBL, from=19787299470, to=1234] 
+operator-1  | 2025-05-13 15:02:02,419 INFO  [] [virtual-66] c.e.o.PostgresPersistenceManager - No Users found for SessionKey[platform=BRBL, from=19787299470, to=1234] 
+operator-1  | 2025-05-13 15:02:02,419 INFO  [] [virtual-66] c.e.operator.Operator - User not found. 
+operator-1  | 2025-05-13 15:02:02,419 INFO  [] [virtual-66] c.e.operator.User - Created new User (id:59fa7410-ea97-44bc-bc20-28a7fbc66216) 
+operator-1  | 2025-05-13 15:02:02,419 INFO  [] [virtual-66] c.e.o.PostgresPersistenceManager - insertUser: insert User[id=59fa7410-ea97-44bc-bc20-28a7fbc66216, platformIds={BRBL=19787299470}, platformCreationTimes={BRBL=2025-05-13T19:02:02.419740375Z}, countryCode=US, languages=[ENG]] 
+sndr-1      | 2025-05-13 15:02:02,414 INFO  [] [pool-1-thread-4] com.enoughisasgoodasafeast.Sndr - Received outbound message: Message[id=3940932d-1582-495e-a3b7-20cea2fbafb1, receivedAt=2025-05-13T19:02:02.392570125Z, type=MT, platform=BRBL, from=1234, to=19787299468, text=PrintWithPrefix: 1 hello] 
+operator-1  | 2025-05-13 15:02:02,421 INFO  [] [virtual-66] c.e.o.PostgresPersistenceManager - insertUser: inserted 1 record(s). 
+operator-1  | 2025-05-13 15:02:02,422 INFO  [] [virtual-66] c.e.operator.Operator - New User created: User[id=59fa7410-ea97-44bc-bc20-28a7fbc66216, platformIds={BRBL=19787299470}, platformCreationTimes={BRBL=2025-05-13T19:02:02.419740375Z}, countryCode=US, languages=[ENG]] 
+operator-1  | 2025-05-13 15:02:02,422 INFO  [] [pool-1-thread-5] c.e.operator.Session - Created Session f9bda0cb-3c82-4d7b-a432-ea44440106aa for User 59fa7410-ea97-44bc-bc20-28a7fbc66216 
+operator-1  | 2025-05-13 15:02:02,422 INFO  [] [pool-1-thread-5] c.e.operator.SimpleTestScript - Evaluated MO text '3 heya' -> MT text 'PrintWithPrefix: 3 heya' 
+operator-1  | 2025-05-13 15:02:02,422 INFO  [] [pool-1-thread-5] c.e.operator.Session - flushOutput: outputBuffer size = 1 
+operator-1  | 2025-05-13 15:02:02,423 INFO  [] [Thread-0] c.e.RabbitQueueProducer -  [x] Enqueued msg 'Message[id=f6687d05-d334-4ca0-ba94-02c7637d68ff, receivedAt=2025-05-13T19:02:02.422535875Z, type=MT, platform=BRBL, from=1234, to=19787299470, text=PrintWithPrefix: 3 heya]' 
+operator-1  | 2025-05-13 15:02:02,423 INFO  [] [pool-1-thread-5] c.e.OperatorConsumer - Processed message: Message[id=3de42842-0394-4027-a1b8-a57b65fb185c, receivedAt=2025-05-13T19:02:02.367478125Z, type=MO, platform=BRBL, from=19787299470, to=1234, text=3 heya] 
+operator-1  | 2025-05-13 15:02:02,426 INFO  [] [pool-1-thread-5] c.e.operator.Operator - Process message: Message[id=b3af86e9-b1e3-46d4-a69c-3d59626fd81b, receivedAt=2025-05-13T19:02:02.372638292Z, type=MO, platform=BRBL, from=19787299471, to=1234, text=4 hey here] 
+operator-1  | 2025-05-13 15:02:02,427 INFO  [] [virtual-69] c.e.operator.Operator - No node found in cache for 1234. Using default for platform, BRBL.
+operator-1  | 2025-05-13 15:02:02,427 INFO  [] [virtual-69] c.e.operator.Script - Created Script (type:EchoWithPrefix, label:'1234', id:314b917b-9fa6-401f-8ccb-71dd2cdfdbe1 
+operator-1  | 2025-05-13 15:02:02,429 INFO  [] [virtual-68] c.e.o.PostgresPersistenceManager - Processed 0 records for SessionKey[platform=BRBL, from=19787299471, to=1234] 
+operator-1  | 2025-05-13 15:02:02,429 INFO  [] [virtual-68] c.e.o.PostgresPersistenceManager - No Users found for SessionKey[platform=BRBL, from=19787299471, to=1234] 
+operator-1  | 2025-05-13 15:02:02,429 INFO  [] [virtual-68] c.e.operator.Operator - User not found. 
+operator-1  | 2025-05-13 15:02:02,429 INFO  [] [virtual-68] c.e.operator.User - Created new User (id:a752f155-54f4-4961-b12c-6f164f79252a) 
+operator-1  | 2025-05-13 15:02:02,429 INFO  [] [virtual-68] c.e.o.PostgresPersistenceManager - insertUser: insert User[id=a752f155-54f4-4961-b12c-6f164f79252a, platformIds={BRBL=19787299471}, platformCreationTimes={BRBL=2025-05-13T19:02:02.429491583Z}, countryCode=US, languages=[ENG]] 
+operator-1  | 2025-05-13 15:02:02,431 INFO  [] [virtual-68] c.e.o.PostgresPersistenceManager - insertUser: inserted 1 record(s). 
+operator-1  | 2025-05-13 15:02:02,431 INFO  [] [virtual-68] c.e.operator.Operator - New User created: User[id=a752f155-54f4-4961-b12c-6f164f79252a, platformIds={BRBL=19787299471}, platformCreationTimes={BRBL=2025-05-13T19:02:02.429491583Z}, countryCode=US, languages=[ENG]] 
+operator-1  | 2025-05-13 15:02:02,431 INFO  [] [pool-1-thread-5] c.e.operator.Session - Created Session 591ae00a-f7e7-440c-90ae-9c3f4e58bab7 for User a752f155-54f4-4961-b12c-6f164f79252a 
+operator-1  | 2025-05-13 15:02:02,432 INFO  [] [pool-1-thread-5] c.e.operator.SimpleTestScript - Evaluated MO text '4 hey here' -> MT text 'PrintWithPrefix: 4 hey here' 
+operator-1  | 2025-05-13 15:02:02,432 INFO  [] [pool-1-thread-5] c.e.operator.Session - flushOutput: outputBuffer size = 1 
+operator-1  | 2025-05-13 15:02:02,432 INFO  [] [Thread-0] c.e.RabbitQueueProducer -  [x] Enqueued msg 'Message[id=13a46a11-c3cc-4f8c-b1b2-432649f33b42, receivedAt=2025-05-13T19:02:02.432135333Z, type=MT, platform=BRBL, from=1234, to=19787299471, text=PrintWithPrefix: 4 hey here]' 
+operator-1  | 2025-05-13 15:02:02,434 INFO  [] [pool-1-thread-5] c.e.OperatorConsumer - Processed message: Message[id=b3af86e9-b1e3-46d4-a69c-3d59626fd81b, receivedAt=2025-05-13T19:02:02.372638292Z, type=MO, platform=BRBL, from=19787299471, to=1234, text=4 hey here] 
+operator-1  | 2025-05-13 15:02:02,436 INFO  [] [pool-1-thread-6] c.e.operator.Operator - Process message: Message[id=9467d801-db74-4a7c-a87d-68b5092291d9, receivedAt=2025-05-13T19:02:02.378868708Z, type=MO, platform=BRBL, from=19787299472, to=1234, text=5 greetings] 
+operator-1  | 2025-05-13 15:02:02,436 INFO  [] [virtual-72] c.e.operator.Operator - No node found in cache for 1234. Using default for platform, BRBL.
+operator-1  | 2025-05-13 15:02:02,436 INFO  [] [virtual-72] c.e.operator.Script - Created Script (type:EchoWithPrefix, label:'1234', id:65ef2c79-5ca9-437a-b0c0-0fbdb36ad0ee 
+operator-1  | 2025-05-13 15:02:02,437 INFO  [] [virtual-71] c.e.o.PostgresPersistenceManager - Processed 0 records for SessionKey[platform=BRBL, from=19787299472, to=1234] 
+operator-1  | 2025-05-13 15:02:02,438 INFO  [] [virtual-71] c.e.o.PostgresPersistenceManager - No Users found for SessionKey[platform=BRBL, from=19787299472, to=1234] 
+operator-1  | 2025-05-13 15:02:02,438 INFO  [] [virtual-71] c.e.operator.Operator - User not found. 
+operator-1  | 2025-05-13 15:02:02,438 INFO  [] [virtual-71] c.e.operator.User - Created new User (id:f135ed61-1077-4fb0-bf82-596ae7fe252a) 
+operator-1  | 2025-05-13 15:02:02,438 INFO  [] [virtual-71] c.e.o.PostgresPersistenceManager - insertUser: insert User[id=f135ed61-1077-4fb0-bf82-596ae7fe252a, platformIds={BRBL=19787299472}, platformCreationTimes={BRBL=2025-05-13T19:02:02.438272500Z}, countryCode=US, languages=[ENG]] 
+operator-1  | 2025-05-13 15:02:02,439 INFO  [] [virtual-71] c.e.o.PostgresPersistenceManager - insertUser: inserted 1 record(s). 
+operator-1  | 2025-05-13 15:02:02,439 INFO  [] [virtual-71] c.e.operator.Operator - New User created: User[id=f135ed61-1077-4fb0-bf82-596ae7fe252a, platformIds={BRBL=19787299472}, platformCreationTimes={BRBL=2025-05-13T19:02:02.438272500Z}, countryCode=US, languages=[ENG]] 
+operator-1  | 2025-05-13 15:02:02,439 INFO  [] [pool-1-thread-6] c.e.operator.Session - Created Session 75f1e827-675e-430b-aadb-07d5abeacaba for User f135ed61-1077-4fb0-bf82-596ae7fe252a 
+operator-1  | 2025-05-13 15:02:02,440 INFO  [] [pool-1-thread-6] c.e.operator.SimpleTestScript - Evaluated MO text '5 greetings' -> MT text 'PrintWithPrefix: 5 greetings' 
+operator-1  | 2025-05-13 15:02:02,440 INFO  [] [pool-1-thread-6] c.e.operator.Session - flushOutput: outputBuffer size = 1 
+operator-1  | 2025-05-13 15:02:02,440 INFO  [] [Thread-0] c.e.RabbitQueueProducer -  [x] Enqueued msg 'Message[id=88267599-06e5-4a5d-b777-fbaf41294b8e, receivedAt=2025-05-13T19:02:02.439996792Z, type=MT, platform=BRBL, from=1234, to=19787299472, text=PrintWithPrefix: 5 greetings]' 
+operator-1  | 2025-05-13 15:02:02,441 INFO  [] [pool-1-thread-6] c.e.OperatorConsumer - Processed message: Message[id=9467d801-db74-4a7c-a87d-68b5092291d9, receivedAt=2025-05-13T19:02:02.378868708Z, type=MO, platform=BRBL, from=19787299472, to=1234, text=5 greetings] 
+sndr-1      | 2025-05-13 15:02:02,492 INFO  [] [pool-1-thread-4] c.e.OperatorConsumer - Processed message: Message[id=3940932d-1582-495e-a3b7-20cea2fbafb1, receivedAt=2025-05-13T19:02:02.392570125Z, type=MT, platform=BRBL, from=1234, to=19787299468, text=PrintWithPrefix: 1 hello] 
+sndr-1      | 2025-05-13 15:02:02,499 INFO  [] [pool-1-thread-4] com.enoughisasgoodasafeast.Sndr - Delivered Message[id=3940932d-1582-495e-a3b7-20cea2fbafb1, receivedAt=2025-05-13T19:02:02.392570125Z, type=MT, platform=BRBL, from=1234, to=19787299468, text=PrintWithPrefix: 1 hello] 
+sndr-1      | 2025-05-13 15:02:02,500 INFO  [] [pool-1-thread-5] com.enoughisasgoodasafeast.Sndr - Received outbound message: Message[id=5f4e6cbe-344f-4416-ac17-e47242fad20e, receivedAt=2025-05-13T19:02:02.410689375Z, type=MT, platform=BRBL, from=1234, to=19787299469, text=PrintWithPrefix: 2 hi] 
+sndr-1      | 2025-05-13 15:02:02,503 INFO  [] [pool-1-thread-5] c.e.OperatorConsumer - Processed message: Message[id=5f4e6cbe-344f-4416-ac17-e47242fad20e, receivedAt=2025-05-13T19:02:02.410689375Z, type=MT, platform=BRBL, from=1234, to=19787299469, text=PrintWithPrefix: 2 hi] 
+sndr-1      | 2025-05-13 15:02:02,504 INFO  [] [pool-1-thread-5] com.enoughisasgoodasafeast.Sndr - Delivered Message[id=5f4e6cbe-344f-4416-ac17-e47242fad20e, receivedAt=2025-05-13T19:02:02.410689375Z, type=MT, platform=BRBL, from=1234, to=19787299469, text=PrintWithPrefix: 2 hi] 
+sndr-1      | 2025-05-13 15:02:02,505 INFO  [] [pool-1-thread-5] com.enoughisasgoodasafeast.Sndr - Received outbound message: Message[id=f6687d05-d334-4ca0-ba94-02c7637d68ff, receivedAt=2025-05-13T19:02:02.422535875Z, type=MT, platform=BRBL, from=1234, to=19787299470, text=PrintWithPrefix: 3 heya] 
+sndr-1      | 2025-05-13 15:02:02,507 INFO  [] [pool-1-thread-5] c.e.OperatorConsumer - Processed message: Message[id=f6687d05-d334-4ca0-ba94-02c7637d68ff, receivedAt=2025-05-13T19:02:02.422535875Z, type=MT, platform=BRBL, from=1234, to=19787299470, text=PrintWithPrefix: 3 heya] 
+sndr-1      | 2025-05-13 15:02:02,508 INFO  [] [pool-1-thread-5] com.enoughisasgoodasafeast.Sndr - Delivered Message[id=f6687d05-d334-4ca0-ba94-02c7637d68ff, receivedAt=2025-05-13T19:02:02.422535875Z, type=MT, platform=BRBL, from=1234, to=19787299470, text=PrintWithPrefix: 3 heya] 
+sndr-1      | 2025-05-13 15:02:02,508 INFO  [] [pool-1-thread-5] com.enoughisasgoodasafeast.Sndr - Received outbound message: Message[id=13a46a11-c3cc-4f8c-b1b2-432649f33b42, receivedAt=2025-05-13T19:02:02.432135333Z, type=MT, platform=BRBL, from=1234, to=19787299471, text=PrintWithPrefix: 4 hey here] 
+sndr-1      | 2025-05-13 15:02:02,511 INFO  [] [pool-1-thread-5] c.e.OperatorConsumer - Processed message: Message[id=13a46a11-c3cc-4f8c-b1b2-432649f33b42, receivedAt=2025-05-13T19:02:02.432135333Z, type=MT, platform=BRBL, from=1234, to=19787299471, text=PrintWithPrefix: 4 hey here] 
+sndr-1      | 2025-05-13 15:02:02,513 INFO  [] [pool-1-thread-5] com.enoughisasgoodasafeast.Sndr - Delivered Message[id=13a46a11-c3cc-4f8c-b1b2-432649f33b42, receivedAt=2025-05-13T19:02:02.432135333Z, type=MT, platform=BRBL, from=1234, to=19787299471, text=PrintWithPrefix: 4 hey here] 
+sndr-1      | 2025-05-13 15:02:02,513 INFO  [] [pool-1-thread-6] com.enoughisasgoodasafeast.Sndr - Received outbound message: Message[id=88267599-06e5-4a5d-b777-fbaf41294b8e, receivedAt=2025-05-13T19:02:02.439996792Z, type=MT, platform=BRBL, from=1234, to=19787299472, text=PrintWithPrefix: 5 greetings] 
+sndr-1      | 2025-05-13 15:02:02,515 INFO  [] [pool-1-thread-6] c.e.OperatorConsumer - Processed message: Message[id=88267599-06e5-4a5d-b777-fbaf41294b8e, receivedAt=2025-05-13T19:02:02.439996792Z, type=MT, platform=BRBL, from=1234, to=19787299472, text=PrintWithPrefix: 5 greetings] 
+sndr-1      | 2025-05-13 15:02:02,516 INFO  [] [pool-1-thread-6] com.enoughisasgoodasafeast.Sndr - Delivered Message[id=88267599-06e5-4a5d-b777-fbaf41294b8e, receivedAt=2025-05-13T19:02:02.439996792Z, type=MT, platform=BRBL, from=1234, to=19787299472, text=PrintWithPrefix: 5 greetings] 
+
+

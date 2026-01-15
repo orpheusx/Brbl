@@ -1,0 +1,4 @@
+#!/bin/zsh
+
+java -cp target/sndrRcvr-1.0-SNAPSHOT-jar-with-dependencies.jar com.enoughisasgoodasafeast.cli.BrblCli
+

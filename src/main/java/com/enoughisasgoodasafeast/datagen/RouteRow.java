@@ -12,6 +12,7 @@ package com.enoughisasgoodasafeast.datagen;
 // created_at      | timestamp with time zone |           | not null |
 // updated_at      | timestamp with time zone |           | not null |
 
+import com.enoughisasgoodasafeast.operator.CountryCode;
 import com.enoughisasgoodasafeast.operator.Platform;
 import com.enoughisasgoodasafeast.operator.RouteStatus;
 
@@ -54,7 +55,7 @@ public class RouteRow {
     public RouteRow(String channel, UUID defaultNodeId, UUID customerId) {
         this.id = UUID.randomUUID();
         this.platform = Platform.SMS;
-        this.channel = channel;
+        this.channel = Functions.adjustPlatformId(CountryCode.US, channel);
         this.defaultNodeId = defaultNodeId;
         this.customerId = customerId;
         this.status = RouteStatus.ACTIVE;

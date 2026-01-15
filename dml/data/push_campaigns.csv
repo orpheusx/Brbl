@@ -1,0 +1,3 @@
+pid,customer_id,description,script_id,created_at,updated_at,completed_at
+eb7aa81a-b314-420c-8f3d-df4755faa9bb,762a353b-0597-0a15-b57d-389b21686463,A test campaign that delivers the MachaCupcake poll.,ffbcdde8-0e95-497b-9a9e-38934fb2d91f,2025-12-17 09:48:19.324436-05,2025-12-17 09:48:19.324436-05,
+95497de1-a092-430d-a37c-25ef35d7d208,762a353b-0597-0a15-b57d-389b21686463,Test campaign that asks many silly poll questions.,57313fde-4caa-424c-a902-5cae09219153,2025-12-17 10:22:27.825177-05,2025-12-17 10:22:27.825177-05,

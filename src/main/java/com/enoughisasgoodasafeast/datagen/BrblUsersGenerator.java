@@ -1,22 +1,17 @@
 package com.enoughisasgoodasafeast.datagen;
 
-import com.enoughisasgoodasafeast.operator.CountryCode;
 import com.enoughisasgoodasafeast.operator.CustomerStatus;
-import com.enoughisasgoodasafeast.operator.Platform;
 import com.enoughisasgoodasafeast.operator.UserStatus;
 import net.datafaker.Faker;
 import org.jeasy.random.EasyRandom;
 import org.jeasy.random.EasyRandomParameters;
 
 import java.io.IOException;
-import java.nio.charset.StandardCharsets;
-import java.nio.file.Files;
-import java.nio.file.Paths;
-import java.sql.Array;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Locale;
 
+import static com.enoughisasgoodasafeast.datagen.Functions.adjustPlatformId;
 import static java.io.IO.println;
 
 /**
@@ -300,20 +295,6 @@ public class BrblUsersGenerator {
         }
 
         return new DataSet(userRowsList, profileRowsList, customerRowsList, companiesRowsList, amalgamRowsList);
-    }
-
-    public static String convertPlatformId(String platformId) {
-        return platformId.replaceAll("[\\s\\-\\(\\)]", "");
-    }
-
-    public static String adjustPlatformId(CountryCode countryCode, String platformId) {
-        var mungedPlatformId = convertPlatformId(platformId);
-        if(countryCode == CountryCode.MX) {
-            mungedPlatformId = "52" + platformId;
-        } else {
-            mungedPlatformId = "1" + platformId;
-        }
-        return mungedPlatformId;
     }
 
     private static String doubleSingleQuotes(String word) {
