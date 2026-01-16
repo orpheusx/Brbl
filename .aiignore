@@ -1,0 +1,15 @@
+**/*.md
+**/*.java
+**/*.properties
+**/*.sql
+**/*.ddl
+**/*.dml
+**/*.sh
+**/*.sql.zst
+**/*.json
+**/*.txt
+**/Dockerfile*
+**/*.zst
+**/*.ser
+**/*.yaml
+**/*.xml
