@@ -2850,3 +2850,17 @@ pg_dump -d brbl_db_dev --schema-only > brbl_db_schema_20260115.ddl
 
 NOTE: this ends up including the pgroll schema and all its associated parts (indexes, triggers, etc.)
 
+
+===== 2026-01-16 ====
+
+Read some interesting comparisons of Clickhouse and DuckDB. Both are high performance OLAP tools.
+Sounds like the latter would be more appropriate (read cheap) for us. Assuming that we need to go outside Postgres at all.
+
+Did the work to replace the use of the JDK standard UUID class to use a UUIDv7 implementation by the team that builds Jackson.
+We create a single instance of TimeBasedEpochRandomGenerator and call it from a wrapping static function:
+
+    public static UUID randomUUID() {
+        TimeBasedEpochRandomGenerator gen = Generators.timeBasedEpochRandomGenerator();
+        return gen.generate();
+    }
+

@@ -20,6 +20,9 @@ import java.time.Instant;
 import java.util.StringJoiner;
 import java.util.UUID;
 
+import static com.enoughisasgoodasafeast.Functions.randomUUID;
+import static io.jenetics.util.NanoClock.utcInstant;
+
 public class ScriptRow {
 
     public static final String INSERT_SQL = """
@@ -43,27 +46,15 @@ public class ScriptRow {
     Instant updatedAt;
 
     public ScriptRow(String name, String description, UUID customerId, UUID nodeId) {
-        this.id = UUID.randomUUID();
+        this.id = randomUUID();
         this.name = name;
         this.description = description;
         this.customerId = customerId;
         this.nodeId = nodeId;
         this.status = ScriptStatus.PROD;
         this.language = LanguageCode.ENG;
-        this.createdAt = Instant.now();
-        this.updatedAt = Instant.now();
-    }
-
-    public ScriptRow(UUID id, String name, String description, UUID customerId, UUID nodeId, ScriptStatus status, LanguageCode language, Instant createdAt, Instant updatedAt) {
-        this.id = id;
-        this.name = name;
-        this.description = description;
-        this.customerId = customerId;
-        this.nodeId = nodeId;
-        this.status = status;
-        this.language = language;
-        this.createdAt = createdAt;
-        this.updatedAt = updatedAt;
+        this.createdAt = utcInstant();
+        this.updatedAt = utcInstant();
     }
 
     String getValuesSql() {

@@ -1,13 +1,13 @@
 package com.enoughisasgoodasafeast.operator;
 
-import com.enoughisasgoodasafeast.Message;
-
+import org.jspecify.annotations.NonNull;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
-import java.io.IOException;
 import java.io.Serializable;
 import java.util.*;
+
+import static com.enoughisasgoodasafeast.Functions.randomUUID;
 
 /**
  * The instructions for processing a message.
@@ -24,7 +24,7 @@ public record Node(UUID id, String text, NodeType type, SequencedSet<Edge> edges
 
     public Node {
         if (id == null) {
-            id = UUID.randomUUID();
+            id = randomUUID();
         }
         if (text == null || text.isEmpty()) {
             throw new IllegalArgumentException("text cannot be null or empty.");
@@ -40,7 +40,7 @@ public record Node(UUID id, String text, NodeType type, SequencedSet<Edge> edges
     }
 
     public Node(String text, NodeType type, SequencedSet<Edge> edges, String label) {
-        this(UUID.randomUUID(), text, type, edges, label);
+        this(randomUUID(), text, type, edges, label);
     }
 
     public Node(UUID id, String text, NodeType type) {
@@ -97,7 +97,7 @@ public record Node(UUID id, String text, NodeType type, SequencedSet<Edge> edges
     }
 
     @Override
-    public String toString() {
+    public @NonNull String toString() {
         return new StringJoiner(", ", Node.class.getSimpleName() + "[", "]")
                 .add("id=" + id)
                 .add("text='" + text + "'")

@@ -1,8 +1,10 @@
 package com.enoughisasgoodasafeast.operator;
 
-import java.io.IO;
 import java.time.Instant;
 import java.util.UUID;
+
+import static com.enoughisasgoodasafeast.Functions.randomUUID;
+import static io.jenetics.util.NanoClock.*;
 
 /*
                             Table "brbl_users.profiles"
@@ -33,8 +35,8 @@ import java.util.UUID;
 public record Profile(UUID id, String surname, String givenName, String otherLanguages, Instant createdAt, Instant updatedAt) {
 
     public Profile(String surname, String givenName, String otherLanguages) {
-        var now = Instant.now();
-        this(UUID.randomUUID(), surname, givenName, otherLanguages, now, now);
+        var now = utcInstant();
+        this(randomUUID(), surname, givenName, otherLanguages, now, now);
     }
 }
 

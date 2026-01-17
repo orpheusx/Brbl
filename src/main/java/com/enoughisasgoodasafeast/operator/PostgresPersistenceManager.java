@@ -3,7 +3,6 @@ package com.enoughisasgoodasafeast.operator;
 import com.enoughisasgoodasafeast.ConfigLoader;
 import com.enoughisasgoodasafeast.Message;
 import com.mchange.v2.c3p0.ComboPooledDataSource;
-import io.jenetics.util.NanoClock;
 import org.jspecify.annotations.NonNull;
 import org.jspecify.annotations.Nullable;
 import org.slf4j.Logger;
@@ -18,6 +17,7 @@ import java.util.regex.Pattern;
 
 import static com.enoughisasgoodasafeast.operator.SessionSerde.bytesToSession;
 import static com.enoughisasgoodasafeast.operator.SessionSerde.sessionToBytes;
+import static io.jenetics.util.NanoClock.utcInstant;
 import static java.sql.Types.*;
 
 public class PostgresPersistenceManager implements PersistenceManager {
@@ -47,7 +47,7 @@ public class PostgresPersistenceManager implements PersistenceManager {
         }
 
         // Verify that the ConnectionPool is ready for action by triggering it to fill itself.
-        try (Connection poolInitingConnection = fetchConnection()) {
+        try (Connection _ = fetchConnection()) {
             LOG.info("Connection pool initialized");
         } catch (SQLException e) {
             throw new PersistenceManagerException("PostgresPersistenceManager startup error", e);
@@ -387,9 +387,9 @@ public class PostgresPersistenceManager implements PersistenceManager {
                     """;
 
     private Connection fetchConnection() throws SQLException {
-        //Instant before = NanoClock.utcInstant();
+        //Instant before = utcInstant();
         return pds.getConnection();
-        //Instant after = NanoClock.utcInstant();
+        //Instant after = utcInstant();
         //LOG.info("fetchConnection: b {} a {}: d {} ", before, after, Duration.between(before, after));
     }
 
@@ -408,7 +408,7 @@ public class PostgresPersistenceManager implements PersistenceManager {
     }
 
     private static boolean insertMO(Connection connection, Message message) {
-        //Instant before = NanoClock.utcInstant();
+        //Instant before = utcInstant();
         try (PreparedStatement ps = connection.prepareStatement(MO_MESSAGE_INSERT)) {
             Timestamp timestampFromInstant = Timestamp.from(message.receivedAt());
             ps.setObject(1, message.id());
@@ -422,37 +422,35 @@ public class PostgresPersistenceManager implements PersistenceManager {
             return false;
         }
 
-        //Instant after = NanoClock.utcInstant();
+        //Instant after = utcInstant();
         //LOG.info("insertMO: b {} a {}: d {} ", before, after, Duration.between(before, after));
         return true;
     }
 
     // Batch mode is definitely slower for single element lists of Messages
-    private static boolean insertMO(Connection connection, List<Message> messages) {
-        //Instant before = NanoClock.utcInstant();
-        try (PreparedStatement ps = connection.prepareStatement(MO_MESSAGE_INSERT)) {
-            for (Message message : messages) {
-                Timestamp timestampFromInstant = Timestamp.from(message.receivedAt());
-                ps.setObject(1, message.id());
-                ps.setTimestamp(2, timestampFromInstant);
-                ps.setString(3, message.from());
-                ps.setString(4, message.to());
-                ps.setString(5, message.text());
-
-                ps.addBatch();
-            }
-
-            ps.executeBatch();
-
-        } catch (SQLException e) {
-            LOG.error("insertMOs failed", e);
-            return false;
-        }
-
-        //Instant after = NanoClock.utcInstant();
-        //LOG.info("insertMO<List>: b {} a {}: d {} ", before, after, Duration.between(before, after));
-        return true;
-    }
+    //    private static boolean insertMO(Connection connection, List<Message> messages) {
+    //        //Instant before = utcInstant();
+    //        try (PreparedStatement ps = connection.prepareStatement(MO_MESSAGE_INSERT)) {
+    //            for (Message message : messages) {
+    //                Timestamp timestampFromInstant = Timestamp.from(message.receivedAt());
+    //                ps.setObject(1, message.id());
+    //                ps.setTimestamp(2, timestampFromInstant);
+    //                ps.setString(3, message.from());
+    //                ps.setString(4, message.to());
+    //                ps.setString(5, message.text());
+    //
+    //                ps.addBatch();
+    //            }
+    //
+    //            ps.executeBatch();
+    //
+    //        } catch (SQLException e) {
+    //            LOG.error("insertMOs failed", e);
+    //            return false;
+    //        }
+    //
+    //        return true;
+    //    }
 
     //---------------------------------- MO metadata -----------------------------
 
@@ -468,10 +466,10 @@ public class PostgresPersistenceManager implements PersistenceManager {
     }
 
     private static boolean insertProcessedMO(Connection connection, Message message, Session session) {
-        //Instant before = NanoClock.utcInstant();
+        //Instant before = utcInstant();
         try (PreparedStatement ps = connection.prepareStatement(MO_MESSAGE_PRCD)) {
             ps.setObject(1, message.id());                              // id
-            ps.setTimestamp(2, Timestamp.from(Instant.now()));          // prcd_at
+            ps.setTimestamp(2, Timestamp.from(utcInstant()));          // prcd_at
             ps.setObject(3, session.getId());                           // session_id
             ps.setObject(4, session.getScriptForProcessedMO().id());    // script_id
             ps.execute();
@@ -479,7 +477,7 @@ public class PostgresPersistenceManager implements PersistenceManager {
             LOG.error("insertProcessedMO failed", e);
             return false;
         }
-        /*Instant after = NanoClock.utcInstant();
+        /*Instant after = utcInstant();
          *LOG.info("insertProcessedMO: b {} a {}: d {} ", before, after, Duration.between(before, after)); */
         return true;
     }
@@ -510,7 +508,7 @@ public class PostgresPersistenceManager implements PersistenceManager {
     //    }
 
     private static boolean insertMT(Connection connection, Message message, Session session) {
-        //Instant before = NanoClock.utcInstant();
+        //Instant before = utcInstant();
         try (PreparedStatement ps = connection.prepareStatement(MT_MESSAGE_INSERT)) {
             ps.setObject(1, message.id());                              // id
             ps.setTimestamp(2, Timestamp.from(message.receivedAt()));   // sent_at
@@ -524,14 +522,14 @@ public class PostgresPersistenceManager implements PersistenceManager {
             LOG.error("insertMT failed", e);
             return false;
         }
-        //Instant after = NanoClock.utcInstant();
+        //Instant after = utcInstant();
         //LOG.info("insertMT: b {} a {}: d {} ", before, after, Duration.between(before, after));
         return true;
     }
 
     // As with MOs, batch mode is definitely slower for single element lists of Messages
     //    private static boolean insertMTs(Connection connection, List<Message> messages, Session session) {
-    //        Instant before = NanoClock.utcInstant();
+    //        Instant before = utcInstant();
     //        try (PreparedStatement ps = connection.prepareStatement(MT_MESSAGE_INSERT)) {
     //            for (Message message : messages) {
     //                ps.setObject(1, message.id());                              // id
@@ -550,7 +548,7 @@ public class PostgresPersistenceManager implements PersistenceManager {
     //            LOG.error("insertMTs failed", e);
     //            return false;
     //        }
-    //        Instant after = NanoClock.utcInstant();
+    //        Instant after = utcInstant();
     //        LOG.info("insertMTs<List>: b {} a {}: d {} ", before, after, Duration.between(before, after));
     //        return true;
     //    }
@@ -569,10 +567,10 @@ public class PostgresPersistenceManager implements PersistenceManager {
     }
 
     private static boolean insertDeliveredMT(Connection connection, Message message) {
-        //Instant before = NanoClock.utcInstant();
+        //Instant before = utcInstant();
         try (PreparedStatement ps = connection.prepareStatement(MT_MESSAGE_DLVR)) {
             ps.setObject(1, message.id());                              // id
-            ps.setTimestamp(2, Timestamp.from(NanoClock.utcInstant())); // dlvr_at
+            ps.setTimestamp(2, Timestamp.from(utcInstant())); // dlvr_at
 
             ps.execute();
 
@@ -581,7 +579,7 @@ public class PostgresPersistenceManager implements PersistenceManager {
             return false;
         }
 
-        //Instant after = NanoClock.utcInstant();
+        //Instant after = utcInstant();
         //LOG.info("insertDeliveredMT: b {} a {}: d {} ", before, after, Duration.between(before, after));
         return true;
     }
@@ -931,7 +929,7 @@ public class PostgresPersistenceManager implements PersistenceManager {
 
             final ResultSet rs = ps.executeQuery();
 
-            UUID id = null; //UUID.randomUUID();
+            UUID id = null;
             UUID groupId = null;
             String country = "US";
             String nickName;
@@ -1032,7 +1030,7 @@ public class PostgresPersistenceManager implements PersistenceManager {
 
         final Map.Entry<Platform, String> onlyPlatform = user.platformIds().entrySet().iterator().next();
         final Map.Entry<Platform, UserStatus> onlyStatus = user.platformStatus().entrySet().iterator().next();
-        Instant createdAt = NanoClock.utcInstant();
+        Instant createdAt = utcInstant();
         final Profile profile = user.profile();
 
         try (PreparedStatement ps = connection.prepareStatement(USER_AMALGAM_INSERT)) {
@@ -1065,7 +1063,7 @@ public class PostgresPersistenceManager implements PersistenceManager {
 //        int numOfPlatforms = user.platformIds().size();
 //        assert numOfPlatforms == 1;
 //        final Map.Entry<Platform, String> onlyPlatform = user.platformIds().entrySet().iterator().next();
-//        Instant createdAt = NanoClock.utcInstant();
+//        Instant createdAt = utcInstant();
 //
 //        LOG.info("insertUser: {}", user);
 //
@@ -1204,7 +1202,7 @@ public class PostgresPersistenceManager implements PersistenceManager {
         }
     }
 
-    static void main(String[] args) throws IOException, PersistenceManagerException {
+    static void main() throws IOException, PersistenceManagerException {
         PostgresPersistenceManager pm = new PostgresPersistenceManager(ConfigLoader.readConfig("persistence_manager_test.properties"));
         //var routes = pm.getActiveRoutes();
         //for (var route : routes) {

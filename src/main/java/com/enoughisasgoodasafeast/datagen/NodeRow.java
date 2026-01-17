@@ -5,7 +5,9 @@ import java.util.Objects;
 import java.util.StringJoiner;
 import java.util.UUID;
 
+import static com.enoughisasgoodasafeast.Functions.randomUUID;
 import static com.enoughisasgoodasafeast.operator.NodeType.PresentMulti;
+import static io.jenetics.util.NanoClock.utcInstant;
 import static java.lang.Math.min;
 
 public class NodeRow {
@@ -36,8 +38,8 @@ public class NodeRow {
 
     public NodeRow(String text) {
         var ctext = text.replaceAll("'", "''");
-        this.id = UUID.randomUUID();
-        this.createdAt = Instant.now();
+        this.id = randomUUID();
+        this.createdAt = utcInstant();
         this.text = ctext;
         this.type = PresentMulti.ordinal();
         int start = min(7, ctext.length());

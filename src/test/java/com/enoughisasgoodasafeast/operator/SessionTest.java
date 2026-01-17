@@ -11,6 +11,7 @@ import java.util.ArrayList;
 import java.util.List;
 import java.util.UUID;
 
+import static com.enoughisasgoodasafeast.Functions.randomUUID;
 import static com.enoughisasgoodasafeast.operator.NodeType.*;
 import static com.enoughisasgoodasafeast.operator.Session.MAX_INPUT_HISTORY;
 import static com.enoughisasgoodasafeast.operator.UserTest.*;
@@ -30,9 +31,9 @@ public class SessionTest {
             String FROM = "11234567890";
             String TO = "12345";
             Session session = new Session(
-                    UUID.randomUUID(),
+                    randomUUID(),
                     new Node("do nothing", EchoWithPrefix, null),
-                    new User(UUID.randomUUID(), UUID.randomUUID(), platformIds, platformsCreated, countryCode, languages, customerId, userNickNames, null, platformStatuses),
+                    new User(randomUUID(), randomUUID(), platformIds, platformsCreated, countryCode, languages, customerId, userNickNames, null, platformStatuses),
                     new InMemoryQueueProducer(),
                     null);
             int numElements = MAX_INPUT_HISTORY + 1;
@@ -67,9 +68,9 @@ public class SessionTest {
                 String FROM = "11234567890";
                 String TO = "12345";
                 Session session = newSession()/*new Session(
-                        UUID.randomUUID(),
+                        Functions.randomUUID(),
                         new Node("The quick brown fox jumps over the lazy dog.", NodeType.SendMessage, "A test Node"), // TODO attach Edges
-                        new User(UUID.randomUUID(), platformIds, platformsCreated, countryCode, languages),
+                        new User(Functions.randomUUID(), platformIds, platformsCreated, countryCode, languages),
                         new InMemoryQueueProducer(),
                         null)*/;
                 for (int j = 0; j < numMessages; j++) {
@@ -97,6 +98,8 @@ public class SessionTest {
             LOG.info("Deserialization time = {}", (currentTimeMillis() - start));
             // Anecdotally on M1 the times are around 10 and 11 respectively.
 
+            assertEquals(sessions.size(), deserializedSessions.size());
+
             fis.close();
 
             final long size = Files.size(file.toPath());
@@ -122,9 +125,9 @@ public class SessionTest {
 //                String FROM = "11234567890";
 //                String TO = "12345";
 //                Session session = newSession()/*new Session(
-//                        UUID.randomUUID(),
+//                        Functions.randomUUID(),
 //                        new Node("The quick brown fox jumps over the lazy dog.", NodeType.SendMessage, "A test Node"), // TODO attach Edges
-//                        new User(UUID.randomUUID(), platformIds, platformsCreated, countryCode, languages),
+//                        new User(Functions.randomUUID(), platformIds, platformsCreated, countryCode, languages),
 //                        new InMemoryQueueProducer(),
 //                        null)*/;
 //                for (int j = 0; j < numMessages; j++) {
@@ -144,7 +147,7 @@ public class SessionTest {
 //                    // .withIntCompressed(true)
 //                    // compress long for smaller size
 //                    // .withLongCompressed(true)
-////                    .withCompatibleMode(CompatibleMode.SCHEMA_CONSISTENT)
+//                   //  .withCompatibleMode(CompatibleMode.SCHEMA_CONSISTENT)
 //                    // enable type forward/backward compatibility
 //                    // disable it for small size and better performance.
 //                    // .withCompatibleMode(CompatibleMode.COMPATIBLE)
@@ -193,14 +196,14 @@ public class SessionTest {
 //    }
 
     private Session newSession() {
-        return newSession(UUID.randomUUID());
+        return newSession(randomUUID());
     }
 
     private Session newSession(UUID id) {
         return new Session(
                 id,
                 new Node("The quick brown fox jumps over the lazy dog.", NodeType.SendMessage, "A test Node"),
-                new User(UUID.randomUUID(), UUID.randomUUID(), platformIds, platformsCreated, countryCode, languages, customerId, userNickNames, null, platformStatuses),
+                new User(randomUUID(), randomUUID(), platformIds, platformsCreated, countryCode, languages, customerId, userNickNames, null, platformStatuses),
                 queueProducer,
                 persistenceManager);
     }
@@ -253,7 +256,7 @@ public class SessionTest {
             PostgresPersistenceManager ppm = (PostgresPersistenceManager) PostgresPersistenceManager.createPersistenceManager(
                     ConfigLoader.readConfig("persistence_manager_test.properties"));
 
-            final UUID sessionId = UUID.randomUUID();
+            final UUID sessionId = randomUUID();
 
             // FIXME add the new method to the interface so the cast isn't needed.
             final Session session = newSession(sessionId);

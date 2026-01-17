@@ -1,7 +1,11 @@
 package com.enoughisasgoodasafeast.operator;
 
+
 import java.time.Instant;
 import java.util.UUID;
+
+import static com.enoughisasgoodasafeast.Functions.randomUUID;
+import static io.jenetics.util.NanoClock.*;
 
 public record Route(UUID id,
                     Platform platform,
@@ -13,6 +17,6 @@ public record Route(UUID id,
                     Instant updated_at) {
 
     public Route(Platform platform, String channel, UUID default_node_id, UUID customer_id) {
-        this(UUID.randomUUID(), platform, channel, default_node_id, customer_id, RouteStatus.REQUESTED, Instant.now(), Instant.now());
+        this(randomUUID(), platform, channel, default_node_id, customer_id, RouteStatus.REQUESTED, utcInstant(), utcInstant());
     }
 }

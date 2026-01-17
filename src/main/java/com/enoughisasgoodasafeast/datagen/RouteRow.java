@@ -20,6 +20,9 @@ import java.time.Instant;
 import java.util.StringJoiner;
 import java.util.UUID;
 
+import static com.enoughisasgoodasafeast.Functions.randomUUID;
+import static io.jenetics.util.NanoClock.*;
+
 public class RouteRow {
 
     public static final String INSERT_SQL = """
@@ -41,26 +44,15 @@ public class RouteRow {
     Instant createdAt;
     Instant updatedAt;
 
-    public RouteRow(UUID id, Platform platform, String channel, UUID defaultNodeId, UUID customerId, RouteStatus status, Instant createdAt, Instant updatedAt) {
-        this.id = id;
-        this.platform = platform;
-        this.channel = channel;
-        this.defaultNodeId = defaultNodeId;
-        this.customerId = customerId;
-        this.status = status;
-        this.createdAt = createdAt;
-        this.updatedAt = updatedAt;
-    }
-
     public RouteRow(String channel, UUID defaultNodeId, UUID customerId) {
-        this.id = UUID.randomUUID();
+        this.id = randomUUID();
         this.platform = Platform.SMS;
         this.channel = Functions.adjustPlatformId(CountryCode.US, channel);
         this.defaultNodeId = defaultNodeId;
         this.customerId = customerId;
         this.status = RouteStatus.ACTIVE;
-        this.createdAt = Instant.now();
-        this.updatedAt = Instant.now();
+        this.createdAt = utcInstant();
+        this.updatedAt = utcInstant();
     }
 
     String getValuesSql() {

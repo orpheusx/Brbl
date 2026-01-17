@@ -12,6 +12,7 @@ import java.time.Instant;
 import java.util.Random;
 import java.util.UUID;
 
+import static io.jenetics.util.NanoClock.*;
 import static org.junit.jupiter.api.Assertions.*;
 
 /**
@@ -68,7 +69,7 @@ class OperatorPersistenceIntegrationTest {
 
     @Test
     void findOrCreateUser() {
-        Instant before = Instant.now();
+        Instant before = utcInstant();
         SessionKey unknown = new SessionKey(Platform.SMS, randomUserNumber(), "119839196677", "keyword");
         final User createdUser = op.findOrCreateUser(unknown);
         assertNotNull(createdUser);

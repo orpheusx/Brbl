@@ -2,7 +2,6 @@ package com.enoughisasgoodasafeast.operator;
 
 import com.enoughisasgoodasafeast.Message;
 import com.enoughisasgoodasafeast.QueueProducer;
-import io.jenetics.util.NanoClock;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -11,6 +10,8 @@ import java.io.Serial;
 import java.io.Serializable;
 import java.time.Instant;
 import java.util.*;
+
+import static io.jenetics.util.NanoClock.utcInstant;
 
 /**
  * The Session tracks and persists state for a single User interaction with Brbl's runtime.
@@ -61,7 +62,7 @@ public class Session implements ScriptContext, Serializable {
      * @param persistenceManager the object that writes artifacts created for this Session
      */
     public Session(UUID id, Node currentNode, User user, QueueProducer producer, PersistenceManager persistenceManager) {
-        this.startTimeNanos = NanoClock.utcInstant();
+        this.startTimeNanos = utcInstant();
         this.lastUpdatedNanos = startTimeNanos;
         this.id = Objects.requireNonNull(id);
         this.currentNode = Objects.requireNonNull(currentNode);
@@ -154,11 +155,11 @@ public class Session implements ScriptContext, Serializable {
     public void flush() throws IOException {
         int numInBuffer = outputBuffer.size();
         LOG.info("flushOutput: outputBuffer size = {}", numInBuffer);
-        Message mtMessage = null;
+        Message mtMessage;
         while((mtMessage = outputBuffer.poll()) !=null) {
             producer.enqueue(mtMessage);
             if (!persistenceManager.insertMT(mtMessage, this)) {
-                throw new IOException("MT write failed for: " + mtMessage.toString());
+                throw new IOException("MT write failed for: " + mtMessage);
             }
         }
 
@@ -182,7 +183,7 @@ public class Session implements ScriptContext, Serializable {
     }
 
     public void sessionUpdated() {
-        lastUpdatedNanos = NanoClock.utcInstant();
+        lastUpdatedNanos = utcInstant();
     }
 
     public User getUser() {

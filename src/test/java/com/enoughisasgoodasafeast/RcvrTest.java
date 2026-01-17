@@ -7,6 +7,8 @@ import org.junit.jupiter.api.Test;
 import java.time.Instant;
 import java.time.ZoneId;
 
+import static io.jenetics.util.NanoClock.utcInstant;
+
 public class RcvrTest {
 
     @Test
@@ -16,13 +18,13 @@ public class RcvrTest {
     }
 
 
-    public static void main(/*String[] args*/) /*throws UnknownHostException*/ {
+    static void main(/*String[] args*/) /*throws UnknownHostException*/ {
 //        InetAddress localhost = InetAddress.getLocalHost();
 //        String ipAddress = localhost.getHostAddress();
 //        System.out.println("ipAddress=" + ipAddress);
 //        long nanos = 1675080820000000000L; // Example nanoseconds since epoch
 //
-        final Instant instantUtc = NanoClock.utcInstant();
+        final Instant instantUtc = utcInstant();
         final Instant instantEDT = NanoClock.system(ZoneId.of("America/New_York")).instant();
 //
         System.out.println(instantUtc);

@@ -9,6 +9,8 @@ import java.util.List;
 import java.util.Map;
 import java.util.UUID;
 
+import static com.enoughisasgoodasafeast.Functions.randomUUID;
+
 /**
  * A User lives in a single country but may speak multiple languages.
  * They may be identified differently by the Platforms they use to communicate.
@@ -97,7 +99,7 @@ public record User(
     // Convenience constructor.
     // TODO Create a countryCode enum class, matching our schema type already defines (US, CA, MX)
     public User(Map<Platform, String> platformIds, Map<Platform, Instant> platformCreationTimes, List<String> languages, UUID customerId, Map<Platform, UserStatus> platformStatus) {
-        this(UUID.randomUUID(), UUID.randomUUID(), platformIds, platformCreationTimes, "US", languages, customerId, Map.of(), null, platformStatus);
+        this(randomUUID(), randomUUID(), platformIds, platformCreationTimes, "US", languages, customerId, Map.of(), null, platformStatus);
     }
 
     void fail(String message) {

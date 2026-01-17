@@ -2,32 +2,30 @@ package com.enoughisasgoodasafeast.operator;
 
 import java.util.UUID;
 
+import static com.enoughisasgoodasafeast.Functions.randomUUID;
 import static com.enoughisasgoodasafeast.SharedConstants.*;
 
 /**
- * This is just a placeholder for the moment that illustrates how we might use
- * composition of records usefully. The backing table would, presumably, be joined
- * with the User table, enabling a Customer to seamlessly work like a User.
+ * A Customer represents a registered, paying user of Brbl.
+ * It is built on top of a Profile which is built on top of a User.
+ * It
  *
  * @param user
  * @param profile
  * @param companyName optional
  */
-public record Customer(UUID id, User user, Profile profile, /*String firstName, String surname,*/ String companyName) {
+public record Customer(UUID id, User user, Profile profile, String companyName) {
 
     public Customer {
         if (id == null) {
-            id = UUID.randomUUID();
+            id = randomUUID();
         }
         if (user == null) {
-            fail("user cannot be null");
+            throw new IllegalArgumentException("user cannot be null");
         }
         if (companyName == null || companyName.isEmpty()) {
             companyName = NO_COMPANY;
         }
     }
 
-    void fail(String message) {
-        throw new IllegalArgumentException(message);
-    }
 }

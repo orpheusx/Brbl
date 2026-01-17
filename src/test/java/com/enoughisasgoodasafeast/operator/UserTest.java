@@ -6,13 +6,14 @@ import org.junit.jupiter.api.Test;
 import java.time.Instant;
 import java.util.*;
 
+import static com.enoughisasgoodasafeast.Functions.randomUUID;
 import static org.junit.jupiter.api.Assertions.*;
 
 public class UserTest {
 
-    final static UUID id = UUID.randomUUID();
-    final static UUID groupId = UUID.randomUUID();
-    final static UUID customerId = UUID.randomUUID();
+    final static UUID id = randomUUID();
+    final static UUID groupId = randomUUID();
+    final static UUID customerId = randomUUID();
     final static Map<Platform, String> platformIds = new HashMap<>();
     final static Map<Platform, Instant> platformsCreated = new LinkedHashMap<>();
     final static Map<Platform, String> userNickNames = new LinkedHashMap<>();

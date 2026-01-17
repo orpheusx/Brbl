@@ -4,6 +4,8 @@ import java.io.Serializable;
 import java.util.List;
 import java.util.UUID;
 
+import static com.enoughisasgoodasafeast.Functions.randomUUID;
+
 /**
  *
  * @param id
@@ -14,11 +16,11 @@ import java.util.UUID;
 public record Edge(UUID id, String text, List<String> matchText, Node targetNode) implements Serializable {
 
     public Edge(List<String> matchText, Node node) {
-        this(UUID.randomUUID(), null, matchText, node);
+        this(randomUUID(), null, matchText, node);
     }
 
     public Edge(List<String> matchText, String text, Node targetNode) {
-        this(UUID.randomUUID(), text, matchText, targetNode);
+        this(randomUUID(), text, matchText, targetNode);
     }
 
     public Edge(UUID id, List<String> matchText, String text) {

@@ -1,7 +1,6 @@
 package com.enoughisasgoodasafeast.operator;
 
 import com.enoughisasgoodasafeast.*;
-import io.jenetics.util.NanoClock;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.slf4j.Logger;
@@ -10,11 +9,12 @@ import org.slf4j.LoggerFactory;
 import java.time.Instant;
 import java.util.List;
 import java.util.Map;
-import java.util.UUID;
 import java.util.regex.Pattern;
 
+import static com.enoughisasgoodasafeast.Functions.randomUUID;
 import static com.enoughisasgoodasafeast.Message.newMO;
 import static com.enoughisasgoodasafeast.Message.newMT;
+import static io.jenetics.util.NanoClock.utcInstant;
 import static java.util.Objects.requireNonNull;
 import static org.junit.jupiter.api.Assertions.*;
 
@@ -100,7 +100,7 @@ public class OperatorTest {
 
         // Define a default script for the platform-channel, adding it with the default route.
         Node defaultScript = new Node("Welcome! You can talk to us about the following topics...", NodeType.EndOfChat, "CustomerTopicStarter");
-        Route route = new Route(Platform.SMS, mo1.to(), defaultScript.id(), UUID.randomUUID());
+        Route route = new Route(Platform.SMS, mo1.to(), defaultScript.id(), randomUUID());
         operator.activeRoutesCache.put(
                 Operator.ALL,
                 List.of(route).toArray(new Route[0]));
@@ -371,7 +371,7 @@ public class OperatorTest {
         assertDoesNotThrow(() -> {
             var op = new Operator(new FakeQueueConsumer(), new InMemoryQueueProducer(), new TestingPersistenceManager());
 
-            Instant beforeUserCreate = NanoClock.utcInstant(); // use the same timestamp method for comparison.
+            Instant beforeUserCreate = utcInstant(); // use the same timestamp method for comparison.
             assertEquals(0, op.userCache.estimatedSize());
 
             User uncachedUser = op.userCache.get(SESSION_KEY_US_SHORT_CODE_1);

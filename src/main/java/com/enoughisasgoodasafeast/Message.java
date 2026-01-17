@@ -1,11 +1,13 @@
 package com.enoughisasgoodasafeast;
 
 import com.enoughisasgoodasafeast.operator.Platform;
-import io.jenetics.util.NanoClock;
 
 import java.io.*;
 import java.time.Instant;
 import java.util.UUID;
+
+import static com.enoughisasgoodasafeast.Functions.randomUUID;
+import static io.jenetics.util.NanoClock.*;
 
 /**
  * A message received by the platform.
@@ -27,11 +29,11 @@ public record Message(UUID id, Instant receivedAt, MessageType type, Platform pl
     }
 
     public Message(MessageType type, String from, String to, String text) {
-        this(UUID.randomUUID(), NanoClock.utcInstant(), type, Platform.SMS, from, to, text);
+        this(randomUUID(), utcInstant(), type, Platform.SMS, from, to, text);
     }
 
     public Message(MessageType type, Platform platform, String from, String to, String text) {
-        this(UUID.randomUUID(), NanoClock.utcInstant(), type, platform, from, to, text);
+        this(randomUUID(), utcInstant(), type, platform, from, to, text);
     }
 
     // Seems like the place for these methods.

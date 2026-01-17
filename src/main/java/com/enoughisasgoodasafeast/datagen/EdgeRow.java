@@ -4,6 +4,9 @@ import java.time.Instant;
 import java.util.StringJoiner;
 import java.util.UUID;
 
+import static com.enoughisasgoodasafeast.Functions.randomUUID;
+import static io.jenetics.util.NanoClock.utcInstant;
+
 public class EdgeRow {
     //id            | uuid
     //created_at    | timestamp with time zone
@@ -32,8 +35,8 @@ public class EdgeRow {
 
     public EdgeRow(String responseText) {
         responseText = responseText.replace("'", "''");
-        this.id = UUID.randomUUID();
-        this.createdAt = Instant.now();
+        this.id = randomUUID();
+        this.createdAt = utcInstant();
         this.matchText = responseText.substring(0, Math.min(responseText.length(), 10));
         this.responseText = responseText;
         this.updatedAt = this.createdAt;

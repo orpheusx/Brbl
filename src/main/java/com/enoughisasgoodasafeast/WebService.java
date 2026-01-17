@@ -1,7 +1,8 @@
 package com.enoughisasgoodasafeast;
 
 import org.slf4j.MDC;
-import java.util.UUID;
+
+import static com.enoughisasgoodasafeast.Functions.randomUUID;
 import static com.enoughisasgoodasafeast.SharedConstants.INSTANCE_ID;
 
 /**
@@ -10,7 +11,7 @@ import static com.enoughisasgoodasafeast.SharedConstants.INSTANCE_ID;
 public abstract class WebService {
 
     static {
-        MDC.put(INSTANCE_ID, UUID.randomUUID().toString());
+        MDC.put(INSTANCE_ID, randomUUID().toString());
     }
 
 }

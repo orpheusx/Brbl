@@ -70,7 +70,61 @@ FROM step_one s1, step_two s2, my_data m
 Clever :-)
 
 
--- Using temp tables
+-- Creating temp tables as a clone of an existing table:
 CREATE TEMP TABLE temp_users (LIKE users); --> creates a temp table with the same schema as the table referenced by the LIKE clause.
+-- NOTE: Remove the TEMP and the same creates a permanent table
 
+
+-- I needed to bone up on SQL window functions and thought it would be good to put a note here
+-- She asked the following question with given sample data.
+-- Write a SQL query to return the count of users who has the status 'Registered' as of end of day 2025-01-08
+
+CREATE TABLE status_change_log
+(
+    user_id INT,
+    updated_at TIMESTAMP,
+    status VARCHAR(50)
+);
+
+insert into status_change_log
+    (userid,  updated_at,      status)
+values
+    (1234567, '2025-01-01 04:00:00', 'Enrolled'),
+    (1234567, '2025-01-08 13:00:00', 'Registered'),
+    (1234567, '2025-01-08 14:00:00', 'Canceled'),
+    (1234567, '2025-01-09 13:00:00', 'Registered'),
+    (1234567, '2025-01-15 18:00:00', 'Completed'),
+    (8675309, '2025-01-03 04:00:00', 'Enrolled'),
+    (8675309, '2025-01-03 05:00:00', 'Canceled'),
+    (8675309, '2025-01-03 06:00:00', 'Enrolled'),
+    (8675309, '2025-01-05 08:00:00', 'Registered'),
+    (8675309, '2025-01-20 18:00:00', 'Completed'),
+    (9876543, '2025-01-04 04:00:00', 'Registered'),
+    (9876543, '2025-01-14 10:00:00', 'Paused'),
+    (9876543, '2025-01-17 10:00:00', 'Registered'),
+    (9876543, '2025-01-18 22:00:00', 'Complete'),
+    (1001001, '2025-01-04 04:00:00', 'Enrolled'),
+    (1001001, '2025-01-18 04:00:00', 'Registered')
+;
+
+SELECT count(*) FROM (
+    SELECT
+        user_id, updated_at, first_value(status)
+    OVER
+        (PARTITION by user_id ORDER BY updated_at DESC)
+    FROM
+        status_change_log
+    WHERE
+        status = 'Registered'
+        AND
+        updated_at < '2025-01-09'
+);
+
+Without the outer count, the results look like this:
+
+     user_id |      updated_at     | first_value
+    ---------+---------------------+-------------
+     1234567 | 2025-01-08 13:00:00 | Registered
+     8675309 | 2025-01-05 08:00:00 | Registered
+     9876543 | 2025-01-04 04:00:00 | Registered
 

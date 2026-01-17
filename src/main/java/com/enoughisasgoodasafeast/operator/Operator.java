@@ -4,7 +4,6 @@ import com.enoughisasgoodasafeast.*;
 import com.enoughisasgoodasafeast.operator.PersistenceManager.PersistenceManagerException;
 import com.github.benmanes.caffeine.cache.Caffeine;
 import com.github.benmanes.caffeine.cache.LoadingCache;
-import io.jenetics.util.NanoClock;
 import org.jspecify.annotations.Nullable;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -18,7 +17,9 @@ import java.util.regex.Pattern;
 
 import org.jspecify.annotations.NonNull;
 
+import static com.enoughisasgoodasafeast.Functions.randomUUID;
 import static com.enoughisasgoodasafeast.operator.Telecom.deriveCountryCodeFromId;
+import static io.jenetics.util.NanoClock.*;
 
 public class Operator implements MessageProcessor {
 
@@ -108,7 +109,7 @@ public class Operator implements MessageProcessor {
     }
 
     private boolean process(Session session, Message message) {
-        synchronized (session) {
+        synchronized (session) { // FIXME move the synchronization to caller where the session is created?
             try {
                 session.registerInput(message);
                 int size = session.currentInputsCount();
@@ -260,18 +261,17 @@ public class Operator implements MessageProcessor {
                 return null;
             } else {
                 return new Session(
-                        UUID.randomUUID(),
+                        randomUUID(),
                         script,
                         user.get(),
                         getQueueProducer(sessionKey.platform()),
                         persistenceManager);
             }
-            //            }
         }
     }
 
     private QueueProducer getQueueProducer(Platform platform) {
-        // We may need to add different handling for each Platform.
+        // We may need to add different handling for each Platform. Only one is used for now.
         return queueProducer;
     }
 
@@ -280,10 +280,10 @@ public class Operator implements MessageProcessor {
         if (user == null) {
             LOG.info("User not found.");
             user = new User(
-                    UUID.randomUUID(),
-                    UUID.randomUUID(),
+                    randomUUID(),
+                    randomUUID(),
                     Map.of(sessionKey.platform(), sessionKey.from()),
-                    Map.of(sessionKey.platform(), NanoClock.utcInstant()),
+                    Map.of(sessionKey.platform(), utcInstant()),
                     deriveCountryCodeFromId(sessionKey.from()),
                     defaultLanguageList(sessionKey.from(), sessionKey.to()),
                     findCustomerIdByRoute(sessionKey),
