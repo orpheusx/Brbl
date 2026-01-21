@@ -2704,7 +2704,7 @@ brbl_logs  . messages_mt
 brbl_logs  . messages_mt_dlvr
 
 NB:
-Super easy to store and load data from .csv files locally:
+It's super easy to store and load data from .csv files locally:
 
     \copy brbl_logic.nodes TO   'dml/nodes.csv' CSV HEADER ;
     \copy brbl_logic.nodes FROM 'dml/users.csv' CSV HEADER ;
@@ -2863,4 +2863,31 @@ We create a single instance of TimeBasedEpochRandomGenerator and call it from a 
         TimeBasedEpochRandomGenerator gen = Generators.timeBasedEpochRandomGenerator();
         return gen.generate();
     }
+
+
+===== 2026-01-19 ====
+Practicing my analytical SQL skills:
+-- Show the id of nodes that have the same value in the text column:
+SELECT
+    DISTINCT(n2.id), n1.text
+FROM
+    nodes n1, nodes n2
+WHERE
+    n1.text = n2.text
+    AND n1.id != n2.id
+ORDER BY n1.text, n2.id;
+
+While working on the Blaster (aka push messaging campaign logic) I added an outer join on SESSIONS so we don't need access to Operator's read-through cache.
+The data in the SESSIONS table is from before our big schema refactor and the generated data set doesn't relate to it. There's also no FK to the amalgams table.
+Deleted all the data in SESSIONS and went to added the missing FK to amalgams...
+
+NOTE: I tried to do this using pgroll but it's giving me grief.
+See ddl/migrations/0002_sessions_fk_to_amalgams.yaml
+Posted a question about it: https://github.com/xataio/pgroll/discussions/1016
+
+Doh, the problem is the group_id isn't a primary key on amalgams....dummy.
+I thought about this previously and realized we couldn't create an FK without duplicating most of the columns in amalgams.
+
+Still interested in knowing why pgroll was throwing that error, however.
+
 

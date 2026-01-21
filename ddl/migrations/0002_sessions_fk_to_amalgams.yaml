@@ -1,0 +1,11 @@
+operations:
+  - alter_column:
+      table: brbl_logic.sessions
+      column: group_id
+      references:
+        name: fk_sessions_group_id_amalgams_group_id
+        table: brbl_users.amalgams
+        column: group_id
+        on_delete: DELETE
+      up: group_id
+      down: group_id

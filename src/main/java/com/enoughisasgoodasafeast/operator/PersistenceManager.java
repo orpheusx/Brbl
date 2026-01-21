@@ -2,6 +2,7 @@ package com.enoughisasgoodasafeast.operator;
 
 import com.enoughisasgoodasafeast.Message;
 import org.jspecify.annotations.NonNull;
+import org.jspecify.annotations.Nullable;
 
 import java.util.List;
 import java.util.Map;
@@ -32,7 +33,7 @@ public interface PersistenceManager {
     Map<Pattern, Keyword> getKeywords();
 
     // Called by Operator
-    Node getScript(UUID scriptId);
+    Node getNodeGraph(UUID scriptId);
 
     // Called by Operator
     Route[] getActiveRoutes();
@@ -45,7 +46,7 @@ public interface PersistenceManager {
 
     List<CampaignUser> getUsersForPushCampaign(@NonNull UUID campaignId);
 
-    PushCampaign getPushCampaign(@NonNull UUID campaignId);
+    @Nullable PushCampaign getPushCampaign(@NonNull UUID campaignId);
 
     /*
      * This exception exists simply to slightly abstract the internal details involved.

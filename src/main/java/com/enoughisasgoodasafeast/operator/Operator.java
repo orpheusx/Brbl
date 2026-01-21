@@ -226,6 +226,13 @@ public class Operator implements MessageProcessor {
         // More logging here if insert fails?
     }
 
+    /*
+     * Check for an active Session without triggering the builder method.
+     */
+    public @Nullable Session getActiveSession(SessionKey sessionKey) {
+        return sessionCache.getIfPresent(sessionKey);
+    }
+
     /**
      * Builder method used with the LoadingCache.
      *
@@ -359,7 +366,7 @@ public class Operator implements MessageProcessor {
     }
 
     @Nullable Node getScript(UUID nodeId) {
-        return persistenceManager.getScript(nodeId);
+        return persistenceManager.getNodeGraph(nodeId);
     }
 
 

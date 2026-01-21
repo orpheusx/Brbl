@@ -45,7 +45,7 @@ class OperatorPersistenceIntegrationTest {
     @Test
     void getScript() {
         final UUID scriptId = UUID.fromString("23900613-af65-48de-b7f4-b310b738eb8e"); // 'What is the capital of Australia?'
-        final Node node = pm.getScript(scriptId);
+        final Node node = pm.getNodeGraph(scriptId);
         assertNotNull(node);
         assertEquals(node.id(), scriptId);
         // Node.printGraph(node, node, 1);

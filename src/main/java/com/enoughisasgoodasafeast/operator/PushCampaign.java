@@ -13,7 +13,7 @@ import java.util.UUID;
  * @param createdAt when the push campaign definition was first created.
  * @param updatedAt the latest change made to an incomplete push campaign.
  * @param completedAt set only after we've completed sending the script's initial message. Null until then.
- * @param status the enum denoting the status of the identified Customer.
+ * @param customerStatus the enum denoting the status of the identified Customer.
  */
 public record PushCampaign(UUID id,
                            UUID customerId,
@@ -22,6 +22,7 @@ public record PushCampaign(UUID id,
                            Instant createdAt,
                            Instant updatedAt,
                            Instant completedAt,
-                           CustomerStatus status,
+                           CustomerStatus customerStatus,
+                           ScriptStatus scriptStatus,
                            UUID nodeId) {
 }

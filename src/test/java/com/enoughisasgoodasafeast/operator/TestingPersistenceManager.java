@@ -71,7 +71,7 @@ public class TestingPersistenceManager implements PersistenceManager {
     }
 
     @Override
-    public Node getScript(UUID scriptId) {
+    public Node getNodeGraph(UUID scriptId) {
         return nodesByScriptId.get(scriptId);
     }
 
