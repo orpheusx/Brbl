@@ -157,7 +157,6 @@ public class BrblUsersGenerator {
 
     public UserRow randomUser() {
         var user = easyRandom.nextObject(UserRow.class);
-        user.nickname = doubleSingleQuotes(faker.name().firstName());
         user.nickname = doubleSingleQuotes(faker.animal().name());
         return user;
     }

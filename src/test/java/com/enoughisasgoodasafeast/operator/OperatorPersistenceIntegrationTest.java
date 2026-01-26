@@ -40,6 +40,9 @@ class OperatorPersistenceIntegrationTest {
                 new SessionKey(Platform.SMS, "18484242144", "119839196677", "random keyword")
         );
         assertNotNull(user);
+        assertNotNull(user.platformProfiles());
+        assertEquals(1, user.platformProfiles().size());
+        assertEquals(2, user.platformStatus().size());
     }
 
     @Test

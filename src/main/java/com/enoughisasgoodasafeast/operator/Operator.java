@@ -295,7 +295,7 @@ public class Operator implements MessageProcessor {
                     defaultLanguageList(sessionKey.from(), sessionKey.to()),
                     findCustomerIdByRoute(sessionKey),
                     defaultNickNameMap(),
-                    null,
+                    null, // FIXME need to do a consistency check on how we handle these Platform-keyed maps. How should we represent an absence of values?
                     defaultPlatformStatusMap(UserStatus.IN) // FIXME is this right value?
             );
 

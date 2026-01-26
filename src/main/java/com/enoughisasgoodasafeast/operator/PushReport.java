@@ -29,6 +29,7 @@ public class PushReport {
     boolean nodeNotFound;
     boolean scriptStatusNotProd;
 
+    // True if there were no user associated with the PushCampaign
     boolean campaignUsersEmpty;
 
     // Number of users in the campaign users segment
@@ -36,6 +37,8 @@ public class PushReport {
 
     // Number of users skipped because they were not opted in at time of push.
     int numInvalidUsers;
+
+    CampaignUserReport  campaignUserReport;
 
 
     public PushReport(UUID campaignId) {
@@ -70,6 +73,10 @@ public class PushReport {
 
     public void end() {
         this.endPush = NanoClock.utcInstant();
+    }
+
+    public void setCampaignUserReport(CampaignUserReport campaignUserReport) {
+        this.campaignUserReport = campaignUserReport;
     }
 
 }

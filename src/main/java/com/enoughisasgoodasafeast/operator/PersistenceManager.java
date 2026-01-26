@@ -4,9 +4,10 @@ import com.enoughisasgoodasafeast.Message;
 import org.jspecify.annotations.NonNull;
 import org.jspecify.annotations.Nullable;
 
-import java.util.List;
+import java.sql.SQLException;
 import java.util.Map;
 import java.util.UUID;
+import java.util.function.Function;
 import java.util.regex.Pattern;
 
 public interface PersistenceManager {
@@ -44,9 +45,13 @@ public interface PersistenceManager {
 
     Session loadSession(UUID id) throws PersistenceManagerException;
 
-    List<CampaignUser> getUsersForPushCampaign(@NonNull UUID campaignId);
-
     @Nullable PushCampaign getPushCampaign(@NonNull UUID campaignId);
+
+    @Nullable CampaignUserReport processPushCampaignUsers
+            (@NonNull UUID campaignId,
+             @NonNull PushSupport pushSupport,
+             @NonNull Function<PushSupport, Boolean> perUserProcessor)
+            throws SQLException;
 
     /*
      * This exception exists simply to slightly abstract the internal details involved.

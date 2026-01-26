@@ -12,6 +12,8 @@ import java.util.UUID;
 import static com.enoughisasgoodasafeast.Functions.randomUUID;
 
 /**
+ * The User model contains all the channel specific incarnations of a human user, the customer of our Customer.
+ * These incarnations are distinguished by the Platform over which they communicate.
  * A User lives in a single country but may speak multiple languages.
  * They may be identified differently by the Platforms they use to communicate.
  * Their primary id is their Brbl defined id.
@@ -27,7 +29,7 @@ import static com.enoughisasgoodasafeast.Functions.randomUUID;
  * @param languages             the list of ISO language codes spoken by the User.
  * @param customerId            the Customer that acquired this User instance.
  * @param platformNickNames     the optional nicknames for this User on other messaging platforms.
- * @param profile               the optional Profile that provides the User's identity.
+ * @param platformProfiles      the optional Profiles associated with this User for each messaging platform.
  * @param platformStatus        the User controlled opt-in status for each Platform.
  */
 
@@ -40,7 +42,7 @@ public record User(
         List<String> languages,
         UUID customerId,
         Map<Platform, String> platformNickNames,
-        Profile profile,
+        Map<Platform, Profile> platformProfiles,
         Map<Platform,UserStatus> platformStatus
     ) implements Serializable
 

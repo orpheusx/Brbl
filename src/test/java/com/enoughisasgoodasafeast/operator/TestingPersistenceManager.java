@@ -9,6 +9,7 @@ import org.slf4j.LoggerFactory;
 import java.io.IOException;
 import java.time.Instant;
 import java.util.*;
+import java.util.function.Function;
 import java.util.regex.Pattern;
 
 import static com.enoughisasgoodasafeast.Functions.randomUUID;
@@ -104,11 +105,6 @@ public class TestingPersistenceManager implements PersistenceManager {
     }
 
     @Override
-    public List<CampaignUser> getUsersForPushCampaign(@NonNull UUID campaignId) {
-        return List.of(); // FIXME implement!
-    }
-
-    @Override
     public PushCampaign getPushCampaign(@NonNull UUID campaignId) {
         return null; // FIXME implement!
     }
@@ -129,5 +125,11 @@ public class TestingPersistenceManager implements PersistenceManager {
         Map<Platform, UserStatus> userStatuses = new LinkedHashMap<>();
         userStatuses.put(Platform.SMS, UserStatus.IN);
         return new User(randomUUID(), randomUUID(), platformIds, platformCreatedAt, "US", List.of("ENG"), CUSTOMER_ID, userNickNames, null, userStatuses);
+    }
+
+    public CampaignUserReport processPushCampaignUsers(@NonNull UUID pushCampaignId,
+                                                       @NonNull PushSupport pushSupport,
+                                                       @NonNull Function<PushSupport, @NonNull Boolean> perUserProcessor) {
+        return new CampaignUserReport();
     }
 }

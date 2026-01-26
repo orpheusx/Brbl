@@ -2405,7 +2405,7 @@ Okay, so now let's figure out what the new query looks for USER_PROFILE_BY_PLATF
 There's only one logical record in our current data set that could be returned. The platform is 'S', the channel is 21249, and the platform_id is '17817299468'
 
 SELECT
-    u.id,u.group_id,u.platform_id,u.platform_code,u.country,u.language,u.nickname,u.created_at,p.surname,p.given_name,p.other_languages as profile_other_languages,p.created_at as profile_created_at,p.updated_at as profile_updated_at,r.customer_id as routes_customer_id
+    u.id,u.group_id,u.platform_id,u.platform_code,u.country,u.language,u.nickname,u.created_at,p.surname,p.given_name,p.other_languages as profile_other_languages,p.created_at as profile_created_at,p.updated_at as profile_updated_at,r.customer_id as owner_customer_id
 FROM
     brbl_users.users u
 LEFT JOIN
@@ -2449,7 +2449,7 @@ NB: the admin web app can reasonably constrain multiple Customers from being cre
 SELECT
     u.id,u.group_id,u.platform_id,u.platform_code,u.country,u.language,u.nickname,u.created_at,
     p.surname,p.given_name,p.other_languages as profile_other_languages,p.created_at as profile_created_at,p.updated_at as profile_updated_at,
-    r.customer_id as routes_customer_id
+    r.customer_id as owner_customer_id
 FROM
     brbl_users.users_t u
 INNER JOIN
@@ -2889,5 +2889,86 @@ Doh, the problem is the group_id isn't a primary key on amalgams....dummy.
 I thought about this previously and realized we couldn't create an FK without duplicating most of the columns in amalgams.
 
 Still interested in knowing why pgroll was throwing that error, however.
+
+
+===== 2026-01-21 ====
+
+Random Note: running \l in psql displays a list of databases in the current cluster.
+I noticed that our working db, brbl_db_dev, has a non-Postgres 18 standard Collate and Ctype.
+Instead of en_US.UTF-8 and en_US.UTF-8 it's using the older value, C, for both. Likely these values came along when we migrated/re-loaded it from the Postgres 16 db.
+If we really expect to get Asian language data then we should make the change sooner than later.
+It can't be changed with a simple ALTER command; gotta create a new database with correct encoding and collation then load a dumped copy of the data into it.
+
+Spit balling the structure we want for processing the push...
+
+Pass a lambda function (or multiple functions) to the PersistenceManager method that manages the select of campaign users (with "FOR UPDATE"?)
+then perform the function on each of the entries? This is the most obvious way of doing it and would _seem_ to prevent synchronization issues that a batch oriented approach might encounter.
+The code in Operator that processes a message in the context of a given Session could be made to be static (it only operates on objects that are passed to it as arguments.)
+It does, however, assume there's an input message that its responding to, even for Multi.Present cases. It also assumes it has access to the full User record (not the abbreviated form it takes in CampaignUser.
+The logic for rendering the initial MT and reflecting that in the Session doesn't seem like it is as complex as what we do in Operator.process() so there's nothing lost by keeping the code for it in Blaster.
+
+===== 2026-01-23 ====
+
+Consider using the Transactional Outbox Pattern for coordinating the MQ and database operations: https://backend.krishnakrmahto.com/transactional-messaging-in-microservices
+This instead of freestyling the various ways one or both of the resources could/will eventually fail us. More latency/overhead involved with this pattern but more reliability.
+Of course, we already have numerous other points in the application where same coordination challenge appears.
+
+Blaster.exec()
+    - fetches the PushCampaign using the uuid provided by our (Quartz-like) caller.
+    - fetch the Node that will be run for all the target users.
+    - NO transaction here
+    - PersistencManager: fetch the CampaignUsers (with an embedded User since that's the interface our script logic expects to have available): SELECT ... FOR UPDATE
+    - for each CampaignUser execute Predicate or Function
+        - construct a Session (using embedded User and Node plus references to a PersistenceManager and QueueProducer.)
+        - execute the script, flush session to MT queue
+            - if enqueue fails; continue to next CampaignUser (or break loop?)
+        - start transaction
+            - persist Session to database.
+            - update status of CampaignUser record and persist to database.
+        - end transaction
+
+Need to update our data gen tools to make sure there's at least one case where there are two user records that share the same amalgam grouping. The platform codes must be different. For the moment I'm manually munging the amalgam mappings so that two User records are represented by a single domain User record.
+
+brbl_db_dev=> select a.group_id, a.user_id, a.profile_id, u.nickname from amalgams a inner join users u on a.user_id = u.id where u.nickname in('alligator', 'goat');
+               group_id               |               user_id                |              profile_id              | nickname
+--------------------------------------+--------------------------------------+--------------------------------------+-----------
+ 12c38553-9934-b138-b3a0-ccd7f21b1b15 | 689935c5-12d8-d323-5fa8-9b13323fb049 | 13bea0c3-1692-7f65-d314-1f80083ad879 | alligator
+ 287328b9-2451-e789-dd98-e0a7f2d20ba4 | 91532e46-52e5-7d54-584b-74fb4ae4ecd0 |                                      | goat
+
+ UPDATE amalgams SET group_id = '12c38553-9934-b138-b3a0-ccd7f21b1b15' WHERE group_id = '287328b9-2451-e789-dd98-e0a7f2d20ba4';
+
+brbl_db_dev=> select a.group_id, a.user_id, a.profile_id, u.nickname from amalgams a inner join users u on a.user_id = u.id where u.nickname in('alligator', 'goat');
+               group_id               |               user_id                |              profile_id              | nickname
+--------------------------------------+--------------------------------------+--------------------------------------+-----------
+ 12c38553-9934-b138-b3a0-ccd7f21b1b15 | 689935c5-12d8-d323-5fa8-9b13323fb049 | 13bea0c3-1692-7f65-d314-1f80083ad879 | alligator
+ 12c38553-9934-b138-b3a0-ccd7f21b1b15 | 91532e46-52e5-7d54-584b-74fb4ae4ecd0 |                                      | goat
+
+
+===== 2026-01-24 ====
+
+While enhancing the CampaignUsers query to include the associated User record I reviewed the getUsers query method.
+I realized that the existing query will not, as expected by the application that constructs the User domain object, select all the USER records with grouped via AMALGAMS.
+
+It seems this broke when I updated the query following the introduction of the amalgams table.
+So let's take a moment and get this fixed.
+
+Using the two records above ('alligator' and 'goat') as our reference. Requires a BRBL route be entered for 'goat'.
+
+INSERT INTO brbl_logic.routes (
+    id, platform, channel, default_node_id, customer_id, status, created_at,
+    updated_at) VALUES(
+    uuidv7(), 'B', '999999999999',
+    '2ef610dc-b7a6-45ef-b1b7-98d2e2b378ea', '8285d1a8-2dc0-6752-3758-0076224bc839', 'ACTIVE',
+    NOW(), NOW()
+) RETURNING id;
+
+I think we need to mandate the CUSTOMER_ID column in the AMALGAMS table. This is because a user must always be associated with a route which is owned by a customer:
+
+    ALTER TABLE brbl_users.amalgams ALTER COLUMN customer_id SET NOT NULL;
+
+===== 2026-01-25 ====
+
+Okay, PersistenceManager.getUser() is working now.
+Need to add another variant of findUserExisting to OperatorPersistenceIntegrationTest. One that hasn't any profiles and only a single unlinked USER record.
 
 
