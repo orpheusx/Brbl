@@ -1,31 +1,28 @@
 package com.enoughisasgoodasafeast.operator;
 
-import com.enoughisasgoodasafeast.QueueProducer;
-
+import java.io.Serializable;
 import java.time.Instant;
 import java.util.UUID;
 
 /*
- * The record class corresponding to the CAMPAIGN_USERS table joined with USERS.
- * This could just be a composition of User and Profile records?
+ * A record class roughly corresponding to the CAMPAIGN_USERS table joined with a bunch of others.
+ * Used to encapsulate components for each target of a push campaign.
  */
-public record CampaignUser(UUID id,
-                           // User
-                           String platformId,
-                           UserStatus userStatus,
-                           CountryCode countryCode,
-                           String nickname,
-                           LanguageCode languageCode,
-                           // CampaignUser
+public record CampaignUser(UUID groupId,
+                           User user,
                            DeliveryStatus deliveryStatus,
-                           // Profile
-                           String givenName,
-                           String surname,
-                           // Session
                            Instant sessionLastUpdatedAt,
-                           // Node
-                           Node node,
-                           // non-value support components
-                           QueueProducer queueProducer,
-                           PersistenceManager persistenceManager) {
+                           PushSupport pushSupport) implements Serializable {
+
+    public CampaignUser(UUID groupId, User user, DeliveryStatus deliveryStatus, Instant sessionLastUpdatedAt) {
+        this(groupId, user, deliveryStatus, sessionLastUpdatedAt, null);
+    }
+
+    // Only the collection properties of a record can be updated.
+    // That works for our purposes here but we if we need to do more we have to return a new instance.
+    public CampaignUser merge(CampaignUser other) {
+        this.user.merge(other.user);
+        return this;
+    }
+
 }

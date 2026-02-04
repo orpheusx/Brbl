@@ -1,5 +1,6 @@
 package com.enoughisasgoodasafeast.operator;
 
+import java.io.Serializable;
 import java.time.Instant;
 import java.util.UUID;
 
@@ -32,7 +33,7 @@ import static io.jenetics.util.NanoClock.*;
  * @param createdAt
  * @param updatedAt
  */
-public record Profile(UUID id, String surname, String givenName, String otherLanguages, Instant createdAt, Instant updatedAt) {
+public record Profile(UUID id, String surname, String givenName, String otherLanguages, Instant createdAt, Instant updatedAt) implements Serializable {
 
     public Profile(String surname, String givenName, String otherLanguages) {
         var now = utcInstant();

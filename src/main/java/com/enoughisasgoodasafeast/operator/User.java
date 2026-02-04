@@ -5,15 +5,14 @@ import org.slf4j.LoggerFactory;
 
 import java.io.Serializable;
 import java.time.Instant;
-import java.util.List;
 import java.util.Map;
+import java.util.Set;
 import java.util.UUID;
-
-import static com.enoughisasgoodasafeast.Functions.randomUUID;
 
 /**
  * The User model contains all the channel specific incarnations of a human user, the customer of our Customer.
- * These incarnations are distinguished by the Platform over which they communicate.
+ * These incarnations are distinguished by the Platform through which they communicate.
+ * We materialize the data for all the rows linked through the amalgams table so that Scripts can make use of it.
  * A User lives in a single country but may speak multiple languages.
  * They may be identified differently by the Platforms they use to communicate.
  * Their primary id is their Brbl defined id.
@@ -33,20 +32,20 @@ import static com.enoughisasgoodasafeast.Functions.randomUUID;
  * @param platformStatus        the User controlled opt-in status for each Platform.
  */
 
+// TODO convert the type of 'languages' to LanguageCode and 'countryCode' to CountryCode.
+//  Also, make 'countryCode' a map like the other properties that are implicitly collections.
 public record User(
         UUID id,
         UUID groupId,
         Map<Platform, String> platformIds,
         Map<Platform, Instant> platformCreationTimes,
-        String countryCode,
-        List<String> languages,
-        UUID customerId,
+        String countryCode, // FIXME why isn't this a map as well?
+        Set<LanguageCode> languages, // FIXME make this a Set of LanguageCode.
+        UUID customerId, // no map because the grouping of User rows is on the basis of the Customer claiming the User.
         Map<Platform, String> platformNickNames,
         Map<Platform, Profile> platformProfiles,
         Map<Platform,UserStatus> platformStatus
-    ) implements Serializable
-
-{
+    ) implements Serializable {
 
     private static final Logger LOG = LoggerFactory.getLogger(User.class);
 
@@ -64,7 +63,6 @@ public record User(
             fail("platformCreationTimes cannot be null or empty.");
         }
 
-
         if (countryCode == null) {
             fail("countryCode cannot be null");
         }
@@ -78,9 +76,9 @@ public record User(
             fail("languages cannot be null or empty.");
         }
 
-        for (String language : languages) {
+        for (LanguageCode language : languages) {
             switch (language) {
-                case "FRA", "ENG", "RUS", "SPA", "CMN", "YUE", "HAT", "POR" -> {} // convert the string
+                case FRA, ENG, RUS, SPA, CMN, YUE, HAT, POR -> {} // convert the string
                 default -> fail("Unsupported language.");
             }
         }
@@ -100,11 +98,23 @@ public record User(
 
     // Convenience constructor.
     // TODO Create a countryCode enum class, matching our schema type already defines (US, CA, MX)
-    public User(Map<Platform, String> platformIds, Map<Platform, Instant> platformCreationTimes, List<String> languages, UUID customerId, Map<Platform, UserStatus> platformStatus) {
-        this(randomUUID(), randomUUID(), platformIds, platformCreationTimes, "US", languages, customerId, Map.of(), null, platformStatus);
-    }
+//    public User(Map<Platform, String> platformIds, Map<Platform, Instant> platformCreationTimes, Set<String> languages,
+//                UUID customerId, Map<Platform, UserStatus> platformStatus) {
+//        this(randomUUID(), randomUUID(), platformIds, platformCreationTimes,
+//                "US", languages, customerId, Map.of(), null, platformStatus);
+//    }
 
     void fail(String message) {
         throw new IllegalArgumentException(message);
     }
+
+    public void merge(User other) {
+        this.platformIds.putAll(other.platformIds());
+        this.platformCreationTimes.putAll(other.platformCreationTimes());
+        this.platformNickNames.putAll(other.platformNickNames());
+        this.platformProfiles.putAll(other.platformProfiles());
+        this.platformStatus.putAll(other.platformStatus());
+        this.languages.addAll(other.languages());
+    }
+
 }

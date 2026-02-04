@@ -2966,9 +2966,80 @@ I think we need to mandate the CUSTOMER_ID column in the AMALGAMS table. This is
 
     ALTER TABLE brbl_users.amalgams ALTER COLUMN customer_id SET NOT NULL;
 
+Of course, the customer_id column is already part of the composite primary key.
+
+
 ===== 2026-01-25 ====
 
 Okay, PersistenceManager.getUser() is working now.
 Need to add another variant of findUserExisting to OperatorPersistenceIntegrationTest. One that hasn't any profiles and only a single unlinked USER record.
 
+
+
+===== 2026-01-28 ====
+
+Working now on the SELECT_PUSH_CAMPAIGN_USERS query used for PostgresPersistenceManager's processPushCampaignUsers method.
+
+Like the getUsers() query it isn't retrieving linked users.
+Our sample data for the push campaign doesn't include any users that are linked.
+Of course, we only have one of those currently.
+Changing the platform for the "goat" user and adding it to the campaign_users segment:
+
+    UPDATE users SET platform_code = 'W' where nickname = 'goat';
+    INSERT INTO
+        campaign_users (
+            campaign_id,
+            user_id,
+            delivered
+        ) VALUES (
+        '019bd1ff-c890-7a28-9758-7ce559af5e0b',
+        '91532e46-52e5-7d54-584b-74fb4ae4ecd0',
+        'PENDING'::delivery_status);
+
+So now, the result set returned for SELECT_PUSH_CAMPAIGN_USERS will include the user row with the nickname, 'goat.' It will not, __yet__, include the user row linked to it with the nickname, 'alligator.'
+
+
+
+===== 2026-01-30 ====
+
+Tried adding a self-left join to SELECT_PUSH_CAMPAIGN_USERS:
+    LEFT JOIN
+        brbl_users.amalgams aa ON aa.group_id = a.group_id
+
+but this just duplicates the goat row rather than adding alligator.
+
+Created a CTE that selects the distinct group_id from the amalgams table joined with push_campaigns and campaign_users tables on user_id and campaign_id. Then, using that list of group_ids did an inner join between amalgams, users and the CTE table. Left joined on the rest including the push_campaigns and campaign_users tables.
+
+Because of those two the values for the customer_id and delivered columns will be null for user rows that are present because they are linked to a user row that is referenced by the campaign.
+
+In our sample data, all but three of the results have a value for customer_id. I think I may have overloaded the meaning of customer_id in the amalgams table.
+
+Originally our model was that a user was a mostly anonymous entity that was further described by a profile. The customer model was a further extension since we wanted them to be usable as users. With this interpretation, however, this leaves open the question of which users a Customer can claim.
+
+NB: In customer facing documentation/marketing, rather than saying that a Customers "owns" a end user we should prefer the term 'claims.' This is ethically less problematic and carries the understanding required for SMS and WhatsApp customer acquisition.
+
+===== 2026-02-01 ====
+
+UPDATE routes SET platform = 'W' WHERE channel = '999999999999'; --> to match the users set up in the CAMPAIGN_USERS segment.
+
+With a few hardcoded values the exec() method is working as expected. The SESSIONS table is populated and the InMemoryQueueProducer contains the same MT for each of the campaign users.
+
+Let's change the node to point at one of our hand rolled graphs? 89eddcb8-7fe5-4cd1-b18b-78858f0789fb --> 'What is your favorite color? 1) red 2) blue 3) flort'
+The scripts table doesn't have a mapping for it yet so
+INSERT INTO scripts (id, name, description, customer_id, node_id, status, language, created_at, updated_at)
+VALUES(uuidv7(), 'Multiple choice sequence', 'A chain of fun multiple choice questions.', '8285d1a8-2dc0-6752-3758-0076224bc839', '89eddcb8-7fe5-4cd1-b18b-78858f0789fb', 'PROD', 'ENG', NOW(), NOW()); --> 019c1ee9-49cc-7d59-a430-f050612acd72
+
+Now it looks right.
+
+But the SESSIONS are getting created with a group_id that doesn't match any entry in AMALGAMS. Oops, was using a random group_id instead of the one associated with the CampaignUser.
+FIXED.
+Confirmed that rerunning the test after a little has passed causes the existing rows in SESSIONS to be overwritten and their updated_at to be updated:
+
+    SELECT group_id, created_at, updated_at, (updated_at - created_at) AS delta FROM sessions ORDER BY group_id;
+
+Ok, so now, apart from the lack of batching and the problems push campaigns with large user segments may cause, we have a push solution.
+
+There are a whole bunch of open questions as to how we handle retries, how we report and save the results. They all require more practical insights that I currently have so I think it might be best to not paper over them now and expect to revisit when we have some experience running this in a stage-like environment.
+
+For the moment, I'll track the campaign user rows using the delivered column.
 

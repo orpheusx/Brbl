@@ -5,9 +5,9 @@ import org.jspecify.annotations.NonNull;
 import org.jspecify.annotations.Nullable;
 
 import java.sql.SQLException;
+import java.util.Collection;
 import java.util.Map;
 import java.util.UUID;
-import java.util.function.Function;
 import java.util.regex.Pattern;
 
 public interface PersistenceManager {
@@ -47,11 +47,9 @@ public interface PersistenceManager {
 
     @Nullable PushCampaign getPushCampaign(@NonNull UUID campaignId);
 
-    @Nullable CampaignUserReport processPushCampaignUsers
-            (@NonNull UUID campaignId,
-             @NonNull PushSupport pushSupport,
-             @NonNull Function<PushSupport, Boolean> perUserProcessor)
-            throws SQLException;
+    Collection<CampaignUser> getPushCampaignUsers(@NonNull UUID campaignId) throws SQLException;
+
+    boolean updatePushCampaignUsersStatus(@NonNull PushReport report) throws SQLException;
 
     /*
      * This exception exists simply to slightly abstract the internal details involved.

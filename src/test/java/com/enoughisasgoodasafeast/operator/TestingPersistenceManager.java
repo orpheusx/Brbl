@@ -7,6 +7,7 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import java.io.IOException;
+import java.sql.SQLException;
 import java.time.Instant;
 import java.util.*;
 import java.util.function.Function;
@@ -124,12 +125,14 @@ public class TestingPersistenceManager implements PersistenceManager {
         userNickNames.put(Platform.SMS, "Bozo");
         Map<Platform, UserStatus> userStatuses = new LinkedHashMap<>();
         userStatuses.put(Platform.SMS, UserStatus.IN);
-        return new User(randomUUID(), randomUUID(), platformIds, platformCreatedAt, "US", List.of("ENG"), CUSTOMER_ID, userNickNames, null, userStatuses);
+        return new User(randomUUID(), randomUUID(), platformIds, platformCreatedAt, "US", Set.of(LanguageCode.ENG), CUSTOMER_ID, userNickNames, null, userStatuses);
     }
 
-    public CampaignUserReport processPushCampaignUsers(@NonNull UUID pushCampaignId,
-                                                       @NonNull PushSupport pushSupport,
-                                                       @NonNull Function<PushSupport, @NonNull Boolean> perUserProcessor) {
-        return new CampaignUserReport();
+    public Collection<CampaignUser> getPushCampaignUsers(@NonNull UUID campaignId) {
+        return new ArrayList<>();
+    }
+
+    public boolean updatePushCampaignUsersStatus(@NonNull PushReport report) throws SQLException {
+        return true;
     }
 }

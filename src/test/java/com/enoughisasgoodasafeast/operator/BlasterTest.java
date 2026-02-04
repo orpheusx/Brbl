@@ -3,23 +3,18 @@ package com.enoughisasgoodasafeast.operator;
 import com.enoughisasgoodasafeast.ConfigLoader;
 import com.enoughisasgoodasafeast.InMemoryQueueProducer;
 import io.jenetics.util.NanoClock;
-import org.jline.builtins.Nano;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
-import java.io.IO;
 import java.io.IOException;
-import java.time.Duration;
+import java.sql.SQLException;
 import java.time.Instant;
-import java.time.temporal.ChronoUnit;
-import java.time.temporal.TemporalUnit;
 import java.util.UUID;
 import java.util.concurrent.ExecutionException;
 import java.util.concurrent.TimeoutException;
 
-import static java.io.IO.println;
 import static org.junit.jupiter.api.Assertions.*;
 
 class BlasterIntegrationTest {
@@ -35,7 +30,7 @@ class BlasterIntegrationTest {
     }
 
     @Test
-    void exec() throws ExecutionException, InterruptedException {
+    void exec() throws ExecutionException, InterruptedException, SQLException {
         // Customers: id, email, status
         // 8285d1a8-2dc0-6752-3758-0076224bc839 | theron.witting@yahoo.com | ACTIVE
 
@@ -60,7 +55,7 @@ class BlasterIntegrationTest {
         var uuid = UUID.fromString("019bd1ff-c890-7a28-9758-7ce559af5e0b");
         final PushReport report = blaster.exec(uuid);
 
-        assertEquals(0, report.numInvalidUsers);
+        assertEquals(0, report.invalidUsersSkipped.size());
 //        assertEquals(13, report.numUsers);
     }
 

@@ -4,6 +4,7 @@ import com.enoughisasgoodasafeast.*;
 import com.enoughisasgoodasafeast.operator.PersistenceManager.PersistenceManagerException;
 import com.github.benmanes.caffeine.cache.Caffeine;
 import com.github.benmanes.caffeine.cache.LoadingCache;
+import org.jspecify.annotations.NonNull;
 import org.jspecify.annotations.Nullable;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -11,15 +12,16 @@ import org.slf4j.LoggerFactory;
 import java.io.IOException;
 import java.time.Instant;
 import java.util.*;
-import java.util.concurrent.*;
+import java.util.concurrent.ExecutionException;
+import java.util.concurrent.StructuredTaskScope;
+import java.util.concurrent.TimeUnit;
+import java.util.concurrent.TimeoutException;
 import java.util.function.Supplier;
 import java.util.regex.Pattern;
 
-import org.jspecify.annotations.NonNull;
-
 import static com.enoughisasgoodasafeast.Functions.randomUUID;
 import static com.enoughisasgoodasafeast.operator.Telecom.deriveCountryCodeFromId;
-import static io.jenetics.util.NanoClock.*;
+import static io.jenetics.util.NanoClock.utcInstant;
 
 public class Operator implements MessageProcessor {
 
@@ -292,7 +294,7 @@ public class Operator implements MessageProcessor {
                     Map.of(sessionKey.platform(), sessionKey.from()),
                     Map.of(sessionKey.platform(), utcInstant()),
                     deriveCountryCodeFromId(sessionKey.from()),
-                    defaultLanguageList(sessionKey.from(), sessionKey.to()),
+                    defaultLanguageSet(sessionKey.from(), sessionKey.to()),
                     findCustomerIdByRoute(sessionKey),
                     defaultNickNameMap(),
                     null, // FIXME need to do a consistency check on how we handle these Platform-keyed maps. How should we represent an absence of values?
@@ -435,11 +437,11 @@ public class Operator implements MessageProcessor {
         return Collections.emptyMap();
     }
 
-    private List<String> defaultLanguageList(String from, String to) {
+    private Set<LanguageCode> defaultLanguageSet(String from, String to) {
         // TODO:
         // the associated shortcode/longcode should probably have expected language code(s)
         // we could also use the 'from' to guess. E.g. if the number is Mexican we could assume 'SPA'
-        return List.of("ENG");
+        return Set.of(LanguageCode.ENG);
     }
 
     public static void main(String[] args) throws IOException, TimeoutException, PersistenceManagerException {
