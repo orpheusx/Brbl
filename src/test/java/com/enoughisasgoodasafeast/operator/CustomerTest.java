@@ -17,7 +17,7 @@ public class CustomerTest {
     final static Map<Platform, Instant> platformCreatedMap = Map.of(Platform.SMS, utcInstant());
     final static Map<Platform, String> userNickNames = new LinkedHashMap<>();
     final static String countryCode = Locale.getDefault().getCountry();
-    final static List<String> languages = List.of("SPA", "FRA");
+    final static Set<LanguageCode> languages = Set.of(LanguageCode.SPA, LanguageCode.FRA);
     final static UUID customerId = randomUUID();
     final static Map<Platform, UserStatus> userStatuses = Map.of(Platform.SMS, UserStatus.IN);
 

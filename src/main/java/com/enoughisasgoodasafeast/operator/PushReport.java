@@ -5,6 +5,8 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import java.time.Instant;
+import java.util.ArrayList;
+import java.util.StringJoiner;
 import java.util.UUID;
 
 /**
@@ -35,10 +37,18 @@ public class PushReport {
     // Number of users in the campaign users segment
     int numUsers;
 
-    // Number of users skipped because they were not opted in at time of push.
-    int numInvalidUsers;
+    // The users skipped because they were not opted in at time of push.
+    ArrayList<UUID> invalidUsersSkipped = new ArrayList<>(); // amalgam.group_id
 
-    CampaignUserReport  campaignUserReport;
+    // The users skipped because they were already actively talking to the platform.
+    ArrayList<UUID> activeUsersSkipped = new ArrayList<>(); // amalgam.group_id
+
+    // The users that had errors while processing their script
+    ArrayList<UUID> usersSkippedDueToScriptErrors = new ArrayList<>();
+
+    ArrayList<UUID> processedUsers = new ArrayList<>();
+
+    private boolean campaignAndUserStatusUpdateFail;
 
 
     public PushReport(UUID campaignId) {
@@ -59,24 +69,50 @@ public class PushReport {
         end();
     }
 
-    public void scriptStatusNotProdFail(ScriptStatus status) {
-        this.scriptStatusNotProd = true;
-        LOG.warn("Script {} status is not PROD ({})", scriptId, status.name());
-        end();
-    }
-
     public void nodeNotFoundFail(UUID nodeId) {
         this.nodeNotFound = true;
         LOG.error("No node found for {}", nodeId);
         end();
     }
 
+    public void scriptStatusNotProdFail(ScriptStatus status) {
+        this.scriptStatusNotProd = true;
+        LOG.warn("Script {} status is not PROD ({})", scriptId, status.name());
+        end();
+    }
+
+    public void campaignUsersEmptyFail() {
+        this.campaignUsersEmpty = true;
+        LOG.error("No campaign users found for campaign {}", campaignId);
+        end();
+    }
+
+    public void campaignAndUserStatusUpdateFail() {
+        this.campaignAndUserStatusUpdateFail = true;
+    }
+
     public void end() {
         this.endPush = NanoClock.utcInstant();
     }
 
-    public void setCampaignUserReport(CampaignUserReport campaignUserReport) {
-        this.campaignUserReport = campaignUserReport;
+    @Override
+    public String toString() {
+        return new StringJoiner(", ", PushReport.class.getSimpleName() + "[", "]")
+                .add("campaignId=" + campaignId)
+                .add("startPush=" + startPush)
+                .add("endPush=" + endPush)
+                .add("campaignNotFound=" + campaignNotFound)
+                .add("customerId=" + customerId)
+                .add("customerStatusNotActive=" + customerStatusNotActive)
+                .add("scriptId=" + scriptId)
+                .add("nodeNotFound=" + nodeNotFound)
+                .add("scriptStatusNotProd=" + scriptStatusNotProd)
+                .add("campaignUsersEmpty=" + campaignUsersEmpty)
+                .add("numUsers=" + numUsers)
+                .add("invalidUsersSkipped=" + invalidUsersSkipped)
+                .add("activeUsersSkipped=" + activeUsersSkipped)
+                .add("usersSkippedDueToScriptErrors=" + usersSkippedDueToScriptErrors)
+                .add("campaignAndUserStatusUpdateFail=" + campaignAndUserStatusUpdateFail)
+                .toString();
     }
-
 }
