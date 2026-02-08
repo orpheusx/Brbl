@@ -3043,3 +3043,42 @@ There are a whole bunch of open questions as to how we handle retries, how we re
 
 For the moment, I'll track the campaign user rows using the delivered column.
 
+===== 2026-02-04 ====
+
+What does the customer_id column in the AMALGAMS table represent? Is it the customer that claims the user? Or a flag the the user is also a customer?
+
+I think we intended the former but it does beg the question: where do we denote a Customer's claim of a User?
+
+This is a BIG design issue that goes to the core of the data model.
+
+We can address the practical gap in the SELECT_PUSH_CAMPAIGN_USERS query by using the customer_id from the CTE rather than the AMALGAMS table.
+
+We could (should?) simply add another column to AMALGAMS called claimant_id which would be filled with the customer_id that claims the user.
+This seems workable and consistent with the original concept of the customer as an extension of the user/profile.
+
+Hmm...
+
+===== 2026-02-06 ====
+
+I've decided we benefit from including the CUSTOMERS table data in the User model. They are the uber user in terms of importance. And using our own software would be a good way of communicating and conducting business. Mobile-first and all that.
+
+Discovered a problem with the SELECT_PUSH_CAMPAIGN_USERS query processing:
+    Currently the query returns all the entries for the given campaign_id, regardless of their delivered status.
+    The code processing the query will exclude rows that were marked SENT by a previous execution, leaving any linked records in place.
+    The resulting User model will only consist of the rows that were for other platforms.
+
+Indirectly, we can solve this by adding a param to the getPushCampaign method that filters by the DeliveryStatus.
+
+TODO
+_ Add the claimant_id to AMALGAMS.
+_ Alter the primary key to use claimant column instead of customer_id.
+_ Update the data generator code.
+X Add route_id to PUSH_CAMPAIGN:
+    ALTER TABLE brbl_logic.push_campaigns ADD COLUMN route_id UUID;
+    ALTER TABLE brbl_logic.push_campaigns
+        ADD CONSTRAINT fk_campaign_routes_id FOREIGN KEY (route_id) REFERENCES brbl_logic.routes(id);
+    (This can be used to provide/define the platform being targeted as well as the "from" field of the MT.)
+
+X Update the getPushCampaign method of PersistenceManager to include the new column.
+X In Blaster, use ROUTES' channel column in the construction of the fake MO so that generated MTs use it as well.
+_ Add NOT NULL constraint to brbl_logic.push_campaigns for customer_id, script_id, route_id.

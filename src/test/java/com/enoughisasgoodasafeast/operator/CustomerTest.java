@@ -11,9 +11,9 @@ import static io.jenetics.util.NanoClock.*;
 import static org.junit.jupiter.api.Assertions.*;
 
 public class CustomerTest {
-    final static UUID id = randomUUID();
+    final static Map<Platform, UUID> platformIds = Map.of(Platform.SMS, randomUUID());
     final static UUID groupId = randomUUID();
-    final static Map<Platform, String> platformIds = Map.of(Platform.SMS, "17815551234");
+    final static Map<Platform, String> platformNumbers = Map.of(Platform.SMS, "17815551234");
     final static Map<Platform, Instant> platformCreatedMap = Map.of(Platform.SMS, utcInstant());
     final static Map<Platform, String> userNickNames = new LinkedHashMap<>();
     final static String countryCode = Locale.getDefault().getCountry();
@@ -21,7 +21,7 @@ public class CustomerTest {
     final static UUID customerId = randomUUID();
     final static Map<Platform, UserStatus> userStatuses = Map.of(Platform.SMS, UserStatus.IN);
 
-    final static User user = new User(id, groupId, platformIds, platformCreatedMap, countryCode, languages, customerId, userNickNames, null, userStatuses);
+    final static User user = new User(platformIds, groupId, platformNumbers, platformCreatedMap, countryCode, languages, customerId, userNickNames, null, userStatuses);
 
     // final String firstName = "Fred";
     // final String surname = "Flintstone";

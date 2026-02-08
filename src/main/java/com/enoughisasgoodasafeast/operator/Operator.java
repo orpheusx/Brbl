@@ -289,7 +289,7 @@ public class Operator implements MessageProcessor {
         if (user == null) {
             LOG.info("User not found.");
             user = new User(
-                    randomUUID(),
+                    Map.of(sessionKey.platform(), randomUUID()),
                     randomUUID(),
                     Map.of(sessionKey.platform(), sessionKey.from()),
                     Map.of(sessionKey.platform(), utcInstant()),

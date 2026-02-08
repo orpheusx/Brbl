@@ -17,7 +17,7 @@ import java.util.concurrent.TimeoutException;
 
 import static org.junit.jupiter.api.Assertions.*;
 
-class BlasterIntegrationTest {
+public class BlasterIntegrationTest {
 
     private static final Logger LOG = LoggerFactory.getLogger(BlasterIntegrationTest.class);
 

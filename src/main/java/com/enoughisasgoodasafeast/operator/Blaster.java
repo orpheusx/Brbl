@@ -112,12 +112,17 @@ public class Blaster {
 
         Node.printGraph(node, node, 0);
 
+        if (!campaign.routeStatus().equals(RouteStatus.ACTIVE)) {
+            report.routeStatusNotActive(campaign.routeStatus());
+            return report;
+        }
+
         LOG.info("Executing: {} (text: {}}", node.id(), node.text());
         LOG.info("Audience:");
 
         PushSupport support = new PushSupport(campaignId, node, this.queueProducer, persistenceManager); // FIXME don't need this anymore, I think.
 
-        final var campaignUsers = persistenceManager.getPushCampaignUsers(campaignId);
+        final var campaignUsers = persistenceManager.getPushCampaignUsers(campaignId, DeliveryStatus.PENDING);
         if(campaignUsers == null) {
             report.campaignUsersEmptyFail();
             return report;
@@ -125,9 +130,9 @@ public class Blaster {
 
         report.numUsers = campaignUsers.size();
 
-        // FIXME I wanted to avoid materializing all the rows into a list of records and simply process them as we go but this wasn't workable
-        //  The query returns rows that may need to be merged (the User model is a aggregation of database records) so I can't simply fetch result set in
-        //  batches. It may be simpler to add a secondary batching structure to the campaign_users table definition.
+        // FIXME Originally, I wanted to avoid materializing all the rows into a list of records and simply process them as we go but this wasn't workable
+        //  The query returns rows that may need to be merged--the User model is a aggregation of database records--so I can't simply fetch result set in
+        //  batches. It may be simpler to add a secondary batching column to the campaign_users table definition to handle big segments.
         for (var campaignUser : campaignUsers) {
 
             LOG.info(campaignUser.toString());
@@ -137,13 +142,13 @@ public class Blaster {
             // In these cases we want to log this so there aren't questions about why the user wasn't included in the blast.
             // FIXME Record this in a report-like object.
 
-            final var campaignDefinedPlatform = Platform.WAP; // FIXME need to add this to the campaign metadata even though it is duplicated (more or less) by the User's platform_code.
+            final var platform = campaign.platform(); // FIXME need to add this to the campaign metadata even though it is duplicated (more or less) by the User's platform_code.
 
-            if (!campaignUser.user().platformStatus().get(campaignDefinedPlatform).equals(UserStatus.IN)) {
+            if (!campaignUser.user().platformStatus().get(platform).equals(UserStatus.IN)) {
                 report.invalidUsersSkipped.add(campaignUser.groupId());
             }
 
-            // NB: SESSIONS is keyed _only_ by the group_id. So there's only one (currently) for any/all channels visited by the Customer's user.
+            // NB: SESSIONS primary key is group_id. So there's only one (currently) for any/all channels visited by the Customer's user.
             // FIXME Should we add user id to the SESSIONS table's primary key to allow more flexibility wrt session scope?
             final var lastSessionActivity = campaignUser.sessionLastUpdatedAt();
             // NB: A missing Session may simply indicate that they've been inactive for a while and the Session row was deleted in a prior cleanup.
@@ -163,14 +168,14 @@ public class Blaster {
             );
 
             // FIXME where should we get the route channel? Should we add it to the PUSH_CAMPAIGNS table? Or include it in the method signature?
-            final var initialMessage = new Message(MessageType.MO, campaignUser.user().platformIds().get(campaignDefinedPlatform), "routeChannel", "#");
+            final var initialMessage = new Message(MessageType.MO, campaignUser.user().platformNumbers().get(platform), campaign.channel(), "#");
 
             // Execute the first node of the script, using the associated session, generating an MT and pushing it onto the regular, rate-limited output queue, possibly with a lower priority.
             final boolean ok = scriptEngine.process(sessionForCampaignUser, initialMessage);
             if (!ok) {
-                report.usersSkippedDueToScriptErrors.add(campaignUser.user().id());
+                report.usersSkippedDueToScriptErrors.add(campaignUser.user().platformIds().get(platform));
             } else {
-                report.processedUsers.add(campaignUser.user().id());
+                report.processedUsers.add(campaignUser.user().platformIds().get(platform));
             }
         }
 

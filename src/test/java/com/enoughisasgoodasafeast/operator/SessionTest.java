@@ -33,7 +33,7 @@ public class SessionTest {
             Session session = new Session(
                     randomUUID(),
                     new Node("do nothing", EchoWithPrefix, null),
-                    new User(randomUUID(), randomUUID(), platformIds, platformsCreated, countryCode, languages, customerId, userNickNames, null, platformStatuses),
+                    new User(platformIds, randomUUID(), platformNumbers, platformsCreated, countryCode, languages, customerId, userNickNames, null, platformStatuses),
                     new InMemoryQueueProducer(),
                     null);
             int numElements = MAX_INPUT_HISTORY + 1;
@@ -70,7 +70,7 @@ public class SessionTest {
                 Session session = newSession()/*new Session(
                         Functions.randomUUID(),
                         new Node("The quick brown fox jumps over the lazy dog.", NodeType.SendMessage, "A test Node"), // TODO attach Edges
-                        new User(Functions.randomUUID(), platformIds, platformsCreated, countryCode, languages),
+                        new User(Functions.randomUUID(), platformNumbers, platformsCreated, countryCode, languages),
                         new InMemoryQueueProducer(),
                         null)*/;
                 for (int j = 0; j < numMessages; j++) {
@@ -127,7 +127,7 @@ public class SessionTest {
 //                Session session = newSession()/*new Session(
 //                        Functions.randomUUID(),
 //                        new Node("The quick brown fox jumps over the lazy dog.", NodeType.SendMessage, "A test Node"), // TODO attach Edges
-//                        new User(Functions.randomUUID(), platformIds, platformsCreated, countryCode, languages),
+//                        new User(Functions.randomUUID(), platformNumbers, platformsCreated, countryCode, languages),
 //                        new InMemoryQueueProducer(),
 //                        null)*/;
 //                for (int j = 0; j < numMessages; j++) {
@@ -203,7 +203,7 @@ public class SessionTest {
         return new Session(
                 id,
                 new Node("The quick brown fox jumps over the lazy dog.", NodeType.SendMessage, "A test Node"),
-                new User(randomUUID(), randomUUID(), platformIds, platformsCreated, countryCode, languages, customerId, userNickNames, null, platformStatuses),
+                new User(platformIds, randomUUID(), platformNumbers, platformsCreated, countryCode, languages, customerId, userNickNames, null, platformStatuses),
                 queueProducer,
                 persistenceManager);
     }

@@ -47,7 +47,7 @@ public interface PersistenceManager {
 
     @Nullable PushCampaign getPushCampaign(@NonNull UUID campaignId);
 
-    Collection<CampaignUser> getPushCampaignUsers(@NonNull UUID campaignId) throws SQLException;
+    Collection<CampaignUser> getPushCampaignUsers(@NonNull UUID campaignId, DeliveryStatus byStatus) throws SQLException;
 
     boolean updatePushCampaignUsersStatus(@NonNull PushReport report) throws SQLException;
 

@@ -10,7 +10,6 @@ import java.io.IOException;
 import java.sql.SQLException;
 import java.time.Instant;
 import java.util.*;
-import java.util.function.Function;
 import java.util.regex.Pattern;
 
 import static com.enoughisasgoodasafeast.Functions.randomUUID;
@@ -117,18 +116,19 @@ public class TestingPersistenceManager implements PersistenceManager {
 
     @Override
     public User getUser(SessionKey sessionKey) {
-        Map<Platform, String> platformIds = new HashMap<>();
-        platformIds.put(Platform.SMS, USER_ID);
+        Map<Platform, UUID> platformIds = Map.of(Platform.SMS, randomUUID());
+        Map<Platform, String> platformNumbers = new HashMap<>();
+        platformNumbers.put(Platform.SMS, USER_ID);
         Map<Platform, Instant> platformCreatedAt = new HashMap<>();
         platformCreatedAt.put(Platform.SMS, utcInstant());
         Map<Platform, String> userNickNames = new LinkedHashMap<>();
         userNickNames.put(Platform.SMS, "Bozo");
         Map<Platform, UserStatus> userStatuses = new LinkedHashMap<>();
         userStatuses.put(Platform.SMS, UserStatus.IN);
-        return new User(randomUUID(), randomUUID(), platformIds, platformCreatedAt, "US", Set.of(LanguageCode.ENG), CUSTOMER_ID, userNickNames, null, userStatuses);
+        return new User(platformIds, randomUUID(), platformNumbers, platformCreatedAt, "US", Set.of(LanguageCode.ENG), CUSTOMER_ID, userNickNames, null, userStatuses);
     }
 
-    public Collection<CampaignUser> getPushCampaignUsers(@NonNull UUID campaignId) {
+    public Collection<CampaignUser> getPushCampaignUsers(@NonNull UUID campaignId, DeliveryStatus byStatus) {
         return new ArrayList<>();
     }
 

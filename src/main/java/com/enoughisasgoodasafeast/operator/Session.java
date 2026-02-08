@@ -69,7 +69,7 @@ public class Session implements ScriptContext, Serializable {
         this.user = Objects.requireNonNull(user);
         this.producer = Objects.requireNonNull(producer);
         this.persistenceManager = persistenceManager;
-        LOG.debug("Created Session {} for User {}", id, user.id());
+        LOG.debug("Created Session {} for User {}", id, user.platformIds());
     }
 
     public int currentInputsCount() {

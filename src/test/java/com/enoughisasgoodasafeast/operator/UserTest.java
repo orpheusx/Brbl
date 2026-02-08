@@ -12,10 +12,10 @@ import static org.junit.jupiter.api.Assertions.*;
 
 public class UserTest {
 
-    final static UUID id = randomUUID();
+    final static Map<Platform, UUID> platformIds = Map.of(Platform.SMS, randomUUID());
     final static UUID groupId = randomUUID();
     final static UUID customerId = randomUUID();
-    final static Map<Platform, String> platformIds = new HashMap<>();
+    final static Map<Platform, String> platformNumbers = new HashMap<>();
     final static Map<Platform, Instant> platformsCreated = new LinkedHashMap<>();
     final static Map<Platform, String> userNickNames = new LinkedHashMap<>();
     final static String countryCode = Locale.getDefault().getCountry();
@@ -23,7 +23,7 @@ public class UserTest {
     final static Map<Platform, UserStatus> platformStatuses = new LinkedHashMap<>();
 
     static {
-        platformIds.put(Platform.SMS, "17815551234");
+        platformNumbers.put(Platform.SMS, "17815551234");
         platformsCreated.put(Platform.SMS, NanoClock.systemUTC().instant());
         languages.add(SPA);
         languages.add(FRA);
@@ -36,32 +36,32 @@ public class UserTest {
     @Test
     void idNull() {
         Exception exception = assertThrows(IllegalArgumentException.class, () -> {
-            new User(null, null, platformIds, platformsCreated, countryCode, languages, customerId, userNickNames, null, platformStatuses);
+            new User(null, null, platformNumbers, platformsCreated, countryCode, languages, customerId, userNickNames, null, platformStatuses);
         });
 
-        assertTrue(exception.getMessage().contains("id"));
+        assertTrue(exception.getMessage().contains("platformIds cannot be null"));
     }
 
     @Test
     void platformIdsNull() {
         Exception exception = assertThrows(IllegalArgumentException.class, () -> {
-            new User(id, groupId, null, platformsCreated, countryCode, languages, customerId, userNickNames, null, platformStatuses);
+            new User(platformIds, groupId, null, platformsCreated, countryCode, languages, customerId, userNickNames, null, platformStatuses);
         });
-        assertTrue(exception.getMessage().contains("platformIds"));
+        assertTrue(exception.getMessage().contains("platformNumbers"));
     }
 
     @Test
     void platformIdsEmpty() {
         Exception exception = assertThrows(IllegalArgumentException.class, () -> {
-            new User(id, groupId, new HashMap<>(),platformsCreated, countryCode, languages, customerId, userNickNames, null, platformStatuses);
+            new User(platformIds, groupId, new HashMap<>(),platformsCreated, countryCode, languages, customerId, userNickNames, null, platformStatuses);
         });
-        assertTrue(exception.getMessage().contains("platformIds"));
+        assertTrue(exception.getMessage().contains("platformNumbers"));
     }
 
     @Test
     void countryCodeNull() {
         Exception exception = assertThrows(IllegalArgumentException.class, () -> {
-            new User(id, groupId, platformIds, platformsCreated, null, languages, customerId, userNickNames, null, platformStatuses);
+            new User(platformIds, groupId, platformNumbers, platformsCreated, null, languages, customerId, userNickNames, null, platformStatuses);
         });
         assertTrue(exception.getMessage().contains("countryCode"));
     }
@@ -69,7 +69,7 @@ public class UserTest {
     @Test
     void countryCodeUnsupported() {
         Exception exception = assertThrows(IllegalArgumentException.class, () -> {
-            new User(id, groupId, platformIds, platformsCreated, "RU", languages, customerId, userNickNames, null, platformStatuses);
+            new User(platformIds, groupId, platformNumbers, platformsCreated, "RU", languages, customerId, userNickNames, null, platformStatuses);
         });
         assertTrue(exception.getMessage().contains("countryCode"));
     }
@@ -77,7 +77,7 @@ public class UserTest {
     @Test
     void languagesNull() {
         Exception exception = assertThrows(IllegalArgumentException.class, () -> {
-            new User(id, groupId, platformIds, platformsCreated, countryCode, null, customerId, userNickNames, null, platformStatuses);
+            new User(platformIds, groupId, platformNumbers, platformsCreated, countryCode, null, customerId, userNickNames, null, platformStatuses);
         });
         assertTrue(exception.getMessage().contains("language"));
     }
@@ -85,7 +85,7 @@ public class UserTest {
     @Test
     void languagesEmpty() {
         Exception exception = assertThrows(IllegalArgumentException.class, () -> {
-            new User(id, groupId, platformIds, platformsCreated, countryCode, Set.of(), customerId, userNickNames, null, platformStatuses);
+            new User(platformIds, groupId, platformNumbers, platformsCreated, countryCode, Set.of(), customerId, userNickNames, null, platformStatuses);
         });
         assertTrue(exception.getMessage().contains("language"));
     }
@@ -96,7 +96,7 @@ public class UserTest {
     //    Exception exception = assertThrows(IllegalArgumentException.class, () -> {
     //        List<String> unsupported = new ArrayList<>();
     //        unsupported.add("ru");
-    //        new User(id, groupId, platformIds, platformsCreated, countryCode, unsupported, customerId, userNickNames, null, platformStatuses);
+    //        new User(id, groupId, platformNumbers, platformsCreated, countryCode, unsupported, customerId, userNickNames, null, platformStatuses);
     //    });
     //    assertTrue(exception.getMessage().contains("language"));
     //}
@@ -104,7 +104,7 @@ public class UserTest {
     @Test
     void platformStatusesNull() {
         Exception exception = assertThrows(IllegalArgumentException.class, () -> {
-            new User(id, groupId, platformIds, platformsCreated, countryCode, languages, customerId, userNickNames, null, null);
+            new User(platformIds, groupId, platformNumbers, platformsCreated, countryCode, languages, customerId, userNickNames, null, null);
         });
         assertTrue(exception.getMessage().contains("platformStatus"));
     }
@@ -112,7 +112,7 @@ public class UserTest {
     @Test
     void platformStatusesEmpty() {
         Exception exception = assertThrows(IllegalArgumentException.class, () -> {
-            new User(id, groupId, platformIds, platformsCreated, countryCode, languages, customerId, userNickNames, null, Map.of());
+            new User(platformIds, groupId, platformNumbers, platformsCreated, countryCode, languages, customerId, userNickNames, null, Map.of());
         });
         assertTrue(exception.getMessage().contains("platformStatus"));
     }

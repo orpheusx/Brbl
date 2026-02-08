@@ -13,7 +13,6 @@ import java.io.*;
 import java.sql.*;
 import java.time.Instant;
 import java.util.*;
-import java.util.function.Function;
 import java.util.regex.Pattern;
 
 import static com.enoughisasgoodasafeast.operator.SessionSerde.bytesToSession;
@@ -356,25 +355,27 @@ public class PostgresPersistenceManager implements PersistenceManager {
                         r.status = ?::route_status
                     """;
 
-    public static final String SELECT_PUSH_CAMPAIGN_USERS =
+    public static final String SELECT_PUSH_CAMPAIGN_USERS_BY_DELIVERY_STATUS =
             """
                     WITH campaign_group_ids AS (
                         SELECT
-                            DISTINCT a.group_id
-                        FROM 
+                            DISTINCT a.group_id,
+                            pc.customer_id
+                        FROM
                             brbl_users.amalgams a
-                        INNER JOIN 
-                            brbl_logic.campaign_users cu 
+                        INNER JOIN
+                            brbl_logic.campaign_users cu
                                 ON cu.user_id = a.user_id
-                        INNER JOIN 
-                            brbl_logic.push_campaigns pc 
+                        INNER JOIN
+                            brbl_logic.push_campaigns pc
                                 ON pc.id = cu.campaign_id
-                        WHERE 
+                        WHERE
                             pc.id = ?
+                            AND
+                            cu.delivered = ?
                     )
                     SELECT
-                        a.customer_id, 
-                        a.group_id, 
+                        a.group_id,
                         a.user_id AS user_id, 
                         a.profile_id AS profile_id,
                         u.country, 
@@ -389,7 +390,7 @@ public class PostgresPersistenceManager implements PersistenceManager {
                         p.surname, 
                         p.created_at AS profile_created_at, 
                         p.updated_at AS profile_updated_at,
-                        pc_all.customer_id,
+                        cgi.customer_id,
                         s.updated_at AS session_updated_at,
                         cu_all.delivered
                     FROM
@@ -428,7 +429,10 @@ public class PostgresPersistenceManager implements PersistenceManager {
                         pc.completed_at,
                         c.status,
                         s.status,
-                        n.id
+                        n.id,
+                        r.channel,
+                        r.platform,
+                        r.status
                     FROM
                         brbl_logic.push_campaigns pc
                     INNER JOIN
@@ -437,6 +441,8 @@ public class PostgresPersistenceManager implements PersistenceManager {
                         brbl_logic.scripts s ON s.id = pc.script_id
                     INNER JOIN
                         brbl_logic.nodes n ON n.id = s.node_id
+                    INNER JOIN
+                        brbl_logic.routes r ON r.id = pc.route_id
                     WHERE
                         pc.id = ?
                     """;
@@ -982,11 +988,11 @@ public class PostgresPersistenceManager implements PersistenceManager {
 
             final ResultSet rs = ps.executeQuery();
 
-            UUID id = null;
             UUID groupId = null;
             String country = "US";
             String nickName;
-            Map<Platform, String> platformMap = new HashMap<>();
+            Map<Platform, UUID> platformIdMap = new HashMap<>();
+            Map<Platform, String> platformNumberMap = new HashMap<>();
             Map<Platform, Instant> platformCreatedMap = new HashMap<>();
             Map<Platform, String> platformNickNames = new HashMap<>();
             Set<LanguageCode> languages = new LinkedHashSet<>();
@@ -1004,7 +1010,7 @@ public class PostgresPersistenceManager implements PersistenceManager {
             while (rs.next()) {
                 rowCount++;
 
-                id = (UUID) rs.getObject("id"); // u.id
+                UUID id = (UUID) rs.getObject("id"); // u.id
 
                 // u.group_id
                 groupId = (UUID) rs.getObject("group_id");
@@ -1012,8 +1018,11 @@ public class PostgresPersistenceManager implements PersistenceManager {
                 String platformId = rs.getString("platform_id"); // u.platform_id
                 Platform platform = Platform.byCode(rs.getString("platform_code")); // u.platform_code // throws IaE if null
 
-                // Build up the map of IDs for each Platform.
-                platformMap.put(platform, platformId);
+                // Build up the map of "numbers" for each Platform. For SMS, this is a phone number. For others, it's an opaque string.
+                platformNumberMap.put(platform, platformId);
+
+                // Same for the UUID
+                platformIdMap.put(platform, id);
 
                 country = rs.getString("country"); // u.country
 
@@ -1061,7 +1070,7 @@ public class PostgresPersistenceManager implements PersistenceManager {
             Set<LanguageCode> userLanguages = new HashSet<>(languages);
             LOG.info("Languages for user: {}", languages);
 
-            return new User(id, groupId, platformMap, platformCreatedMap, country, userLanguages, customerId, platformNickNames, platformProfiles, platformStatus);
+            return new User(platformIdMap, groupId, platformNumberMap, platformCreatedMap, country, userLanguages, customerId, platformNickNames, platformProfiles, platformStatus);
 
         } catch (SQLException e) {
             LOG.error("getUser failed", e);
@@ -1084,19 +1093,20 @@ public class PostgresPersistenceManager implements PersistenceManager {
     private boolean insertNewUserAmalgam(Connection connection, User user) throws SQLException {
         LOG.info("insertUserAmalgam: {}", user);
 
-        final Map.Entry<Platform, String> onlyPlatform = user.platformIds().entrySet().iterator().next();
-        final Map.Entry<Platform, UserStatus> onlyStatus = user.platformStatus().entrySet().iterator().next();
+        final var onlyId = user.platformIds().entrySet().iterator().next();
+        final var onlyNumber = user.platformNumbers().entrySet().iterator().next();
+        final var onlyStatus = user.platformStatus().entrySet().iterator().next();
         final var onlyProfile = (user.platformProfiles() == null) ? null : user.platformProfiles().entrySet().iterator().next().getValue();
         Instant createdAt = utcInstant();
 
         try (PreparedStatement ps = connection.prepareStatement(USER_AMALGAM_INSERT)) {
-            ps.setObject(1, user.id()); // id
+            ps.setObject(1, onlyId.getValue()); // id
             ps.setObject(2, onlyStatus.getValue(), OTHER);
-            ps.setString(3, onlyPlatform.getValue()); // platform_id
-            ps.setObject(4, onlyPlatform.getKey().code(), OTHER); // platform_code
+            ps.setString(3, onlyNumber.getValue()); // platform_id
+            ps.setObject(4, onlyNumber.getKey().code(), OTHER); // platform_code
             ps.setObject(5, user.countryCode(), OTHER); // country
             ps.setObject(6, user.languages().iterator().next(), OTHER); // language
-            ps.setObject(7, user.platformNickNames().get(onlyPlatform.getKey()));
+            ps.setObject(7, user.platformNickNames().get(onlyNumber.getKey()));
             ps.setTimestamp(8, Timestamp.from(createdAt)); // created_at
             ps.setTimestamp(9, Timestamp.from(createdAt)); // updated_at
             // plus these two just for the amalgams table.
@@ -1116,9 +1126,9 @@ public class PostgresPersistenceManager implements PersistenceManager {
     }
 
 //    private boolean insertUser(Connection connection, User user) {
-//        int numOfPlatforms = user.platformIds().size();
+//        int numOfPlatforms = user.platformNumbers().size();
 //        assert numOfPlatforms == 1;
-//        final Map.Entry<Platform, String> onlyPlatform = user.platformIds().entrySet().iterator().next();
+//        final Map.Entry<Platform, String> onlyPlatform = user.platformNumbers().entrySet().iterator().next();
 //        Instant createdAt = utcInstant();
 //
 //        LOG.info("insertUser: {}", user);
@@ -1151,11 +1161,11 @@ public class PostgresPersistenceManager implements PersistenceManager {
 //
 //    }
 
-    public Collection<CampaignUser> getPushCampaignUsers(@NonNull UUID campaignId) {
+    public @NonNull Collection<CampaignUser> getPushCampaignUsers(@NonNull UUID campaignId, DeliveryStatus byStatus) {
         try (Connection connection = fetchConnection()) {
             assert connection != null;
             return getPushCampaignUsers(
-                    connection, campaignId);
+                    connection, campaignId, DeliveryStatus.PENDING);
         } catch (SQLException e) {
             LOG.error("getUsersForPushCampaign: fetchConnection failed", e);
             return new ArrayList<>(0);
@@ -1163,22 +1173,22 @@ public class PostgresPersistenceManager implements PersistenceManager {
     }
 
     @NonNull
-    private Collection<CampaignUser> getPushCampaignUsers(@NonNull Connection connection, @NonNull UUID campaignId) throws SQLException {
-        try (PreparedStatement ps = connection.prepareStatement(SELECT_PUSH_CAMPAIGN_USERS)) {
+    private Collection<CampaignUser> getPushCampaignUsers(@NonNull Connection connection, @NonNull UUID campaignId, DeliveryStatus byStatus) throws SQLException {
+        try (PreparedStatement ps = connection.prepareStatement(SELECT_PUSH_CAMPAIGN_USERS_BY_DELIVERY_STATUS)) {
 
             CampaignUserReport report = new CampaignUserReport();
 
             ps.setObject(1, campaignId);
+            ps.setObject(2, byStatus, OTHER);
             final ResultSet rs = ps.executeQuery();
-
-            // rs.findColumn(""); // FIXME worth doing a one time loop to get the indexes for each column name? Nah...
 
             Map<UUID, CampaignUser> campaignUsersByGroupId = new HashMap<>();
 
             // NB: customer_id and delivered will be null for linked users
             while (rs.next()) {
 
-                final Map<Platform, String> plaformIdsMap = new HashMap<>();
+                final Map<Platform, UUID> plaformIdMap = new HashMap<>();
+                final Map<Platform, String> plaformNumberMap = new HashMap<>();
                 final Map<Platform, UserStatus> platformStatusMap = new HashMap<>();
                 final Map<Platform, Instant> platformCreationTimesMap = new HashMap<>();
                 final Map<Platform, String> platformNickNames = new HashMap<>();
@@ -1232,7 +1242,7 @@ public class PostgresPersistenceManager implements PersistenceManager {
                 final Timestamp pua = rs.getTimestamp("profile_updated_at");
                 final Instant profileUpdatedAt = (pua == null) ? null : pua.toInstant();
 
-                // pc_all.customer_id (nullable)
+                // cgi.customer_id  // pc_all.customer_id (nullable)
                 final UUID customerId = (UUID) rs.getObject("customer_id");
 
                 // s.updated_at AS session_updated_at
@@ -1260,7 +1270,8 @@ public class PostgresPersistenceManager implements PersistenceManager {
                 }
 
                 languages.add(languageCode);
-                plaformIdsMap.put(userPlatform, platformId);
+                plaformIdMap.put(userPlatform, userId);
+                plaformNumberMap.put(userPlatform, platformId);
                 platformStatusMap.put(userPlatform, userStatus);
                 platformNickNames.put(userPlatform, nickName);
                 platformCreationTimesMap.put(userPlatform, userCreatedAt);
@@ -1270,9 +1281,9 @@ public class PostgresPersistenceManager implements PersistenceManager {
                 }
 
                 final var user = new User(
-                        userId,
+                        plaformIdMap,
                         groupId,
-                        plaformIdsMap,
+                        plaformNumberMap,
                         platformCreationTimesMap,
                         country.name(),
                         languages,
@@ -1298,10 +1309,6 @@ public class PostgresPersistenceManager implements PersistenceManager {
 
             }
 
-            //campaignUsersByGroupId.forEach( (k,v) -> {
-            //    perUserProcessor.apply(v);
-            //});
-
             //IO.println("Total users processed: " + campaignUsersByGroupId.size());
             //List<CampaignUser> serializeThis = new ArrayList<>(campaignUsersByGroupId.values());
             // The output for 14 records is just under 7K. This is less than 140 lines (7,245 bytes or 7,243 chars) of plain text.
@@ -1313,7 +1320,6 @@ public class PostgresPersistenceManager implements PersistenceManager {
             //    throw new RuntimeException(e);
             //}
 
-//          final var ok = perUserProcessor.apply(campaignUser);
             return campaignUsersByGroupId.values();
         }
     }
@@ -1324,8 +1330,8 @@ public class PostgresPersistenceManager implements PersistenceManager {
            SET
              delivered = ?
            WHERE
-             campaign_id = ? 
-           AND           
+             campaign_id = ?
+           AND
              user_id = ANY (?)
            """;
 
@@ -1346,8 +1352,8 @@ public class PostgresPersistenceManager implements PersistenceManager {
             ps.setObject(2, report.campaignId);
 
             UUID[] ids = report.processedUsers.toArray(new UUID[0]);
-            LOG.info("ids size: " + ids.length);
-            LOG.info("ids elements: " + Arrays.toString(ids));
+            // LOG.info("ids size: " + ids.length);
+            // LOG.info("ids elements: " + Arrays.toString(ids));
 
             Array skippedIds = connection.createArrayOf("uuid", ids);
             ps.setArray(3, skippedIds);
@@ -1369,6 +1375,7 @@ public class PostgresPersistenceManager implements PersistenceManager {
 //        }
 //    }
 //
+
 //    private @Nullable List<CampaignUser> getUsersForPushCampaign(Connection connection, @NonNull UUID pushCampaignId) {
 //        try (PreparedStatement ps = connection.prepareStatement(SELECT_PUSH_CAMPAIGN_USERS)) {
 //            ps.setObject(1, pushCampaignId);
@@ -1467,10 +1474,21 @@ public class PostgresPersistenceManager implements PersistenceManager {
             // node id
             UUID nodeId = (UUID) rs.getObject(10);
 
+            // r.channel
+            String channel = rs.getString(11);
+
+            // r.platform
+            Platform platform = Platform.byCode(rs.getString(12));
+
+            // r.status
+            RouteStatus routeStatus = RouteStatus.valueOf(rs.getString(13));
+
+
             return new PushCampaign(
                     id, customerId, description, scriptId, createdAt, updatedAt, completedAt,
                     customerStatus, scriptStatus,
-                    nodeId);
+                    nodeId,
+                    channel, platform, routeStatus);
 
         } catch (SQLException e) {
             LOG.error("getPushCampaign failed", e);

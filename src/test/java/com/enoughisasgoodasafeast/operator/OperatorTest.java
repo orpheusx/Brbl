@@ -221,7 +221,7 @@ public class OperatorTest {
 
         var session = operator.sessionCache.get(SessionKey.newSessionKey(mo4));
         assertNotNull(session);
-        final String userPhoneNumber = session.getUser().platformIds().get(Platform.SMS);
+        final String userPhoneNumber = session.getUser().platformNumbers().get(Platform.SMS);
         LOG.info("Session User platform ID = {}", userPhoneNumber);
         assertEquals(MOBILE_MX, userPhoneNumber);
 

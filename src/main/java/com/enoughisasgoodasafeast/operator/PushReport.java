@@ -6,6 +6,7 @@ import org.slf4j.LoggerFactory;
 
 import java.time.Instant;
 import java.util.ArrayList;
+import java.util.Map;
 import java.util.StringJoiner;
 import java.util.UUID;
 
@@ -30,6 +31,7 @@ public class PushReport {
 
     boolean nodeNotFound;
     boolean scriptStatusNotProd;
+    boolean routeStatusNotActive;
 
     // True if there were no user associated with the PushCampaign
     boolean campaignUsersEmpty;
@@ -44,9 +46,9 @@ public class PushReport {
     ArrayList<UUID> activeUsersSkipped = new ArrayList<>(); // amalgam.group_id
 
     // The users that had errors while processing their script
-    ArrayList<UUID> usersSkippedDueToScriptErrors = new ArrayList<>();
+    ArrayList<UUID> usersSkippedDueToScriptErrors = new ArrayList<UUID>();
 
-    ArrayList<UUID> processedUsers = new ArrayList<>();
+    ArrayList<UUID> processedUsers = new ArrayList<UUID>();
 
     private boolean campaignAndUserStatusUpdateFail;
 
@@ -78,6 +80,12 @@ public class PushReport {
     public void scriptStatusNotProdFail(ScriptStatus status) {
         this.scriptStatusNotProd = true;
         LOG.warn("Script {} status is not PROD ({})", scriptId, status.name());
+        end();
+    }
+
+    public void routeStatusNotActive(RouteStatus routeStatus) {
+        this.routeStatusNotActive = true;
+        LOG.warn("Route status is not ACTIVE ({}.)", routeStatus.name());
         end();
     }
 
@@ -115,4 +123,5 @@ public class PushReport {
                 .add("campaignAndUserStatusUpdateFail=" + campaignAndUserStatusUpdateFail)
                 .toString();
     }
+
 }

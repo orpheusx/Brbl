@@ -20,9 +20,9 @@ import java.util.UUID;
  * The validation of country codes is limited to what the platform supports.
  * TODO Currently, this is hardcoded and we need to change it.
  *
- * @param id                    the identifier used within the Brbl ecosystem.
+ * @param platformIds           the identifier used within the Brbl ecosystem.
  * @param groupId               the identifier used to link the same user on different platforms together.
- * @param platformIds           the identifiers for this User on other messaging platforms.
+ * @param platformNumbers       the identifiers for this User on other messaging platforms.
  * @param platformCreationTimes the creation time for this User for each messaging platform.
  * @param countryCode           the ISO country of the nation where the User lives.
  * @param languages             the list of ISO language codes spoken by the User.
@@ -35,9 +35,9 @@ import java.util.UUID;
 // TODO convert the type of 'languages' to LanguageCode and 'countryCode' to CountryCode.
 //  Also, make 'countryCode' a map like the other properties that are implicitly collections.
 public record User(
-        UUID id,
+        Map<Platform, UUID> platformIds,
         UUID groupId,
-        Map<Platform, String> platformIds,
+        Map<Platform, String> platformNumbers,
         Map<Platform, Instant> platformCreationTimes,
         String countryCode, // FIXME why isn't this a map as well?
         Set<LanguageCode> languages, // FIXME make this a Set of LanguageCode.
@@ -51,12 +51,12 @@ public record User(
 
     public User {
         // validations
-        if (id == null) {
-            fail("id cannot be null.");
+        if (platformIds == null || platformIds.isEmpty()) {
+            fail("platformIds cannot be null.");
         }
 
-        if (platformIds == null || platformIds.isEmpty()) {
-            fail("platformIds cannot be null or empty.");
+        if (platformNumbers == null || platformNumbers.isEmpty()) {
+            fail("platformNumbers cannot be null or empty.");
         }
 
         if (platformCreationTimes == null || platformCreationTimes.isEmpty()) {
@@ -93,14 +93,14 @@ public record User(
 
         // NB: Perfectly fair for the User to not have any nicknames or be associated with a Profile.
 
-        LOG.debug("Created new User (id:{})", id);
+        LOG.debug("Created new User (id:{})", platformIds);
     }
 
     // Convenience constructor.
     // TODO Create a countryCode enum class, matching our schema type already defines (US, CA, MX)
-//    public User(Map<Platform, String> platformIds, Map<Platform, Instant> platformCreationTimes, Set<String> languages,
+//    public User(Map<Platform, String> platformNumbers, Map<Platform, Instant> platformCreationTimes, Set<String> languages,
 //                UUID customerId, Map<Platform, UserStatus> platformStatus) {
-//        this(randomUUID(), randomUUID(), platformIds, platformCreationTimes,
+//        this(randomUUID(), randomUUID(), platformNumbers, platformCreationTimes,
 //                "US", languages, customerId, Map.of(), null, platformStatus);
 //    }
 
@@ -109,7 +109,8 @@ public record User(
     }
 
     public void merge(User other) {
-        this.platformIds.putAll(other.platformIds());
+        this.platformIds.putAll(other.platformIds);
+        this.platformNumbers.putAll(other.platformNumbers());
         this.platformCreationTimes.putAll(other.platformCreationTimes());
         this.platformNickNames.putAll(other.platformNickNames());
         this.platformProfiles.putAll(other.platformProfiles());
