@@ -13,7 +13,7 @@ import java.util.*;
 import java.util.regex.Pattern;
 
 import static com.enoughisasgoodasafeast.Functions.randomUUID;
-import static io.jenetics.util.NanoClock.*;
+import static io.jenetics.util.NanoClock.utcInstant;
 
 public class TestingPersistenceManager implements PersistenceManager {
 
@@ -22,7 +22,7 @@ public class TestingPersistenceManager implements PersistenceManager {
     public static final UUID KEYWORD_ID = randomUUID();
     public static final UUID SCRIPT_ID = UUID.fromString("89eddcb8-7fe5-4cd1-b18b-78858f0789fb");
     public static final String USER_ID = OperatorTest.MOBILE_MX;
-    public static final UUID CUSTOMER_ID = randomUUID();
+    public static final UUID CLAIMANT_ID = randomUUID();
 
     private final Map<Pattern, Keyword> keywordMap = new HashMap<>();
     private final Map<UUID, Node> nodesByScriptId = new HashMap<>();
@@ -125,7 +125,7 @@ public class TestingPersistenceManager implements PersistenceManager {
         userNickNames.put(Platform.SMS, "Bozo");
         Map<Platform, UserStatus> userStatuses = new LinkedHashMap<>();
         userStatuses.put(Platform.SMS, UserStatus.IN);
-        return new User(platformIds, randomUUID(), platformNumbers, platformCreatedAt, "US", Set.of(LanguageCode.ENG), CUSTOMER_ID, userNickNames, null, userStatuses);
+        return new User(platformIds, randomUUID(), platformNumbers, platformCreatedAt, "US", Set.of(LanguageCode.ENG), CLAIMANT_ID, null, userNickNames, null, userStatuses);
     }
 
     public Collection<CampaignUser> getPushCampaignUsers(@NonNull UUID campaignId, DeliveryStatus byStatus) {
@@ -134,5 +134,12 @@ public class TestingPersistenceManager implements PersistenceManager {
 
     public boolean updatePushCampaignUsersStatus(@NonNull PushReport report) throws SQLException {
         return true;
+    }
+
+    public UUID createPushCampaign(@NonNull UUID customerId,
+                                   String description,
+                                   @NonNull UUID scriptId,
+                                   @NonNull UUID routeId) throws SQLException {
+        return null;
     }
 }

@@ -3070,15 +3070,54 @@ Discovered a problem with the SELECT_PUSH_CAMPAIGN_USERS query processing:
 Indirectly, we can solve this by adding a param to the getPushCampaign method that filters by the DeliveryStatus.
 
 TODO
-_ Add the claimant_id to AMALGAMS.
-_ Alter the primary key to use claimant column instead of customer_id.
-_ Update the data generator code.
+X Add the claimant_id to AMALGAMS.
+    ALTER TABLE brbl_users.amalgams ADD COLUMN claimant_id UUID;
+    ALTER TABLE brbl_users.amalgams
+        ADD CONSTRAINT fk_customers_claimant_id FOREIGN KEY (claimant_id) REFERENCES brbl_users.customers(id);
+X Add NOT NULL to claimant_id column.
+    ALTER TABLE brbl_users.amalgams
+        ALTER COLUMN claimant_id SET NOT NULL;
+X Alter the primary key to use claimant column instead of customer_id. Also, remove profile_id from the constraint since it us nullable:
+    ALTER TABLE ONLY brbl_users.amalgams
+        ADD CONSTRAINT unique_group_user_claimant UNIQUE (group_id, user_id, claimant_id);
+X Update insertNewUserAmalgam method, replacing customer_id with claimant_id in the insert.
+    _ (Should we also drop the customer_id from AMALGAMS and instead use a boolean in the PROFILES table to detect that the User is also a Customer?)
 X Add route_id to PUSH_CAMPAIGN:
     ALTER TABLE brbl_logic.push_campaigns ADD COLUMN route_id UUID;
     ALTER TABLE brbl_logic.push_campaigns
         ADD CONSTRAINT fk_campaign_routes_id FOREIGN KEY (route_id) REFERENCES brbl_logic.routes(id);
     (This can be used to provide/define the platform being targeted as well as the "from" field of the MT.)
-
 X Update the getPushCampaign method of PersistenceManager to include the new column.
 X In Blaster, use ROUTES' channel column in the construction of the fake MO so that generated MTs use it as well.
-_ Add NOT NULL constraint to brbl_logic.push_campaigns for customer_id, script_id, route_id.
+X Add NOT NULL constraint to brbl_logic.push_campaigns for customer_id, script_id, route_id.
+    ALTER TABLE brbl_logic.push_campaigns
+        ALTER COLUMN customer_id SET NOT NULL;
+    ALTER TABLE brbl_logic.push_campaigns
+            ALTER COLUMN script_id SET NOT NULL;
+    ALTER TABLE brbl_logic.push_campaigns
+        ALTER COLUMN route_id SET NOT NULL;
+
+_ Update the data generator code.
+
+
+===== 2026-02-08 ====
+
+Watched a video talking about the Mandrel project coming out of Quarkus and thought I should check if we could still build a compiled binary...
+
+    mvn clean verify -Pnative -DskipTests=true
+
+[The skipTests flag is needed because there's something amiss with our native testing configuration apparently.]
+
+The binary size is up to 99M--because of libraries we've added since the last native build?--but, yes, we can still build it.
+
+===== 2026-02-10 ====
+
+To complete the BlasterIntegrationTest we need to make the data setup reproducible.
+
+Need to implement createPushCampaign and createCampaignUserSegment methods in PostgresPersistenceManager.
+
+However...this leads me to realize that we don't yet have create methods for Nodes, Scripts, Routes, Customers, or Companies.
+
+I guess we don't have to implement all of these to create PushCampaigns. We could defer these till we get back to building Brbl admin which does the authoring.
+
+

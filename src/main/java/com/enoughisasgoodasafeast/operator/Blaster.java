@@ -40,6 +40,11 @@ public class Blaster {
         this.queueProducer = queueProducer;
     }
 
+    public Blaster(PersistenceManager persistenceManager, QueueProducer queueProducer) {
+        this.persistenceManager = persistenceManager;
+        this.queueProducer = queueProducer;
+    }
+
     public void init(Properties props) throws PersistenceManagerException, IOException, TimeoutException {
         if (persistenceManager == null) {
             persistenceManager = PostgresPersistenceManager.createPersistenceManager(props);
@@ -120,10 +125,8 @@ public class Blaster {
         LOG.info("Executing: {} (text: {}}", node.id(), node.text());
         LOG.info("Audience:");
 
-        PushSupport support = new PushSupport(campaignId, node, this.queueProducer, persistenceManager); // FIXME don't need this anymore, I think.
-
         final var campaignUsers = persistenceManager.getPushCampaignUsers(campaignId, DeliveryStatus.PENDING);
-        if(campaignUsers == null) {
+        if(campaignUsers == null || campaignUsers.isEmpty()) {
             report.campaignUsersEmptyFail();
             return report;
         }
@@ -146,25 +149,29 @@ public class Blaster {
 
             if (!campaignUser.user().platformStatus().get(platform).equals(UserStatus.IN)) {
                 report.invalidUsersSkipped.add(campaignUser.groupId());
+                LOG.info("User {} not opted-in at {}", campaignUser.groupId(), report.startPush); // FIXME make this .debug
+                continue;
             }
 
             // NB: SESSIONS primary key is group_id. So there's only one (currently) for any/all channels visited by the Customer's user.
             // FIXME Should we add user id to the SESSIONS table's primary key to allow more flexibility wrt session scope?
             final var lastSessionActivity = campaignUser.sessionLastUpdatedAt();
             // NB: A missing Session may simply indicate that they've been inactive for a while and the Session row was deleted in a prior cleanup.
-            final var isExpired = (null == lastSessionActivity) || isSessionExpired(lastSessionActivity);
-            if (!isExpired) {
+            final var isInactiveOrExpired = (null == lastSessionActivity) || isSessionExpired(lastSessionActivity);
+            if (!isInactiveOrExpired) {
                 // session is considered active so don't clobber it out-of-the-blue.
                 report.activeUsersSkipped.add(campaignUser.groupId());
+                LOG.info("Skipping active session: {}", campaignUser.groupId()); // FIXME make this .debug
+                continue;
             }
 
             // Create a new Session
             final var sessionForCampaignUser = new Session(
                     campaignUser.groupId(),
-                    support.startNode(),
+                    node,
                     campaignUser.user(),
-                    support.queueProducer(),
-                    support.persistenceManager()
+                    this.queueProducer,
+                    persistenceManager
             );
 
             // FIXME where should we get the route channel? Should we add it to the PUSH_CAMPAIGNS table? Or include it in the method signature?
@@ -183,7 +190,7 @@ public class Blaster {
         // FIXME move this outside of the campaignUser processing loop.
         // FIXME to avoid the cost of group updates we could have a results table that could provide historic info about successive attempts to push to a user.
         if (!persistenceManager.updatePushCampaignUsersStatus(report)) {
-            LOG.error("Failed to update push campaign {} and users!", campaignId);
+            report.campaignAndUserStatusUpdateFail();
         }
 
         // Generate the run report. Is this a table? push_campaign_report?

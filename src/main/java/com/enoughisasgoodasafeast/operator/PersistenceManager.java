@@ -51,6 +51,13 @@ public interface PersistenceManager {
 
     boolean updatePushCampaignUsersStatus(@NonNull PushReport report) throws SQLException;
 
+
+    UUID createPushCampaign(@NonNull UUID customerId,
+                            String description,
+                            @NonNull UUID scriptId,
+                            @NonNull UUID routeId) throws SQLException;
+
+
     /*
      * This exception exists simply to slightly abstract the internal details involved.
      */

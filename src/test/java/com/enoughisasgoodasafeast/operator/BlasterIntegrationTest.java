@@ -21,12 +21,49 @@ public class BlasterIntegrationTest {
 
     private static final Logger LOG = LoggerFactory.getLogger(BlasterIntegrationTest.class);
 
+    PersistenceManager persistenceManager;
     Blaster blaster;
+
+    final UUID customerId = UUID.fromString("8285d1a8-2dc0-6752-3758-0076224bc839");
+    final String description = "Created by BlasterIntegrationTest";
+    final UUID scriptId = UUID.fromString("019c1ee9-49cc-7d59-a430-f050612acd72");
+    final UUID routeId = UUID.fromString("019bf69d-a08a-7c3a-a4ca-ed70d35327fc");
 
     @BeforeEach
     void setUp() throws IOException, PersistenceManager.PersistenceManagerException, TimeoutException {
-        blaster = new Blaster(new InMemoryQueueProducer());
-        blaster.init(ConfigLoader.readConfig("persistence_manager_test.properties"));
+        final var props = ConfigLoader.readConfig("persistence_manager_test.properties");
+        persistenceManager = PostgresPersistenceManager.createPersistenceManager(props);
+        blaster = new Blaster(persistenceManager, new InMemoryQueueProducer());
+        blaster.init(props);
+    }
+
+    @Test
+    void pushCampaignLifecycle() {
+        assertDoesNotThrow(() -> {
+            var pcId = persistenceManager.createPushCampaign(customerId, description, scriptId, routeId);
+            final var pushCampaign = persistenceManager.getPushCampaign(pcId);
+            assertNotNull(pushCampaign);
+            assertEquals(ScriptStatus.PROD, pushCampaign.scriptStatus());
+            assertEquals(RouteStatus.ACTIVE, pushCampaign.routeStatus());
+
+            // create a user segment
+
+            // exec the campaign
+
+            // fetch campaign and check its status
+
+            // fetch user segment and check status of each campaign user
+        });
+    }
+
+    @Test
+    void updateCampaignUsersStatus() {
+        // create user segment for existing campaign,
+    }
+
+    @Test
+    void updatePushCampaignStatus() {
+        // create a campaign, fetch it, check status, update status. fetch it, check status
     }
 
     @Test
@@ -37,26 +74,22 @@ public class BlasterIntegrationTest {
         // Scripts: id, name, customer_id, status
         // 0cdbd272-4916-4a88-9826-d43623443fb2 | Script 0   | 8285d1a8-2dc0-6752-3758-0076224bc839 | PROD
 
-         // INSERT INTO brbl_logic.push_campaigns
-         //  (id, customer_id, description, script_id, created_at, updated_at, completed_at)
-         //  VALUES
-         //  (uuidv7(), '8285d1a8-2dc0-6752-3758-0076224bc839', 'Test Campaign 1', '0cdbd272-4916-4a88-9826-d43623443fb2', NOW(), NOW(), null);
+         // Push Campaign: campaign_id
+        // 019bd1ff-c890-7a28-9758-7ce559af5e0b
 
-        // We have 13 users on the WhatsApp platform with Profiles:
-        // select u.id, u.platform_code, u.platform_id, u.status, p.given_name from amalgams a inner join profiles p on p.id = a.profile_id inner join users u on u.id = a.user_id where u.platform_code = 'W';
-
-        // INSERT INTO CAMPAIGN_USERS(campaign_id, user_id, delivered)
-        // SELECT '019bd1ff-c890-7a28-9758-7ce559af5e0b', u.id, 'PENDING'
-        // FROM amalgams a
-        //      INNER JOIN profiles p ON p.id = a.profile_id
-        //      INNER JOIN users u ON u.id = a.user_id
-        // WHERE u.platform_code = 'W';
-        // 13 records inserted.
         var uuid = UUID.fromString("019bd1ff-c890-7a28-9758-7ce559af5e0b");
         final PushReport report = blaster.exec(uuid);
 
+        assertFalse(report.nodeNotFound, "Missing specified Node");
+        assertFalse(report.scriptStatusNotProd,  "Specified Script status was not PROD.");
+        assertFalse(report.routeStatusNotActive, "Specified Route status was not ACTIVE.");
+        assertFalse(report.campaignUsersEmpty, "Missing expected campaign users.");
         assertEquals(0, report.invalidUsersSkipped.size());
-//        assertEquals(13, report.numUsers);
+//        assertEquals(0, report.activeUsersSkipped.size());
+        assertEquals(0, report.usersSkippedDueToScriptErrors.size());
+//        assertEquals(report.numUsers, report.processedUsers.size(), "Not all users have been processed.");
+        assertFalse(report.campaignAndUserStatusUpdateFail, "Push campaign and/or campaign user status update failed.");
+
     }
 
     @Test

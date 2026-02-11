@@ -289,16 +289,17 @@ public class Operator implements MessageProcessor {
         if (user == null) {
             LOG.info("User not found.");
             user = new User(
-                    Map.of(sessionKey.platform(), randomUUID()),
-                    randomUUID(),
-                    Map.of(sessionKey.platform(), sessionKey.from()),
-                    Map.of(sessionKey.platform(), utcInstant()),
-                    deriveCountryCodeFromId(sessionKey.from()),
-                    defaultLanguageSet(sessionKey.from(), sessionKey.to()),
-                    findCustomerIdByRoute(sessionKey),
-                    defaultNickNameMap(),
+                    Map.of(sessionKey.platform(), randomUUID()),      // platformIds
+                    randomUUID(),                                     // groupId
+                    Map.of(sessionKey.platform(), sessionKey.from()), // platformNumbers
+                    Map.of(sessionKey.platform(), utcInstant()),      // platformCreationTimes
+                    deriveCountryCodeFromId(sessionKey.from()),       // countryCode
+                    defaultLanguageSet(sessionKey.from(), sessionKey.to()), //  languages
+                    findCustomerIdByRoute(sessionKey),                // claimant_id
+                    null,                                             // customer_id
+                    defaultNickNameMap(),                             // platformNicknames
                     null, // FIXME need to do a consistency check on how we handle these Platform-keyed maps. How should we represent an absence of values?
-                    defaultPlatformStatusMap(UserStatus.IN) // FIXME is this right value?
+                    defaultPlatformStatusMap(UserStatus.IN) // FIXME is this right initial value?
             );
 
             boolean isInserted = persistenceManager.insertNewUser(user);

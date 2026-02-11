@@ -33,7 +33,8 @@ public class SessionTest {
             Session session = new Session(
                     randomUUID(),
                     new Node("do nothing", EchoWithPrefix, null),
-                    new User(platformIds, randomUUID(), platformNumbers, platformsCreated, countryCode, languages, customerId, userNickNames, null, platformStatuses),
+                    new User(platformIds, randomUUID(), platformNumbers, platformsCreated, countryCode, languages,
+                            claimantId, null, userNickNames, null, platformStatuses),
                     new InMemoryQueueProducer(),
                     null);
             int numElements = MAX_INPUT_HISTORY + 1;
@@ -107,8 +108,6 @@ public class SessionTest {
         });
 
     }
-
-
 
 //    @Test
 //    void serializeSessionUsingFury() {
@@ -203,7 +202,8 @@ public class SessionTest {
         return new Session(
                 id,
                 new Node("The quick brown fox jumps over the lazy dog.", NodeType.SendMessage, "A test Node"),
-                new User(platformIds, randomUUID(), platformNumbers, platformsCreated, countryCode, languages, customerId, userNickNames, null, platformStatuses),
+                new User(platformIds, randomUUID(), platformNumbers, platformsCreated, countryCode, languages,
+                        claimantId, null, userNickNames, null, platformStatuses),
                 queueProducer,
                 persistenceManager);
     }
@@ -277,12 +277,8 @@ public class SessionTest {
             assertEquals(session.getId().toString(), clone.getId().toString());
             assertEquals(session.currentNode, clone.currentNode);
 
-
             clone.postDeserialize(queueProducer, persistenceManager);
             assertEquals(session, clone);
-
-//            clone.registerOutput(new Message(MessageType.MT, "17817209468", "1234", "still connected to ppm and queue?"));
-//            clone.flush();
 
             LOG.info("Cool.");
 

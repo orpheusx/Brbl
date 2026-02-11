@@ -6,7 +6,6 @@ import org.slf4j.LoggerFactory;
 
 import java.time.Instant;
 import java.util.ArrayList;
-import java.util.Map;
 import java.util.StringJoiner;
 import java.util.UUID;
 
@@ -50,7 +49,7 @@ public class PushReport {
 
     ArrayList<UUID> processedUsers = new ArrayList<UUID>();
 
-    private boolean campaignAndUserStatusUpdateFail;
+    public boolean campaignAndUserStatusUpdateFail;
 
 
     public PushReport(UUID campaignId) {
@@ -97,6 +96,8 @@ public class PushReport {
 
     public void campaignAndUserStatusUpdateFail() {
         this.campaignAndUserStatusUpdateFail = true;
+        LOG.error("Failed to update push campaign {} and users!", campaignId);
+        end();
     }
 
     public void end() {

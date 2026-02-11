@@ -1,5 +1,7 @@
 package com.enoughisasgoodasafeast.operator;
 
+import org.jspecify.annotations.NonNull;
+import org.jspecify.annotations.Nullable;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -14,8 +16,9 @@ import java.util.UUID;
  * These incarnations are distinguished by the Platform through which they communicate.
  * We materialize the data for all the rows linked through the amalgams table so that Scripts can make use of it.
  * A User lives in a single country but may speak multiple languages.
- * They may be identified differently by the Platforms they use to communicate.
- * Their primary id is their Brbl defined id.
+ * They may be identified differently by the Platforms they use to communicate. SMS and WhatsApp use a phone number while
+ *  other platforms use opaque identifiers.
+ * Their primary id is their Brbl defined id, a UUID.
  * <p>
  * The validation of country codes is limited to what the platform supports.
  * TODO Currently, this is hardcoded and we need to change it.
@@ -26,31 +29,31 @@ import java.util.UUID;
  * @param platformCreationTimes the creation time for this User for each messaging platform.
  * @param countryCode           the ISO country of the nation where the User lives.
  * @param languages             the list of ISO language codes spoken by the User.
- * @param customerId            the Customer that acquired this User instance.
+ * @param claimantId            the identifier of the Customer that claims this User instance.
  * @param platformNickNames     the optional nicknames for this User on other messaging platforms.
  * @param platformProfiles      the optional Profiles associated with this User for each messaging platform.
  * @param platformStatus        the User controlled opt-in status for each Platform.
  */
 
-// TODO convert the type of 'languages' to LanguageCode and 'countryCode' to CountryCode.
-//  Also, make 'countryCode' a map like the other properties that are implicitly collections.
+// TODO make 'countryCode' a map like the other properties that are implicitly collections.
 public record User(
-        Map<Platform, UUID> platformIds,
-        UUID groupId,
-        Map<Platform, String> platformNumbers,
-        Map<Platform, Instant> platformCreationTimes,
-        String countryCode, // FIXME why isn't this a map as well?
-        Set<LanguageCode> languages, // FIXME make this a Set of LanguageCode.
-        UUID customerId, // no map because the grouping of User rows is on the basis of the Customer claiming the User.
-        Map<Platform, String> platformNickNames,
-        Map<Platform, Profile> platformProfiles,
-        Map<Platform,UserStatus> platformStatus
+        @NonNull Map<Platform, UUID> platformIds,
+        @NonNull UUID groupId,
+        @NonNull Map<Platform, String> platformNumbers,
+        @NonNull Map<Platform, Instant> platformCreationTimes,
+        @NonNull String countryCode,
+        @NonNull Set<LanguageCode> languages,
+        @NonNull UUID claimantId, // Not a map because the grouping of User rows is on the basis of the claimant_id, the Customer claiming the User.
+        @Nullable UUID customerId, // Optional but, if present, same cardinality as groupId and claimantId
+        @NonNull Map<Platform, String> platformNickNames,
+        @Nullable Map<Platform, Profile> platformProfiles,
+        @NonNull Map<Platform,UserStatus> platformStatus
     ) implements Serializable {
 
     private static final Logger LOG = LoggerFactory.getLogger(User.class);
 
     public User {
-        // validations
+        // validations (we still do this to help debug (de)serialization problems.)
         if (platformIds == null || platformIds.isEmpty()) {
             fail("platformIds cannot be null.");
         }
@@ -83,8 +86,8 @@ public record User(
             }
         }
 
-        if (customerId == null) {
-            fail("customerId cannot be null");
+        if (claimantId == null) {
+            fail("claimantId cannot be null");
         }
 
         if (platformStatus == null || platformStatus.isEmpty()) {
@@ -96,24 +99,25 @@ public record User(
         LOG.debug("Created new User (id:{})", platformIds);
     }
 
-    // Convenience constructor.
-    // TODO Create a countryCode enum class, matching our schema type already defines (US, CA, MX)
-//    public User(Map<Platform, String> platformNumbers, Map<Platform, Instant> platformCreationTimes, Set<String> languages,
-//                UUID customerId, Map<Platform, UserStatus> platformStatus) {
-//        this(randomUUID(), randomUUID(), platformNumbers, platformCreationTimes,
-//                "US", languages, customerId, Map.of(), null, platformStatus);
-//    }
-
     void fail(String message) {
         throw new IllegalArgumentException(message);
     }
 
     public void merge(User other) {
+        // Only the paranoid survive...
+        if(!this.groupId.equals(other.groupId) || !this.claimantId.equals(other.claimantId)) {
+            throw new IllegalArgumentException("Cannot merge Users with different groupId or claimantId.");
+        }
+        if (this.customerId != null && other.customerId != null && !this.customerId.equals(other.customerId)) {
+            throw new IllegalArgumentException("Cannot merge Users with different customerId.");
+        }
         this.platformIds.putAll(other.platformIds);
         this.platformNumbers.putAll(other.platformNumbers());
         this.platformCreationTimes.putAll(other.platformCreationTimes());
         this.platformNickNames.putAll(other.platformNickNames());
-        this.platformProfiles.putAll(other.platformProfiles());
+        if (this.platformProfiles != null && other.platformProfiles() != null) {
+            this.platformProfiles.putAll(other.platformProfiles());
+        }
         this.platformStatus.putAll(other.platformStatus());
         this.languages.addAll(other.languages());
     }

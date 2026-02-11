@@ -18,10 +18,10 @@ public class CustomerTest {
     final static Map<Platform, String> userNickNames = new LinkedHashMap<>();
     final static String countryCode = Locale.getDefault().getCountry();
     final static Set<LanguageCode> languages = Set.of(LanguageCode.SPA, LanguageCode.FRA);
-    final static UUID customerId = randomUUID();
+    final static UUID claimantId = randomUUID();
     final static Map<Platform, UserStatus> userStatuses = Map.of(Platform.SMS, UserStatus.IN);
 
-    final static User user = new User(platformIds, groupId, platformNumbers, platformCreatedMap, countryCode, languages, customerId, userNickNames, null, userStatuses);
+    final static User user = new User(platformIds, groupId, platformNumbers, platformCreatedMap, countryCode, languages, claimantId, null, userNickNames, null, userStatuses);
 
     // final String firstName = "Fred";
     // final String surname = "Flintstone";
@@ -47,21 +47,5 @@ public class CustomerTest {
         });
         assertTrue(exception.getMessage().contains("user"));
     }
-
-    //@Test
-    //public void firstNameNull() {
-    //    Exception exception = assertThrows(IllegalArgumentException.class, () ->
-    //            new Customer(null, user, null, null)
-    //    );
-    //    assertTrue(exception.getMessage().contains("firstName"));
-    //}
-
-    //@Test
-    //public void surnameNull() {
-    //    Exception exception = assertThrows(IllegalArgumentException.class, () ->
-    //        new Customer(null, user, /*firstName, null, companyName,*/ null, null)
-    //    );
-    //    assertTrue(exception.getMessage().contains("surname"));
-    //}
 
 }
