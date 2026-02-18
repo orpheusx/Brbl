@@ -111,59 +111,7 @@ public class Operator implements MessageProcessor {
     }
 
     private boolean process(Session session, Message message) {
-        synchronized (session) { // FIXME move the synchronization to caller where the session is created?
-            try {
-                session.registerInput(message);
-                int size = session.currentInputsCount();
-                if (size > EXPECTED_INPUT_COUNT) {
-                    LOG.error("Uh oh, there are more inputs ({}) than expected in session ({})", size, session);
-                    // NB: We've synchronized on the Session which seems like it should prevent the following:
-                        // Corner case: user sent multiple responses that arrived closely together (possibly due to delays/buffering in
-                        // the telco's SMSc) and, due to an unfortunate thread context switch, we've processed each in the same process call.
-                        // Likely this creates an unexpected situation. To handle it we should create a new Node of
-                        // NodeType.PivotScript and chain the remaining Scripts to it.
-                        // These scripts will explain the problem and ask what the user what they want to do.
-                        // We'll do the same in other cases as well.
-                    // TODO...fetch the PivotScript for the given shortcode
-                }
-
-                // Also check if the current Message was created prior to the previous Message in the session's history.
-                // This would signal out-of-order processing which Is Bad™
-                Message previousInputMessage = session.previousInput();
-                if (previousInputMessage != null) {
-                    if (previousInputMessage.receivedAt().isAfter(message.receivedAt())) {
-                        LOG.error("Oh shit, we processed an MO received later than this one: {} > {}",
-                                previousInputMessage.receivedAt(), message.receivedAt());
-                        // TODO fetch a special script to apologize to the user then replay the Node returned by Session.getScriptForProcessedMO()?
-                    }
-                }
-
-                // FIXME Session.evaluate handles appending the evaluated node to the evaluatedScript list
-                // NB Script processing functions are limited to getting the currentNode, never setting it.
-                // Setting it is only done here based on the function's return value but can be
-                Node next = evaluate(session.currentNode, session, message); // FIXME What if currentNode is null? Start using Optionals with a constant sentinel value instead of null?
-                LOG.info("Next node is {}", next);
-                session.currentNode = next;
-
-                // Continue to walk the graph until we reach the end (null) or a node that blocks for input
-                while (next != null && !next.type().isAwaitInput()) {
-                    LOG.info("Continuing playback...");
-                    next = evaluate(session.currentNode, session, message);
-
-                    session.currentNode = next;
-                }
-
-                session.flush(); // FIXME ideally should be in a finally block but writing to db can throw. Hmm...
-
-                persistenceManager.saveSession(session);
-
-                return true; // when would this be false?
-
-            } catch (IOException | PersistenceManagerException e) {
-                LOG.error("Processing error", e); // TODO need to consider options for better handling of error scenarios.
-                return false;
-            }
-        }
+        return ScriptEngine.process(session, message);
     }
 
     /**

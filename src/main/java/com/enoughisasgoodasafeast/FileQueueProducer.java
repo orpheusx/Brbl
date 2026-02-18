@@ -27,8 +27,8 @@ public class FileQueueProducer implements QueueProducer {
     }
 
     @Override
-    public void enqueue(Message event) {
-        Message mt = (Message)event;
+    public boolean enqueue(Message event) {
+        Message mt = (Message) event;
         long receivedAt = NanoClock.systemUTC().nanos();
         try {
             Files.writeString(
@@ -37,9 +37,11 @@ public class FileQueueProducer implements QueueProducer {
                     StandardCharsets.UTF_8
             );
         } catch (IOException e) {
-            throw new RuntimeException(e);
+            LOG.error("Failed to enqueue message to file.");
+            return false;
         }
 
+        return true;
     }
 
     @Override

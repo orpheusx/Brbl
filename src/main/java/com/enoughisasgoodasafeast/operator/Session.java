@@ -152,15 +152,25 @@ public class Session implements ScriptContext, Serializable {
         return evaluatedNodes.getFirst();
     }
 
-    public void flush() throws IOException {
+    public boolean flush() {
         int numInBuffer = outputBuffer.size();
-        LOG.info("flushOutput: outputBuffer size = {}", numInBuffer);
+        LOG.info("flush: outputBuffer size = {}", numInBuffer);
         Message mtMessage;
         while((mtMessage = outputBuffer.poll()) !=null) {
-            producer.enqueue(mtMessage);
-            if (!persistenceManager.insertMT(mtMessage, this)) {
-                throw new IOException("MT write failed for: " + mtMessage);
+            if (!producer.enqueue(mtMessage)) {
+                LOG.error("flush: failed to enqueue: {}", mtMessage);
+                return false;
             }
+            if (!persistenceManager.insertMT(mtMessage, this)) {
+                LOG.error("flush: MT write failed for: {}", mtMessage);
+            }
+        }
+
+        try {
+            persistenceManager.saveSession(this);
+        } catch (PersistenceManager.PersistenceManagerException e) {
+            LOG.error("flush: failed to save session: {}", this, e);
+            return false;
         }
 
         outputBuffer.clear();
@@ -168,6 +178,8 @@ public class Session implements ScriptContext, Serializable {
         inputs.forEach(inputHistory::addLast);
 
         inputs.clear();
+
+        return true;
     }
 
     public UUID getId() {

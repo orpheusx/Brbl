@@ -96,22 +96,22 @@ public class Rcvr extends WebService {
             String rcvPayload = req.content().as(String.class); // write this to a log?
 
             //Message moMessage = null;
-            try {
-                Message moMessage = marshall(rcvPayload);
-                LOG.info("{} request content: {}", BRBL_ENQUEUE_ENDPOINT, moMessage); // make debug
+            Message moMessage = marshall(rcvPayload);
+            LOG.info("{} request content: {}", BRBL_ENQUEUE_ENDPOINT, moMessage); // make debug
 
-                queueProducer.enqueue(moMessage);
-
-                boolean isInsertOk = persistenceManager.insertMO(moMessage);
-                if (!isInsertOk) {
-                    // TODO increment a database specific error counter metric in Prometheus?
-                    LOG.error("Failed to log enqueued message, {}", moMessage);
-                }
-
-            } catch (IOException e) {
-                LOG.error("Error handling message: {}", rcvPayload);
-                LOG.error("Cause:", e);
+            final boolean enqueueOk = queueProducer.enqueue(moMessage);
+            if (!enqueueOk) {
+                LOG.error("Enqueue failed for message, {}", moMessage);
+                return;
             }
+
+            boolean isInsertOk = persistenceManager.insertMO(moMessage);
+            if (!isInsertOk) {
+                // TODO increment a database specific error counter metric in Prometheus?
+                LOG.error("Failed to log enqueued message, {}", moMessage);
+                return;
+            }
+
             /*finally {
                 // TODO increment a queue specific error counter metric in Prometheus?
             }*/

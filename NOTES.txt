@@ -3187,7 +3187,13 @@ Then I started questioning the use of the user_id (instead of the group_id) in t
 
 We could refactor this though I don't that we wouldn't find a different gotcha. Let's continue and revisit if there are other issues that tip the scales towards a refactor.
 
-Fixing the id used to save/load sessions to be consistent. We're not actually calling loadSession outside of tests! WTF.
-We do join on the sessions table when loading campaign users but don't grab the byte array, only the updated_at value.
+Fixing the id used to save/load sessions to be consistent. We're not actually calling loadSession outside of tests. We should be doing this in Operator as part of the
+We do join on the sessions table when loading campaign users but don't grab the byte array, only the updated_at value. This is reasonable given the feature description.
 
+===== 2026-02-18 ====
 
+TODO
+_ Add an updated_at column to the campaign_users table.
+_ Rename "delivered" column. This isn't what it means. The values of the delivery_status enum are likewise wrong.
+_ Refactor the process method currently duplicated in Operator and ScriptEngine.
+_ Add one more case to BlasterIntegrationTest to complete the coverage of PushReport.

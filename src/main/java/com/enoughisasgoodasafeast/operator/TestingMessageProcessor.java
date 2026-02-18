@@ -19,13 +19,8 @@ public class TestingMessageProcessor implements MessageProcessor {
 
     @Override
     public boolean process(Message message) {
-        try {
-            producer.enqueue(message);
-            LOG.info("Processed {}", message);
-        } catch (IOException e) {
-            LOG.error("Exception thrown processing {}", message);
-            throw new RuntimeException(e);
-        }
+        producer.enqueue(message);
+        LOG.info("Processed {}", message);
         return true;
     }
 

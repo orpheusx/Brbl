@@ -1,7 +1,8 @@
 package com.enoughisasgoodasafeast;
 
+import org.jspecify.annotations.NonNull;
+
 import java.io.IOException;
-import java.util.List;
 import java.util.concurrent.TimeoutException;
 
 /**
@@ -9,7 +10,7 @@ import java.util.concurrent.TimeoutException;
  */
 public interface QueueProducer {
 
-    public void enqueue(Message event) throws IOException;
+    public boolean enqueue(@NonNull Message event);
 
     public void shutdown() throws IOException, TimeoutException;
 

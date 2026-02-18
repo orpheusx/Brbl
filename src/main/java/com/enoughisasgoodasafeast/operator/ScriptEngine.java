@@ -25,7 +25,7 @@ public class ScriptEngine {
      * @param message the Message that initiates or continues the processing of the Session's Node graph.
      * @return false if the processing of the Message fails or there were exceptions thrown.
      */
-    public boolean process(Session session, Message message) {
+    public static boolean process(Session session, Message message) {
         synchronized (session) { // FIXME move the synchronization to caller where the session is created?
             try {
                 session.registerInput(message);
@@ -68,14 +68,15 @@ public class ScriptEngine {
                     session.currentNode = next;
                 }
 
-                session.flush(); // FIXME ideally should be in a finally block but writing to db can throw. Hmm...
+                boolean flushOk = session.flush(); // FIXME ideally should be in a finally block but writing to db can throw. Hmm...
+                if(!flushOk) {
+                    LOG.error("Errors flushing session: {}", session);
+                }
 
-                persistenceManager.saveSession(session);
+                return flushOk;
 
-                return true; // when would this be false?
-
-            } catch (IOException | PersistenceManager.PersistenceManagerException e) {
-                LOG.error("Processing error", e); // TODO need to consider options for better handling of error scenarios.
+            } catch (IOException e) {
+                LOG.error("Processing error: " + session.getUser().groupId() + " for " + message, e); // TODO need to consider options for better handling of error scenarios.
                 return false;
             }
         }
@@ -94,7 +95,7 @@ public class ScriptEngine {
      * @return the next Node in the conversation (or null if the conversation is complete?)
      * FIXME Maybe instead of null we return a symbolic Node that indicates the end of Node?
      */
-    private Node evaluate(Node node, ScriptContext session, Message moMessage) throws IOException {
+    private static Node evaluate(Node node, ScriptContext session, Message moMessage) throws IOException {
         Node nextNode = switch (node.type()) {
             case EchoWithPrefix ->
                     SimpleTestScript.SimpleEchoResponseScript.evaluate(session, moMessage);

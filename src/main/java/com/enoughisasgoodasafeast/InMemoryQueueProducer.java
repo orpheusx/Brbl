@@ -23,10 +23,11 @@ public class InMemoryQueueProducer implements QueueProducer {
     }
 
     @Override
-    public void enqueue(Message event) throws IOException {
+    public boolean enqueue(Message event) {
         LOG.info("Enqueuing message: {}", event);
-        queuedMessages.add((Message) event);
+        boolean ok = queuedMessages.add((Message) event);
         LOG.info("Number messages in queue: {}", queuedMessages.size());
+        return ok;
     }
 
     @Override

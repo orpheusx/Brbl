@@ -2,6 +2,7 @@ package com.enoughisasgoodasafeast;
 
 import com.rabbitmq.client.*;
 import com.rabbitmq.client.Channel;
+import org.jspecify.annotations.NonNull;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -100,13 +101,14 @@ public class RabbitQueueProducer implements QueueProducer {
     }
 
     @Override
-    public void enqueue(Message event) throws IOException {
+    public boolean enqueue(@NonNull Message event) {
         boolean ok = internalMessageBuffer.offer(event);
         if (!ok) {
-            LOG.error("Unable to add message to internalMessageBuffer: {}", event);
+            LOG.error("Failed to add message to internalMessageBuffer: {}", event);
             // TODO write to disk? Do any telcos support retries? Probably not...
             // FIXME Wait and retry some number of times before failing?
         }
+        return ok;
     }
 
     /*

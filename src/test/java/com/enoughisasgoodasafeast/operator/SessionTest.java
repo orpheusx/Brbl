@@ -36,7 +36,7 @@ public class SessionTest {
                     new User(platformIds, randomUUID(), platformNumbers, platformsCreated, countryCode, languages,
                             claimantId, null, userNickNames, null, platformStatuses),
                     new InMemoryQueueProducer(),
-                    null);
+                    new TestingPersistenceManager());
             int numElements = MAX_INPUT_HISTORY + 1;
             for (int i = 0; i < numElements; i++) {
                 Message mo = Message.newMO(FROM, TO, String.valueOf(i));

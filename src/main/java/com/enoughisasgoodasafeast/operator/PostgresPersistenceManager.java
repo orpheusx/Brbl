@@ -685,8 +685,7 @@ public class PostgresPersistenceManager implements PersistenceManager {
 
     private void saveSession(Connection connection, Session session) throws PersistenceManagerException {
         try (PreparedStatement ps = connection.prepareStatement(SESSION_UPSERT)) {
-            ps.setObject(1, session.getUser().groupId());
-//            ps.setObject(1, session.getId());
+            ps.setObject(1, session.getUser().groupId()); // primary key
             ps.setBytes(2, sessionToBytes(session));
             ps.setTimestamp(3, Timestamp.from(session.getStartTimeNanos()));
             ps.setTimestamp(4, Timestamp.from(session.getLastUpdatedNanos()));
@@ -722,7 +721,7 @@ public class PostgresPersistenceManager implements PersistenceManager {
                 return null;
             }
         } catch (SQLException | IOException | ClassNotFoundException e) {
-            throw new PersistenceManagerException(e);
+            throw new PersistenceManagerException("Error loading Session for groupId, " + id, e);
         }
     }
 
