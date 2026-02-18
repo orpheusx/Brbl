@@ -136,10 +136,15 @@ public class TestingPersistenceManager implements PersistenceManager {
         return true;
     }
 
-    public UUID createPushCampaign(@NonNull UUID customerId,
-                                   String description,
-                                   @NonNull UUID scriptId,
-                                   @NonNull UUID routeId) throws SQLException {
+    public UUID createPushCampaign(@NonNull UUID customerId, String description, @NonNull UUID scriptId, @NonNull UUID routeId) throws SQLException {
         return null;
+    }
+
+    public boolean insertCampaignUserSegment(@NonNull UUID campaignId, @NonNull List<UUID> userIds) {
+        return true;
+    }
+
+    public boolean completePushCampaign(@NonNull UUID campaignId, Instant completionTime) throws SQLException {
+        return false;
     }
 }

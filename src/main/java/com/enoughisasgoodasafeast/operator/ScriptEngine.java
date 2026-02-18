@@ -20,6 +20,7 @@ public class ScriptEngine {
 
     /**
      * Process the given Message in the context of given Session.
+     * FIXME this currently duplicates the logic in Operator.process().
      * @param session the state-bearing Session providing the context for the executing graph Node graph.
      * @param message the Message that initiates or continues the processing of the Session's Node graph.
      * @return false if the processing of the Message fails or there were exceptions thrown.

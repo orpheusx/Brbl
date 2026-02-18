@@ -378,44 +378,46 @@ public class PostgresPersistenceManager implements PersistenceManager {
                     )
                     SELECT
                         a.group_id,
-                        a.user_id AS user_id, 
+                        a.user_id AS user_id,
                         a.profile_id AS profile_id,
-                        u.country, 
-                        u.created_at AS user_created_at,                          
-                        u.language, 
-                        u.nickname, 
-                        u.platform_code, 
-                        u.platform_id, 
-                        u.status,                        
-                        p.given_name, 
-                        p.other_languages, 
-                        p.surname, 
-                        p.created_at AS profile_created_at, 
+                        u.country,
+                        u.created_at AS user_created_at,
+                        u.language,
+                        u.nickname,
+                        u.platform_code,
+                        u.platform_id,
+                        u.status,
+                        p.given_name,
+                        p.other_languages,
+                        p.surname,
+                        p.created_at AS profile_created_at,
                         p.updated_at AS profile_updated_at,
                         cgi.customer_id,
                         a.claimant_id,
                         s.updated_at AS session_updated_at,
-                        cu_all.delivered
+                        cu_outer.delivered
                     FROM
                         brbl_users.amalgams a
                     INNER JOIN
-                        brbl_users.users u 
+                        brbl_users.users u
                             ON u.id = a.user_id
                     INNER JOIN
-                        campaign_group_ids cgi 
+                        campaign_group_ids cgi
                             ON a.group_id = cgi.group_id
                     LEFT JOIN
-                        brbl_users.profiles p 
+                        brbl_users.profiles p
                             ON p.id = a.profile_id
                     LEFT JOIN
-                        brbl_logic.sessions s 
+                        brbl_logic.sessions s
                             ON s.group_id = a.group_id
                     LEFT JOIN
-                        brbl_logic.campaign_users cu_all 
-                            ON cu_all.user_id = u.id
+                        brbl_logic.campaign_users cu_outer
+                            ON cu_outer.user_id = u.id
                     LEFT JOIN
-                        brbl_logic.push_campaigns pc_all 
-                            ON pc_all.id = cu_all.campaign_id
+                        brbl_logic.push_campaigns pc_outer
+                            ON pc_outer.id = cu_outer.campaign_id
+                    WHERE
+                        pc_outer.id = ?
                     ORDER BY
                         a.group_id, u.id
                     """;
@@ -448,6 +450,29 @@ public class PostgresPersistenceManager implements PersistenceManager {
                         brbl_logic.routes r ON r.id = pc.route_id
                     WHERE
                         pc.id = ?
+                    """;
+
+    public static final String PUSH_CAMPAIGN_INSERT =
+            """
+                    INSERT INTO brbl_logic.push_campaigns (
+                        id,
+                        customer_id,
+                        description, 
+                        script_id, 
+                        created_at, updated_at, completed_at, 
+                        route_id)
+                    VALUES
+                        (?::UUID, ?::UUID, ?, ?::UUID, 
+                         ?::TIMESTAMP, ?::TIMESTAMP, ?::TIMESTAMP,
+                         ?::UUID)                
+                    """;
+
+    public static final String CAMPAIGN_USER_INSERT =
+            """
+                    INSERT INTO brbl_logic.campaign_users
+                        (campaign_id, user_id, delivered)
+                    VALUES
+                        (?::UUID, ?::UUID, ?::delivery_status);
                     """;
 
     private Connection fetchConnection() throws SQLException {
@@ -660,22 +685,24 @@ public class PostgresPersistenceManager implements PersistenceManager {
 
     private void saveSession(Connection connection, Session session) throws PersistenceManagerException {
         try (PreparedStatement ps = connection.prepareStatement(SESSION_UPSERT)) {
-            ps.setObject(1, session.getId());
+            ps.setObject(1, session.getUser().groupId());
+//            ps.setObject(1, session.getId());
             ps.setBytes(2, sessionToBytes(session));
             ps.setTimestamp(3, Timestamp.from(session.getStartTimeNanos()));
             ps.setTimestamp(4, Timestamp.from(session.getLastUpdatedNanos()));
             ps.execute();
+            LOG.info("Session upserted: {} for user {}", session.getId(), session.getUser().groupId());
         } catch (SQLException | IOException e) {
             LOG.error(e.getMessage(), e);
             throw new PersistenceManagerException(e);
         }
     }
 
-    public @Nullable Session loadSession(@NonNull UUID id) throws PersistenceManagerException {
-        LOG.info("Fetching session data for {}", id);
+    public @Nullable Session loadSession(@NonNull UUID userGroupId) throws PersistenceManagerException {
+        LOG.info("Fetching session data for {}", userGroupId);
         try (Connection connection = fetchConnection()) {
             assert connection != null;
-            return loadSession(connection, id);
+            return loadSession(connection, userGroupId);
         } catch (SQLException e) {
             LOG.error("loadSession: fetchConnection failed", e);
             throw new PersistenceManagerException(e);
@@ -683,7 +710,6 @@ public class PostgresPersistenceManager implements PersistenceManager {
     }
 
     private @Nullable Session loadSession(@NonNull Connection connection, @NonNull UUID id) throws PersistenceManagerException {
-        LOG.info("Retrieving session {}", id);
         try (PreparedStatement ps = connection.prepareStatement(SESSION_SELECT)) {
             ps.setObject(1, id);
             final ResultSet rs = ps.executeQuery();
@@ -1177,9 +1203,9 @@ public class PostgresPersistenceManager implements PersistenceManager {
         try (Connection connection = fetchConnection()) {
             assert connection != null;
             return getPushCampaignUsers(
-                    connection, campaignId, DeliveryStatus.PENDING);
+                    connection, campaignId, byStatus);
         } catch (SQLException e) {
-            LOG.error("getUsersForPushCampaign: fetchConnection failed", e);
+            LOG.error("getUsersForPushCampaign failed", e);
             return new ArrayList<>(0);
         }
     }
@@ -1188,10 +1214,15 @@ public class PostgresPersistenceManager implements PersistenceManager {
     private Collection<CampaignUser> getPushCampaignUsers(@NonNull Connection connection, @NonNull UUID campaignId, DeliveryStatus byStatus) throws SQLException {
         try (PreparedStatement ps = connection.prepareStatement(SELECT_PUSH_CAMPAIGN_USERS_BY_DELIVERY_STATUS)) {
 
+            // FIXME campaign_users table references the users.id column instead of amalgams.group_id.
+            //      In retrospect this seems dumb since we need to pull together the complete set of user rows to create the User
+            //      and the campaign row contains the route_id (which gives us the Platform that will get us the correct platform number.
+
             CampaignUserReport report = new CampaignUserReport();
 
             ps.setObject(1, campaignId);
             ps.setObject(2, byStatus, OTHER);
+            ps.setObject(3, campaignId);
             final ResultSet rs = ps.executeQuery();
 
             Map<UUID, CampaignUser> campaignUsersByGroupId = new HashMap<>();
@@ -1254,7 +1285,7 @@ public class PostgresPersistenceManager implements PersistenceManager {
                 final Timestamp pua = rs.getTimestamp("profile_updated_at");
                 final Instant profileUpdatedAt = (pua == null) ? null : pua.toInstant();
 
-                // cgi.customer_id  // pc_all.customer_id (nullable)
+                // cgi.customer_id  // pc_outer.customer_id (nullable)
                 final UUID customerId = (UUID) rs.getObject("customer_id");
                 final UUID claimantId = (UUID) rs.getObject("claimant_id");
 
@@ -1262,7 +1293,11 @@ public class PostgresPersistenceManager implements PersistenceManager {
                 final Timestamp sua = rs.getTimestamp("session_updated_at");
                 final Instant sessionUpdatedAt = (sua == null) ? null : sua.toInstant();
 
-                // cu_all.delivered
+                // FIXME delete this block since we don't use an existing session
+                //final byte[] data = rs.getBytes("session_data");
+                //Session session = (data == null) ? null: bytesToSession(data);
+
+                // cu_outer.delivered
                 DeliveryStatus delivered = null;
                 final var deliveryStatus = rs.getString("delivered");
                 if (deliveryStatus != null) {
@@ -1277,7 +1312,11 @@ public class PostgresPersistenceManager implements PersistenceManager {
                 }
 
                 // delivered will be null for linked rows that are only present to construct the full User model.
-                if (delivered != null && !delivered.equals(DeliveryStatus.PENDING)) {
+//                if (delivered != null && !delivered.equals(DeliveryStatus.PENDING)) {
+//                    LOG.info("Campaign {}: Skipping user {} with delivery status: {}", campaignId, userId, delivered);
+//                    continue;
+//                }
+                if (delivered == null) {
                     LOG.info("Campaign {}: Skipping user {} with delivery status: {}", campaignId, userId, delivered);
                     continue;
                 }
@@ -1307,6 +1346,7 @@ public class PostgresPersistenceManager implements PersistenceManager {
                         platformStatusMap);
 
                 var campaignUser = new CampaignUser(
+                        campaignId,
                         groupId,
                         user,
                         delivered,
@@ -1338,7 +1378,7 @@ public class PostgresPersistenceManager implements PersistenceManager {
     }
 
     public static final String UPDATE_PUSH_CAMPAIGN_USER_STATUS = """           
-            UPDATE
+           UPDATE
              brbl_logic.campaign_users
            SET
              delivered = ?
@@ -1351,31 +1391,11 @@ public class PostgresPersistenceManager implements PersistenceManager {
     public boolean updatePushCampaignUsersStatus(@NonNull PushReport report) throws SQLException {
         try (Connection connection = fetchConnection()) {
             assert connection != null;
-            return updatePushCampaignUsersStatus(connection, report);
+            return updatePushCampaignUsersStatus(connection, report.campaignId, report.processedUsers.toArray(new UUID[0]));
         } catch (SQLException e) {
             LOG.error("getUsersForPushCampaign: fetchConnection failed", e);
             return false;
         }
-    }
-
-    private boolean updatePushCampaignUsersStatus(Connection connection, PushReport report) throws SQLException {
-//        LOG.info("Num campaignUsers to status update: " + report.processedUsers.size());
-//        try (PreparedStatement ps = connection.prepareStatement(UPDATE_PUSH_CAMPAIGN_USER_STATUS)) {
-//            ps.setObject(1, DeliveryStatus.SENT, OTHER);
-//            ps.setObject(2, report.campaignId);
-//
-//            UUID[] ids = report.processedUsers.toArray(new UUID[0]);
-//            // LOG.info("ids size: " + ids.length);
-//            // LOG.info("ids elements: " + Arrays.toString(ids));
-//
-//            Array skippedIds = connection.createArrayOf("uuid", ids);
-//            ps.setArray(3, skippedIds);
-//
-//            int numUpdated = ps.executeUpdate(); // ps.executeLargeUpdate()
-//            LOG.info("getUsersForPushCampaignUserStatus: numUpdated = {}", numUpdated);
-//
-//        }
-        return updatePushCampaignUsersStatus(connection, report.campaignId, report.processedUsers.toArray(new UUID[0]));
     }
 
     private boolean updatePushCampaignUsersStatus(Connection connection, UUID campaignId, UUID[] campaignUsersIds) throws SQLException {
@@ -1388,9 +1408,41 @@ public class PostgresPersistenceManager implements PersistenceManager {
 
             int numUpdated = ps.executeUpdate(); // ps.executeLargeUpdate()
             LOG.info("updatePushCampaignUsersStatus: numUpdated = {}", numUpdated);
-
         }
         return true;
+    }
+
+    public static final String MARK_PUSH_CAMPAIGN_COMPLETE = """
+            UPDATE
+                brbl_logic.push_campaigns
+            SET
+                completed_at = ?
+            WHERE
+                id = ?
+            """;
+
+    public boolean completePushCampaign(@NonNull UUID campaignId, Instant completionTime) throws SQLException {
+        try (Connection connection = fetchConnection()) {
+            assert connection != null;
+            return completePushCampaign(connection, campaignId, completionTime);
+        } catch (SQLException e) {
+            LOG.error("completePushCampaign: fetchConnection failed", e);
+            return false;
+        }
+    }
+
+    private boolean completePushCampaign(Connection connection, UUID campaignId, Instant completionTime) throws SQLException {
+        try (PreparedStatement ps = connection.prepareStatement(MARK_PUSH_CAMPAIGN_COMPLETE)) {
+            ps.setTimestamp(1, Timestamp.from(completionTime));
+            ps.setObject(2, campaignId);
+
+            int numUpdated = ps.executeUpdate();
+            LOG.info("completePushCampaign: numUpdated = {}", numUpdated);
+            return numUpdated == 1;
+        } catch (SQLException e) {
+            LOG.error("completePushCampaign: update failed", e);
+            return false;
+        }
     }
 
 //    public @Nullable List<CampaignUser> getUsersForPushCampaign(@NonNull UUID pushCampaignId) {
@@ -1538,7 +1590,7 @@ public class PostgresPersistenceManager implements PersistenceManager {
         }
     }
 
-    public UUID createPushCampaign(Connection connection,
+    private UUID createPushCampaign(Connection connection,
                                    @NonNull UUID customerId,
                                    String description,
                                    @NonNull UUID scriptId,
@@ -1566,19 +1618,36 @@ public class PostgresPersistenceManager implements PersistenceManager {
         }
     }
 
-    public final static String PUSH_CAMPAIGN_INSERT = """
-            INSERT INTO brbl_logic.push_campaigns (
-                id,
-                customer_id,
-                description, 
-                script_id, 
-                created_at, updated_at, completed_at, 
-                route_id)
-            VALUES
-                (?::UUID, ?::UUID, ?, ?::UUID, 
-                 ?::TIMESTAMP, ?::TIMESTAMP, ?::TIMESTAMP,
-                 ?::UUID)                
-            """;
+
+    public boolean insertCampaignUserSegment(@NonNull UUID campaignId, @NonNull List<UUID> userIds) {
+        try (Connection connection = fetchConnection()) {
+            assert connection != null;
+            return insertCampaignUserSegment(connection, campaignId, userIds);
+        } catch (SQLException e) {
+            LOG.error("insertCampaignUserSegment: fetchConnection or transaction management failed for campaignId {}.", campaignId, e);
+            return false;
+        }
+    }
+
+    // Generated by Gemini
+    private boolean insertCampaignUserSegment(Connection connection, UUID campaignId, List<UUID> userIds) throws SQLException {
+        connection.setAutoCommit(false); // Start transaction
+        try (PreparedStatement ps = connection.prepareStatement(CAMPAIGN_USER_INSERT)) {
+            for (UUID userId : userIds) {
+                ps.setObject(1, campaignId);
+                ps.setObject(2, userId);
+                ps.setObject(3, DeliveryStatus.PENDING, OTHER); // Default status for new campaign users
+                ps.addBatch();
+            }
+            ps.executeBatch();
+            connection.commit(); // Commit transaction
+            return true;
+        } catch (SQLException e) {
+            connection.rollback(); // Rollback on error
+            LOG.error("insertCampaignUserSegment: batch insert failed for campaignId {} and userIds {}", campaignId, userIds, e);
+            return false;
+        }
+    }
 
     static void main() throws IOException, PersistenceManagerException {
         PostgresPersistenceManager pm = new PostgresPersistenceManager(ConfigLoader.readConfig("persistence_manager_test.properties"));

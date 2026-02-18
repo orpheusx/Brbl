@@ -2,6 +2,7 @@ package com.enoughisasgoodasafeast.operator;
 
 import com.enoughisasgoodasafeast.*;
 import com.enoughisasgoodasafeast.operator.PersistenceManager.PersistenceManagerException;
+import io.jenetics.util.NanoClock;
 import org.jspecify.annotations.NonNull;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -13,7 +14,6 @@ import java.time.Duration;
 import java.time.Instant;
 import java.util.Properties;
 import java.util.UUID;
-import java.util.concurrent.ExecutionException;
 import java.util.concurrent.TimeoutException;
 
 /**
@@ -70,17 +70,20 @@ public class Blaster {
      * then it doesn't make much sense to ask if it has expired. */
     public boolean isSessionExpired(@NonNull Instant lastUpdateAt) {
         // FIXME whether an not expired session can be overwritten should be a push campaign param.
-        return sessionLifetime.compareTo(Duration.between(lastUpdateAt, Instant.now())) <= 0;
+        // FIXME with zero as the delta this will always return
+        return sessionLifetime.compareTo(Duration.between(lastUpdateAt, Instant.now())) <= 0; //true if > 20 minutes
+    }
+
+    public void setExpirationSessionLifetime(@NonNull Duration sessionLifetime) {
+        this.sessionLifetime = sessionLifetime;
     }
 
     /**
      * Assumes the caller (Quartz or similar) knows which campaign id to execute.
      *
      * @param campaignId the id of the campaign to be executed.
-     * @throws InterruptedException if one of the StructuredTaskScope tasks throws.
-     * @throws ExecutionException   if one of the StructuredTaskScope tasks throws.
      */
-    public PushReport exec(@NonNull UUID campaignId) throws InterruptedException, ExecutionException, SQLException {
+    public PushReport exec(@NonNull UUID campaignId) throws SQLException {
         // Collect needed data:
         //  Read the Campaign from PUSH_CAMPAIGNS
         //  Fetch the associated graph of Nodes for the campaign's script id. (use the standard method for this.)
@@ -133,9 +136,10 @@ public class Blaster {
 
         report.numUsers = campaignUsers.size();
 
-        // FIXME Originally, I wanted to avoid materializing all the rows into a list of records and simply process them as we go but this wasn't workable
-        //  The query returns rows that may need to be merged--the User model is a aggregation of database records--so I can't simply fetch result set in
-        //  batches. It may be simpler to add a secondary batching column to the campaign_users table definition to handle big segments.
+        // FIXME Originally, I wanted to avoid materializing all the rows into a list of records and simply process them as we go but this wasn't workable;
+        //  the query returns rows that may need to be merged--the User model is a aggregation of database records--so I can't simply fetch result set in
+        //  batches. It may be simpler to add a secondary batching column to the campaign_users table definition to subdivide big segments into manageable
+        //  chunks.
         for (var campaignUser : campaignUsers) {
 
             LOG.info(campaignUser.toString());
@@ -148,8 +152,8 @@ public class Blaster {
             final var platform = campaign.platform(); // FIXME need to add this to the campaign metadata even though it is duplicated (more or less) by the User's platform_code.
 
             if (!campaignUser.user().platformStatus().get(platform).equals(UserStatus.IN)) {
-                report.invalidUsersSkipped.add(campaignUser.groupId());
-                LOG.info("User {} not opted-in at {}", campaignUser.groupId(), report.startPush); // FIXME make this .debug
+                report.invalidUsersSkipped.add(campaignUser.campaignId());
+                LOG.info("User {} not opted-in at {}", campaignUser.campaignId(), report.startPush); // FIXME switch to debug
                 continue;
             }
 
@@ -160,14 +164,15 @@ public class Blaster {
             final var isInactiveOrExpired = (null == lastSessionActivity) || isSessionExpired(lastSessionActivity);
             if (!isInactiveOrExpired) {
                 // session is considered active so don't clobber it out-of-the-blue.
-                report.activeUsersSkipped.add(campaignUser.groupId());
-                LOG.info("Skipping active session: {}", campaignUser.groupId()); // FIXME make this .debug
+                report.activeUsersSkipped.add(campaignUser.campaignId());
+                LOG.info("Skipping active session: {}", campaignUser.campaignId()); // FIXME make this .debug
                 continue;
             }
 
             // Create a new Session
             final var sessionForCampaignUser = new Session(
-                    campaignUser.groupId(),
+                    campaignUser.user().groupId(),
+//                    campaignUser.campaignId(),
                     node,
                     campaignUser.user(),
                     this.queueProducer,
@@ -177,23 +182,31 @@ public class Blaster {
             // FIXME where should we get the route channel? Should we add it to the PUSH_CAMPAIGNS table? Or include it in the method signature?
             final var initialMessage = new Message(MessageType.MO, campaignUser.user().platformNumbers().get(platform), campaign.channel(), "#");
 
-            // Execute the first node of the script, using the associated session, generating an MT and pushing it onto the regular, rate-limited output queue, possibly with a lower priority.
+            // Execute the first node of the script, using the associated session, generating an MT and pushing it onto the regular,
+            //  rate-limited output queue, possibly with a lower priority.
             final boolean ok = scriptEngine.process(sessionForCampaignUser, initialMessage);
             if (!ok) {
-                report.usersSkippedDueToScriptErrors.add(campaignUser.user().platformIds().get(platform));
+//                report.usersSkippedDueToScriptErrors.add(campaignUser.user().platformIds().get(platform));
+                report.usersSkippedDueToScriptErrors.add(campaignUser.user().groupId());
             } else {
-                report.processedUsers.add(campaignUser.user().platformIds().get(platform));
+//                report.processedUsers.add(campaignUser.user().platformIds().get(platform));
+                //
+                report.processedUsers.add(campaignUser.user().groupId());
             }
         }
 
         // Update the delivered column of the CampaignUser record (CAMPAIGN_USERS table)
-        // FIXME move this outside of the campaignUser processing loop.
         // FIXME to avoid the cost of group updates we could have a results table that could provide historic info about successive attempts to push to a user.
-        if (!persistenceManager.updatePushCampaignUsersStatus(report)) {
-            report.campaignAndUserStatusUpdateFail();
+        if (!persistenceManager.updatePushCampaignUsersStatus(report) ) {
+            report.campaignUsersStatusUpdateFail();
         }
 
-        // Generate the run report. Is this a table? push_campaign_report?
+        // Mark the campaign complete here or leave it to the caller? How do we know we're complete? Are we handling retries here?
+        if (!persistenceManager.completePushCampaign(campaignId, NanoClock.utcInstant())) {
+            report.campaignCompletionTimeUpdateFail();
+        }
+
+        // Persist the run report? Is this a table? push_campaign_report?
 
         //    |
         //    |--> for each CampaignUsers

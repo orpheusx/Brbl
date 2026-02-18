@@ -5,7 +5,9 @@ import org.jspecify.annotations.NonNull;
 import org.jspecify.annotations.Nullable;
 
 import java.sql.SQLException;
+import java.time.Instant;
 import java.util.Collection;
+import java.util.List;
 import java.util.Map;
 import java.util.UUID;
 import java.util.regex.Pattern;
@@ -49,6 +51,8 @@ public interface PersistenceManager {
 
     Collection<CampaignUser> getPushCampaignUsers(@NonNull UUID campaignId, DeliveryStatus byStatus) throws SQLException;
 
+    boolean completePushCampaign(@NonNull UUID campaignId, Instant completionTime) throws SQLException;
+
     boolean updatePushCampaignUsersStatus(@NonNull PushReport report) throws SQLException;
 
 
@@ -56,6 +60,8 @@ public interface PersistenceManager {
                             String description,
                             @NonNull UUID scriptId,
                             @NonNull UUID routeId) throws SQLException;
+
+    public boolean insertCampaignUserSegment(@NonNull UUID campaignId, @NonNull List<UUID> userIds);
 
 
     /*

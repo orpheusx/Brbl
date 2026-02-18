@@ -3118,6 +3118,76 @@ Need to implement createPushCampaign and createCampaignUserSegment methods in Po
 
 However...this leads me to realize that we don't yet have create methods for Nodes, Scripts, Routes, Customers, or Companies.
 
-I guess we don't have to implement all of these to create PushCampaigns. We could defer these till we get back to building Brbl admin which does the authoring.
+We don't _have to_ implement all of these to create PushCampaigns. They could be deferred till we get back to the Brbl admin which does the authoring using Hibernate.
+
+For now, we'll implement the create methods as well as methods for marking the campaign and segments as complete.
+
+
+===== 2026-02-15 ====
+Been thinking alot about the transactional problem of delivering messages in the face of crashes. The issue is the same one we face for our normal MO initiated message flow: coordinating the enqueueing of the outbound message with the writing of the log to the database (and the actual HTTP POST to the 3rd party gateway.)
+
+Gemini usefully summarizes four approaches to solving this problem:
+
+1. The Transactional Outbox Pattern (Most Robust)
+    Instead of publishing directly to RabbitMQ, you write the message payload to a local "outbox" table in Postgres within the same transaction as your business data update.
+    Workflow:
+        BEGIN transaction.
+        Insert business data (e.g., orders).
+        Insert message into outbox table (same transaction).
+        COMMIT transaction.
+A separate relay process (or CDC tool) polls the outbox table, publishes messages to RabbitMQ, and deletes them from the table.
+Why: If the Postgres commit fails, the message never hits the outbox. If the relay fails, the message is still in the table to be retried.
+
+2. Logical Decoding / Change Data Capture (Real-time & Reliable)
+    Use PostgreSQL's WAL (Write-Ahead Log) to capture changes without requiring a separate outbox table.
+    How: CDC Tools like Debezium or Sequin stream changes from the WAL directly to RabbitMQ.
+    Why: Highly reliable, low latency, and removes the need for application-level handling of the outbox.
+
+3. PostgreSQL LISTEN/NOTIFY (Real-time, No Extra Tools)
+    Postgres can emit an event (NOTIFY) that an external worker listens for, which then pushes the message to RabbitMQ.
+    Workflow:
+        Transaction commits data and triggers a NOTIFY channel_name, 'payload'.
+        A lightweight background worker (e.g., in Node.js) listens for this notification.
+        The worker publishes the payload to RabbitMQ.
+    Why: Provides near real-time, event-driven, async behavior.
+
+4. Application-Level Dual Write (Simple, Less Reliable)
+    The application handles both operations within a single, atomic operation, but this is less reliable than the patterns above.
+    Workflow:
+        BEGIN
+        Write to Postgres.
+        Publish to RabbitMQ using publisher confirms to ensure it was received.
+        If RabbitMQ confirms, COMMIT. If not, ROLLBACK.
+    Why: Easy to implement, but requires careful handling of network failures between the DB and RabbitMQ.
+
+For our purposes, it's not clear that the first approach does anything more than kick the can down the road. Because it still requires a coordination between the queue and an update of the database state. The third approach lacks durability when used with our lightweight deployment model (which will almost certainly experience occasional restarts of unclustered resources.)
+The second and fourth approaches are the ones we should consider. #4 requires the use of Rabbit's publisher confirms which we aren't currently using.
+
+Sequin is apparently written in Elixir and appears to be lighter weight, faster than Debezium though it doesn't _guarantee_ at-least-once delivery.
+It does support "backfill" which appears to support catching up in cases where a system was down. There's a filtering stage as well so we could prevent sending messages that were too old.
+ NB: in the process of researching these CDC (change data capture) systems learned of a two Postgres extension called, pg_cron (does what you think) and pg_partman which efficiently removes old partitions.
+
+Downsides for us: more complexity for the additional components and another system dependencies for core functionality.
+Upsides for us: we'll likely need to address auditing and warehousing at some point and this could be the mechanism for that.
+
+The fourth approach requires adding txSelect or, preferably, confirmSelect with a listener so we get a callback when messages are "committed" to the queue (roughly equivalent to a db transaction. See https://www.rabbitmq.com/blog/2011/02/10/introducing-publisher-confirms#streaming-lightweight-publisher-confirms
+
+For the moment, lets structure our code using this fourth approach--it's close to how it currently setup--and make a note to review our RabbitQueueProducer class.
+
+TODO
+_ Add an updated_at column to the campaign_users table.
+_ Rename "delivered" column. This isn't what it means. The values of the delivery_status enum are likewise wrong.
+X add campaign users whose user component is in OPTED OUT state to exercise that part of the PushReport.
+_ Refactor the process method currently duplicated in Operator and ScriptEngine.
+
+===== 2026-02-17 ====
+
+While adding checks of the Sessions produced by Blaster in the integration tests, I realized the PushReport needed to capture the list of group_ids for the Users' sessions.
+Then I started questioning the use of the user_id (instead of the group_id) in the campaign_users table. I think I went that direction since the push_campaign includes the route_id (which implies a specific platform.) Partly for that reason, we'd informally decided to limit the scope of a campaign to a single platform. This assumes that the UI our customers use could generate multiple campaigns for a single logical push operations, one for each distinct platform. This certainly made the query to pull together the composite User given a platform specific id more complicated. The short cut to the platform specific user probably doesn't help that much since the route tells us which platform we're targeting.
+
+We could refactor this though I don't that we wouldn't find a different gotcha. Let's continue and revisit if there are other issues that tip the scales towards a refactor.
+
+Fixing the id used to save/load sessions to be consistent. We're not actually calling loadSession outside of tests! WTF.
+We do join on the sessions table when loading campaign users but don't grab the byte array, only the updated_at value.
 
 

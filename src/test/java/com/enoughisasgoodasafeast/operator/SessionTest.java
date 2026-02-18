@@ -260,11 +260,12 @@ public class SessionTest {
 
             // FIXME add the new method to the interface so the cast isn't needed.
             final Session session = newSession(sessionId);
+            LOG.info("New session id = {} with groupId {}", sessionId, session.getUser().groupId());
 
             ppm.saveSession(session);
 
             // Now fetch it back and check values
-            final Session clone = ppm.loadSession(sessionId);
+            final Session clone = ppm.loadSession(session.getUser().groupId());
             /* FIXME
                Need to be able set the queueProducer and persistenceManager unless we prefer to move those out of Session
                class and use independent functions.

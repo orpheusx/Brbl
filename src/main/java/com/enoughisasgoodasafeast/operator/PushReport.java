@@ -49,7 +49,9 @@ public class PushReport {
 
     ArrayList<UUID> processedUsers = new ArrayList<UUID>();
 
-    public boolean campaignAndUserStatusUpdateFail;
+    public boolean campaignUsersStatusUpdateFail;
+
+    public boolean campaignCompletionTimeUpdateFail;
 
 
     public PushReport(UUID campaignId) {
@@ -94,10 +96,29 @@ public class PushReport {
         end();
     }
 
-    public void campaignAndUserStatusUpdateFail() {
-        this.campaignAndUserStatusUpdateFail = true;
-        LOG.error("Failed to update push campaign {} and users!", campaignId);
+    /*
+     * This is probably the worst kind of error. How do we handle it?
+     */
+    public void campaignUsersStatusUpdateFail() {
+        this.campaignUsersStatusUpdateFail = true;
+        LOG.error("Failed to update campaign users status for campaign {}", campaignId);
         end();
+    }
+
+    public void campaignCompletionTimeUpdateFail() {
+        this.campaignCompletionTimeUpdateFail = true;
+        LOG.error("Failed to update campaign completion time for campaign {}", campaignId);
+        end();
+    }
+
+    /* Business method to evaluate the push's various metrics.
+     * If true, the campaign was "complete" and should not be re-tried. This is a little ambiguous. Could we simplify it?
+     * False, if there were any retriable failures. Such failures could be a reflection of transient service problems or
+     * in-flight changes to user/script/route/customer states.
+     * It's important to note that "complete" does not imply "successful."
+     */
+    public boolean isPushComplete() {
+        return campaignNotFound || campaignUsersEmpty || customerStatusNotActive || nodeNotFound || scriptStatusNotProd || routeStatusNotActive;
     }
 
     public void end() {
@@ -121,7 +142,7 @@ public class PushReport {
                 .add("invalidUsersSkipped=" + invalidUsersSkipped)
                 .add("activeUsersSkipped=" + activeUsersSkipped)
                 .add("usersSkippedDueToScriptErrors=" + usersSkippedDueToScriptErrors)
-                .add("campaignAndUserStatusUpdateFail=" + campaignAndUserStatusUpdateFail)
+                .add("campaignAndUserStatusUpdateFail=" + campaignUsersStatusUpdateFail)
                 .toString();
     }
 
