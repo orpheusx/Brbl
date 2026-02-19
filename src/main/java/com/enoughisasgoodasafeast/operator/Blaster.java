@@ -164,8 +164,8 @@ public class Blaster {
             final var isInactiveOrExpired = (null == lastSessionActivity) || isSessionExpired(lastSessionActivity);
             if (!isInactiveOrExpired) {
                 // session is considered active so don't clobber it out-of-the-blue.
-                report.activeUsersSkipped.add(campaignUser.campaignId());
-                LOG.info("Skipping active session: {}", campaignUser.campaignId()); // FIXME make this .debug
+                report.usersWithActiveSessionsSkipped.add(campaignUser.user().groupId());
+                LOG.info("Skipping active session: {}", campaignUser.user().groupId()); // FIXME make this .debug
                 continue;
             }
 

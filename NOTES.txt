@@ -3126,7 +3126,7 @@ For now, we'll implement the create methods as well as methods for marking the c
 ===== 2026-02-15 ====
 Been thinking alot about the transactional problem of delivering messages in the face of crashes. The issue is the same one we face for our normal MO initiated message flow: coordinating the enqueueing of the outbound message with the writing of the log to the database (and the actual HTTP POST to the 3rd party gateway.)
 
-Gemini usefully summarizes four approaches to solving this problem:
+Gemini usefully summarized four approaches to solving this problem:
 
 1. The Transactional Outbox Pattern (Most Robust)
     Instead of publishing directly to RabbitMQ, you write the message payload to a local "outbox" table in Postgres within the same transaction as your business data update.
@@ -3185,7 +3185,7 @@ _ Refactor the process method currently duplicated in Operator and ScriptEngine.
 While adding checks of the Sessions produced by Blaster in the integration tests, I realized the PushReport needed to capture the list of group_ids for the Users' sessions.
 Then I started questioning the use of the user_id (instead of the group_id) in the campaign_users table. I think I went that direction since the push_campaign includes the route_id (which implies a specific platform.) Partly for that reason, we'd informally decided to limit the scope of a campaign to a single platform. This assumes that the UI our customers use could generate multiple campaigns for a single logical push operations, one for each distinct platform. This certainly made the query to pull together the composite User given a platform specific id more complicated. The short cut to the platform specific user probably doesn't help that much since the route tells us which platform we're targeting.
 
-We could refactor this though I don't that we wouldn't find a different gotcha. Let's continue and revisit if there are other issues that tip the scales towards a refactor.
+We could refactor this though I don't know that we wouldn't run into a different problem. Let's continue and revisit if there are other issues that tip the scales towards a refactor.
 
 Fixing the id used to save/load sessions to be consistent. We're not actually calling loadSession outside of tests. We should be doing this in Operator as part of the
 We do join on the sessions table when loading campaign users but don't grab the byte array, only the updated_at value. This is reasonable given the feature description.
@@ -3197,3 +3197,13 @@ _ Add an updated_at column to the campaign_users table.
 _ Rename "delivered" column. This isn't what it means. The values of the delivery_status enum are likewise wrong.
 _ Refactor the process method currently duplicated in Operator and ScriptEngine.
 _ Add one more case to BlasterIntegrationTest to complete the coverage of PushReport.
+
+Gemini prompt:
+    Add integration-level tests to the existing BlasterIntegrationTest class that fill out coverage of the Blaster and PushReport classes. Use JUnit for these new tests. If there are additional testing support libraries n1eeded ask me before installing them.
+Results: Gemini hallucinated enum values for ScriptStatus, RouteStatus, and CustomerStatus.
+
+It didn't grasp the structure of the User model but that's reasonable since it doesn't have access to database schema.
+
+[A thought: would it help to align the User model with the table schema and define a new model (UserGroup) that handles the composition?]
+
+Overall, not sure I saved any time. Might get better next time.

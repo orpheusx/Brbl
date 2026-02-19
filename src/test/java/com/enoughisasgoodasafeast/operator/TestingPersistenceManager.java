@@ -7,6 +7,7 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import java.io.IOException;
+import java.sql.Connection;
 import java.sql.SQLException;
 import java.time.Instant;
 import java.util.*;
@@ -146,5 +147,10 @@ public class TestingPersistenceManager implements PersistenceManager {
 
     public boolean completePushCampaign(@NonNull UUID campaignId, Instant completionTime) throws SQLException {
         return false;
+    }
+
+    @Override
+    public @NonNull Connection fetchConnection() throws SQLException {
+        return null; // NB: This is intentional.
     }
 }

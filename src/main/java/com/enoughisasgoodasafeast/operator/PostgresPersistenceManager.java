@@ -475,7 +475,7 @@ public class PostgresPersistenceManager implements PersistenceManager {
                         (?::UUID, ?::UUID, ?::delivery_status);
                     """;
 
-    private Connection fetchConnection() throws SQLException {
+    public @NonNull Connection fetchConnection() throws SQLException {
         //Instant before = utcInstant();
         return pds.getConnection();
         //Instant after = utcInstant();

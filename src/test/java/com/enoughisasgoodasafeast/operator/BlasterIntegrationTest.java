@@ -14,10 +14,7 @@ import java.sql.SQLException;
 import java.time.Duration;
 import java.time.Instant;
 import java.time.temporal.ChronoUnit;
-import java.util.ArrayList;
-import java.util.Collection;
-import java.util.List;
-import java.util.UUID;
+import java.util.*;
 import java.util.concurrent.TimeoutException;
 
 import static org.junit.jupiter.api.Assertions.*;
@@ -33,6 +30,7 @@ public class BlasterIntegrationTest {
     final UUID modelCustomerId = UUID.fromString("8285d1a8-2dc0-6752-3758-0076224bc839");
     final String description = "Created by BlasterIntegrationTest";
     final UUID modelScriptId = UUID.fromString("019c1ee9-49cc-7d59-a430-f050612acd72");
+    final UUID nodeId = UUID.fromString("89eddcb8-7fe5-4cd1-b18b-78858f0789fb");
     final UUID modelRouteId = UUID.fromString("019bf69d-a08a-7c3a-a4ca-ed70d35327fc");
 
     final static List<UUID> modelUserIds = new ArrayList<>();
@@ -205,5 +203,148 @@ public class BlasterIntegrationTest {
         final Instant pastExpiration = Instant.ofEpochSecond(blaster.sessionLifetime.toMillis() + 100);
         assertTrue(blaster.isSessionExpired(pastExpiration));
     }
+
+    @Test
+    void testExec_ActiveSessionUsersSkipped() throws SQLException, PersistenceManager.PersistenceManagerException {
+        final UUID userForTestUserGroupId = UUID.fromString("8204383c-7a73-7ba0-1c8c-83be6886ef90"); // This is the first model user in knownUserIds
+        final UUID testUserGroupId = UUID.fromString("34237d77-b16e-9251-c90f-1a99b7b7555b"); // and the corresponding group_id in amalgams.
+
+        // Create a new push campaign
+        final UUID pcId = persistenceManager.createPushCampaign(modelCustomerId, "testExec_ActiveSessionUsersSkipped", modelScriptId, modelRouteId);
+        assertNotNull(pcId);
+
+        // Add only the test user to the campaign
+        final boolean usersAdded = persistenceManager.insertCampaignUserSegment(pcId, List.of(userForTestUserGroupId));
+        assertTrue(usersAdded);
+
+        // Fetch a User object for the test user group ID (this is a placeholder, a real user would be fetched differently)
+        // For testing, we can create a dummy user since the actual fields don't matter much for session expiration logic
+        final User dummyUser = new User(
+                Map.of(Platform.SMS, UUID.randomUUID()),
+                testUserGroupId,
+                Map.of(Platform.SMS, "1234567890"),
+                Map.of(Platform.SMS, NanoClock.utcInstant()),
+                "US",
+                Set.of(LanguageCode.ENG),
+                UUID.randomUUID(),
+                modelCustomerId,
+                Map.of(Platform.SMS, "TestUser"),
+                Map.of(),
+                Map.of(Platform.SMS, UserStatus.IN)
+        );
+
+        // Get a Node for the session
+        final var node = persistenceManager.getNodeGraph(nodeId);
+        assertNotNull(node, "Node graph for modelScriptId should not be null.");
+
+        // Create and save an active session for this user
+        final Session activeSession = new Session(testUserGroupId, node, dummyUser, new InMemoryQueueProducer(), persistenceManager);
+        persistenceManager.saveSession(activeSession);
+
+        // Ensure blaster's session lifetime is long enough to consider the session active
+        blaster.setExpirationSessionLifetime(Duration.ofDays(1)); // Make session effectively never expire within test runtime
+
+        final var pushReport = blaster.exec(pcId);
+
+        LOG.error("Looking for skipped user by group id: {}", testUserGroupId);
+        assertTrue(pushReport.usersWithActiveSessionsSkipped.contains(testUserGroupId), "PushReport should indicate the user with active session (by groupId) was skipped.");
+        assertFalse(pushReport.processedUsers.contains(testUserGroupId), "User with active session should not be processed.");
+
+        // Restore default session lifetime for other tests
+        blaster.setExpirationSessionLifetime(Duration.ofMinutes(20));
+    }
+
+    @Test
+    void testExec_CampaignUsersEmpty() throws SQLException {
+        // Create a push campaign without adding any users to it
+        final UUID pcId = persistenceManager.createPushCampaign(modelCustomerId, "testExec_CampaignUsersEmpty", modelScriptId, modelRouteId);
+        assertNotNull(pcId);
+
+        final var pushReport = blaster.exec(pcId);
+
+        assertTrue(pushReport.campaignUsersEmpty, "PushReport should indicate campaignUsersEmpty for a campaign with no users.");
+        assertTrue(pushReport.isPushComplete(), "PushReport should be complete when campaign users are empty.");
+    }
+
+    @Test
+    void testExec_RouteStatusNotActive() throws SQLException {
+        UUID pcId = null;
+        try {
+            // Create a push campaign linked to modelRouteId (which is assumed to be ACTIVE initially)
+            pcId = persistenceManager.createPushCampaign(modelCustomerId, "testExec_RouteStatusNotActive", modelScriptId, modelRouteId);
+            assertNotNull(pcId);
+
+            // Set the route status to INACTIVE
+            updateRouteStatus(modelRouteId, RouteStatus.SUSPENDED);
+
+            final var pushReport = blaster.exec(pcId);
+
+            assertTrue(pushReport.routeStatusNotActive, "PushReport should indicate routeStatusNotActive.");
+            assertTrue(pushReport.isPushComplete(), "PushReport should be complete when route is not active.");
+        } finally {
+            // Revert route status back to ACTIVE for subsequent tests
+            updateRouteStatus(modelRouteId, RouteStatus.ACTIVE);
+        }
+    }
+
+    private void updateRouteStatus(UUID routeId, RouteStatus status) throws SQLException {
+        try (var connection = persistenceManager.fetchConnection();
+             var ps = connection.prepareStatement("UPDATE brbl_logic.routes SET status = ?::route_status WHERE id = ?")) {
+            ps.setString(1, status.name());
+            ps.setObject(2, routeId);
+            ps.executeUpdate();
+        }
+    }
+
+    private void updateScriptStatus(UUID scriptId, ScriptStatus status) throws SQLException {
+        try (var connection = persistenceManager.fetchConnection();
+             var ps = connection.prepareStatement("UPDATE brbl_logic.scripts SET status = ?::script_status WHERE id = ?")) {
+            ps.setString(1, status.name());
+            ps.setObject(2, scriptId);
+            ps.executeUpdate();
+        }
+    }
+
+    private void updateCustomerStatus(UUID customerId, CustomerStatus status) throws SQLException {
+        try (var connection = persistenceManager.fetchConnection();
+             var ps = connection.prepareStatement("UPDATE brbl_users.customers SET status = ?::customer_status WHERE id = ?")) {
+            ps.setString(1, status.name());
+            ps.setObject(2, customerId);
+            ps.executeUpdate();
+        }
+    }
+
+    @Test
+    void testExec_CustomerStatusNotActive() throws SQLException {
+        UUID pcId = null;
+        try {
+            // Create a push campaign linked to modelCustomerId (which is assumed to be ACTIVE initially)
+            pcId = persistenceManager.createPushCampaign(modelCustomerId, "Inactive Customer Test", modelScriptId, modelRouteId);
+            assertNotNull(pcId);
+
+            // Set the customer status to INACTIVE
+            updateCustomerStatus(modelCustomerId, CustomerStatus.SUSPENDED);
+
+            final var pushReport = blaster.exec(pcId);
+
+            assertTrue(pushReport.customerStatusNotActive, "PushReport should indicate customerStatusNotActive.");
+            assertTrue(pushReport.isPushComplete(), "PushReport should be complete when customer is not active.");
+        } finally {
+            // Revert customer status back to ACTIVE for subsequent tests
+            updateCustomerStatus(modelCustomerId, CustomerStatus.ACTIVE);
+            // Cleanup the created campaign if necessary. For now, we assume campaigns are transient.
+        }
+    }
+
+    @Test
+    void testExec_CampaignNotFound() throws SQLException {
+        // Use a UUID that is highly unlikely to exist in the database
+        final UUID nonExistentCampaignId = UUID.fromString("00000000-0000-0000-0000-000000000000");
+        final var pushReport = blaster.exec(nonExistentCampaignId);
+
+        assertTrue(pushReport.campaignNotFound, "PushReport should indicate campaignNotFound for a non-existent campaign.");
+        assertTrue(pushReport.isPushComplete(), "PushReport should be complete when campaign is not found.");
+    }
+
 
 }

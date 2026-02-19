@@ -1,5 +1,8 @@
 package com.enoughisasgoodasafeast.operator;
 
+/**
+ * Denotes the state of a given Route. Only ACTIVE Routes can be processed by the Operator or Blaster.
+ */
 public enum RouteStatus {
     REQUESTED,  // a Customer has requested a new channel for the given Platform. Awaiting approval from Platform owner.
     APPROVED,   // the Platform owner has approved the request, but it hasn't become active in our system.

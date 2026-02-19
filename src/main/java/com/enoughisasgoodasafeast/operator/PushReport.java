@@ -42,7 +42,7 @@ public class PushReport {
     ArrayList<UUID> invalidUsersSkipped = new ArrayList<>(); // amalgam.group_id
 
     // The users skipped because they were already actively talking to the platform.
-    ArrayList<UUID> activeUsersSkipped = new ArrayList<>(); // amalgam.group_id
+    ArrayList<UUID> usersWithActiveSessionsSkipped = new ArrayList<>(); // amalgam.group_id
 
     // The users that had errors while processing their script
     ArrayList<UUID> usersSkippedDueToScriptErrors = new ArrayList<UUID>();
@@ -112,10 +112,10 @@ public class PushReport {
     }
 
     /* Business method to evaluate the push's various metrics.
-     * If true, the campaign was "complete" and should not be re-tried. This is a little ambiguous. Could we simplify it?
+     * If true, the campaign was "complete" and should not be re-tried. (This is a little ambiguous. Could we simplify it?)
      * False, if there were any retriable failures. Such failures could be a reflection of transient service problems or
      * in-flight changes to user/script/route/customer states.
-     * It's important to note that "complete" does not imply "successful."
+     * To be clear, "complete" does not imply "successful."
      */
     public boolean isPushComplete() {
         return campaignNotFound || campaignUsersEmpty || customerStatusNotActive || nodeNotFound || scriptStatusNotProd || routeStatusNotActive;
@@ -140,7 +140,7 @@ public class PushReport {
                 .add("campaignUsersEmpty=" + campaignUsersEmpty)
                 .add("numUsers=" + numUsers)
                 .add("invalidUsersSkipped=" + invalidUsersSkipped)
-                .add("activeUsersSkipped=" + activeUsersSkipped)
+                .add("activeUsersSkipped=" + usersWithActiveSessionsSkipped)
                 .add("usersSkippedDueToScriptErrors=" + usersSkippedDueToScriptErrors)
                 .add("campaignAndUserStatusUpdateFail=" + campaignUsersStatusUpdateFail)
                 .toString();

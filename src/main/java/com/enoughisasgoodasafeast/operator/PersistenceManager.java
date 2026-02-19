@@ -4,6 +4,7 @@ import com.enoughisasgoodasafeast.Message;
 import org.jspecify.annotations.NonNull;
 import org.jspecify.annotations.Nullable;
 
+import java.sql.Connection;
 import java.sql.SQLException;
 import java.time.Instant;
 import java.util.Collection;
@@ -63,6 +64,7 @@ public interface PersistenceManager {
 
     public boolean insertCampaignUserSegment(@NonNull UUID campaignId, @NonNull List<UUID> userIds);
 
+    @NonNull Connection fetchConnection() throws SQLException;
 
     /*
      * This exception exists simply to slightly abstract the internal details involved.
