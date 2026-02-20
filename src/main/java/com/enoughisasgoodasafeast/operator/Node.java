@@ -106,4 +106,15 @@ public record Node(UUID id, String text, NodeType type, SequencedSet<Edge> edges
                 .add("label='" + label + "'")
                 .toString();
     }
+
+    @Override
+    public boolean equals(Object o) {
+        if (!(o instanceof Node node)) return false;
+        return Objects.equals(id, node.id);
+    }
+
+    @Override
+    public int hashCode() {
+        return Objects.hashCode(id);
+    }
 }

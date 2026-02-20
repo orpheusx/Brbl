@@ -42,7 +42,7 @@ public class UserTest {
     @Test
     void platformIdsEmpty() {
         Exception exception = assertThrows(IllegalArgumentException.class, () -> {
-            new User(platformIds, groupId, new HashMap<>(),platformsCreated, countryCode, languages, claimantId, null, userNickNames, null, platformStatuses);
+            new User(platformIds, groupId, new HashMap<>(), platformsCreated, countryCode, languages, claimantId, null, userNickNames, null, platformStatuses);
         });
         assertTrue(exception.getMessage().contains("platformNumbers"));
     }

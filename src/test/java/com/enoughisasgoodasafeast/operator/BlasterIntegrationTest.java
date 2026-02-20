@@ -2,6 +2,8 @@ package com.enoughisasgoodasafeast.operator;
 
 import com.enoughisasgoodasafeast.ConfigLoader;
 import com.enoughisasgoodasafeast.InMemoryQueueProducer;
+import com.enoughisasgoodasafeast.Message;
+import com.enoughisasgoodasafeast.MessageType;
 import io.jenetics.util.NanoClock;
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.BeforeEach;
@@ -10,13 +12,16 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import java.io.IOException;
+import java.sql.ResultSet;
 import java.sql.SQLException;
 import java.time.Duration;
 import java.time.Instant;
 import java.time.temporal.ChronoUnit;
 import java.util.*;
 import java.util.concurrent.TimeoutException;
+import java.util.stream.Collectors;
 
+import static java.util.stream.Collectors.toList;
 import static org.junit.jupiter.api.Assertions.*;
 
 public class BlasterIntegrationTest {
@@ -24,6 +29,7 @@ public class BlasterIntegrationTest {
     private static final Logger LOG = LoggerFactory.getLogger(BlasterIntegrationTest.class);
 
     PersistenceManager persistenceManager;
+    private InMemoryQueueProducer queueProducer;
     Blaster blaster;
 
     final UUID modelCampaignId = UUID.fromString("019bd1ff-c890-7a28-9758-7ce559af5e0b");
@@ -33,6 +39,8 @@ public class BlasterIntegrationTest {
     final UUID nodeId = UUID.fromString("89eddcb8-7fe5-4cd1-b18b-78858f0789fb");
     final UUID modelRouteId = UUID.fromString("019bf69d-a08a-7c3a-a4ca-ed70d35327fc");
 
+    public static final int EXPECTED_SUCCESSES = 14; // matched with the elements in knownUserIds
+    public static final int EXPECTED_SKIPPED = 6; // matched with the elements in knownUserIds
     final static List<UUID> modelUserIds = new ArrayList<>();
 
     @BeforeAll
@@ -70,7 +78,8 @@ public class BlasterIntegrationTest {
     void setUp() throws IOException, PersistenceManager.PersistenceManagerException, TimeoutException {
         final var props = ConfigLoader.readConfig("persistence_manager_test.properties");
         persistenceManager = PostgresPersistenceManager.createPersistenceManager(props);
-        blaster = new Blaster(persistenceManager, new InMemoryQueueProducer());
+        queueProducer = new InMemoryQueueProducer();
+        blaster = new Blaster(persistenceManager, queueProducer);
         blaster.init(props);
     }
 
@@ -116,7 +125,7 @@ public class BlasterIntegrationTest {
             assertFalse(pushReport.customerStatusNotActive);
             assertFalse(pushReport.invalidUsersSkipped.isEmpty());
             assertEquals(6, pushReport.invalidUsersSkipped.size(), "Unexpected number of invalid users skipped");
-            assertEquals(14, pushReport.processedUsers.size(), "Unexpected number of processed users"); // See knownUserIds list.
+            assertEquals(EXPECTED_SUCCESSES, pushReport.processedUsers.size(), "Unexpected number of processed users"); // See knownUserIds list.
 
             // Fetch campaign and check its status.
             final var postExecPushCampaign = persistenceManager.getPushCampaign(pcId);
@@ -144,9 +153,63 @@ public class BlasterIntegrationTest {
                 assertEquals(pushCampaign.nodeId(), session.previousScript().id(),
                         "Session script " + pushCampaign.scriptId() + " not in expected state for user " + processedUserId);
             }
+            
+            // Check the queue producer for the MTs we expect to have been generated
+            final var enqueued = queueProducer.enqueued();
+            assertFalse(enqueued.isEmpty());
+            assertEquals(EXPECTED_SUCCESSES, enqueued.size());
 
+            // Check messages_mt table as well
+            var messageIds = enqueued.stream().map(Message::id).toList();
+            var messagesCreated = getMessages(messageIds);
+            assertEquals(EXPECTED_SUCCESSES, messagesCreated.size());
         });
     }
+
+    private List<Message> getMessages(List<UUID> messageIds) throws SQLException {
+        try (var connection = persistenceManager.fetchConnection();
+             var ps = connection.prepareStatement(
+                     "SELECT id, sent_at, _from, _to, _text, session_id, script_id FROM brbl_logs.messages_mt WHERE id = ANY (?)"
+             )) {
+            ps.setArray(1, connection.createArrayOf("uuid", messageIds.toArray()));
+
+            final ResultSet rs = ps.executeQuery();
+            List<Message> messages = new ArrayList<>();
+            while(rs.next()) {
+                final UUID id = (UUID) rs.getObject("id");
+                final Instant sentAt = rs.getTimestamp("sent_at").toInstant();
+                final String from = rs.getString("_from");
+                final String to = rs.getString("_to");
+                final String text = rs.getString("_text");
+
+                messages.add(
+                        new Message(id, sentAt, MessageType.MT, Platform.WAP, from, to, text)
+                );
+            }
+
+            return messages;
+        }
+    }
+
+   //@Test
+   //void fetchMessagesById() throws SQLException {
+   //    var messageIds = List.of(UUID.fromString("019c76a8-47d5-7fab-b0c1-b870cbfeb3b8"),
+   //            UUID.fromString("019c76a8-47d7-7bef-92d2-4fe6a2843ff2"),
+   //            UUID.fromString("019c76a8-47d9-7c8c-b3d6-c02e5892340e"),
+   //            UUID.fromString("019c76a8-47db-788a-821c-29ec153baa4a"),
+   //            UUID.fromString("019c76a8-47dd-7951-b02b-3b3c5a5dca2d"),
+   //            UUID.fromString("019c76a8-47df-7386-8c6d-b1d7a372e55e"),
+   //            UUID.fromString("019c76a8-47e0-7f32-a8ae-3655033acae9"),
+   //            UUID.fromString("019c76a8-47e2-751b-8781-ee7b5e178402"),
+   //            UUID.fromString("019c76a8-47e4-7197-9bff-e0f08bd00b6e"),
+   //            UUID.fromString("019c76a8-47e6-7cc7-86f1-f0efc48d8b50"),
+   //            UUID.fromString("019c76a8-47e7-7651-9aab-29fc385650dc"));
+   //    var messages = getMessages(messageIds);
+   //    assertEquals(11, messages.size());
+   //    for (Message message : messages) {
+   //        LOG.info(message.toString());
+   //    }
+   //}
 
     @Test
     void getPushCampaignUsers() throws SQLException {

@@ -69,7 +69,7 @@ public interface PersistenceManager {
     /*
      * This exception exists simply to slightly abstract the internal details involved.
      */
-    class PersistenceManagerException extends Exception {
+    static class PersistenceManagerException extends Exception {
         public PersistenceManagerException(Exception e) {
             super(e);
         }

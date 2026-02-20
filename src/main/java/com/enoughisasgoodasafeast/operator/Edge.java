@@ -2,6 +2,7 @@ package com.enoughisasgoodasafeast.operator;
 
 import java.io.Serializable;
 import java.util.List;
+import java.util.Objects;
 import java.util.UUID;
 
 import static com.enoughisasgoodasafeast.Functions.randomUUID;
@@ -39,5 +40,16 @@ public record Edge(UUID id, String text, List<String> matchText, Node targetNode
     //         return String.format("Edge[id=%s, text='%s', matchText=%s, node=%s]", id, text, matchText(), node.id());
     //     }
     // }
+
+    @Override
+    public boolean equals(Object o) {
+        if (!(o instanceof Edge edge)) return false;
+        return Objects.equals(id, edge.id);
+    }
+
+    @Override
+    public int hashCode() {
+        return Objects.hashCode(id);
+    }
 }
 

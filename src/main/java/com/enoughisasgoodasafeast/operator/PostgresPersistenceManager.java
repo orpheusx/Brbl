@@ -546,7 +546,6 @@ public class PostgresPersistenceManager implements PersistenceManager {
     @Override
     public boolean insertProcessedMO(Message message, Session session) {
         try (Connection connection = fetchConnection()) {
-            assert connection != null;
             return insertProcessedMO(connection, message, session);
         } catch (SQLException e) {
             LOG.error("insertProcessedMO: fetchConnection failed", e);
@@ -577,7 +576,6 @@ public class PostgresPersistenceManager implements PersistenceManager {
     @Override
     public boolean insertMT(Message message, Session session) {
         try (Connection connection = fetchConnection()) {
-            assert connection != null;
             return insertMT(connection, message, session);
         } catch (SQLException e) {
             LOG.error("insertMTs: fetchConnection failed", e);
@@ -588,8 +586,7 @@ public class PostgresPersistenceManager implements PersistenceManager {
     // Called by Operator
     //    public boolean insertMTs(List<Message> messages, Session session) {
     //        try (Connection connection = fetchConnection()) {
-    //            assert connection != null;
-    //            return insertMTs(connection, messages, session);
+    //                //            return insertMTs(connection, messages, session);
     //        } catch (SQLException e) {
     //            LOG.error("insertMTs: fetchConnection failed", e);
     //            return false;
@@ -647,7 +644,6 @@ public class PostgresPersistenceManager implements PersistenceManager {
     @Override
     public boolean insertDeliveredMT(Message message) {
         try (Connection connection = fetchConnection()) {
-            assert connection != null;
             return insertDeliveredMT(connection, message);
         } catch (SQLException e) {
             LOG.error("insertDeliveredMTs: fetchConnection failed", e);
@@ -675,7 +671,6 @@ public class PostgresPersistenceManager implements PersistenceManager {
 
     public void saveSession(Session session) throws PersistenceManagerException {
         try (Connection connection = fetchConnection()) {
-            assert connection != null;
             saveSession(connection, session);
         } catch (SQLException e) {
             LOG.error("saveSession: fetchConnection failed", e);
@@ -700,7 +695,6 @@ public class PostgresPersistenceManager implements PersistenceManager {
     public @Nullable Session loadSession(@NonNull UUID userGroupId) throws PersistenceManagerException {
         LOG.info("Fetching session data for {}", userGroupId);
         try (Connection connection = fetchConnection()) {
-            assert connection != null;
             return loadSession(connection, userGroupId);
         } catch (SQLException e) {
             LOG.error("loadSession: fetchConnection failed", e);
@@ -729,7 +723,6 @@ public class PostgresPersistenceManager implements PersistenceManager {
     public @Nullable Map<Pattern, Keyword> getKeywords() {
         LOG.info("(Re)Loading keyword cache...");
         try (Connection connection = fetchConnection()) {
-            assert connection != null;
             return getKeywords(connection);
         } catch (SQLException e) {
             LOG.error("getKeywords: fetchConnection failed", e);
@@ -778,7 +771,6 @@ public class PostgresPersistenceManager implements PersistenceManager {
     public @Nullable Route[] getActiveRoutes() {
         LOG.info("(Re)Loading route cache...");
         try (Connection connection = fetchConnection()) {
-            assert connection != null;
             return getActiveRoutes(connection);
         } catch (SQLException e) {
             LOG.error("getActiveRoutes: fetchConnection failed", e);
@@ -826,8 +818,7 @@ public class PostgresPersistenceManager implements PersistenceManager {
 //        @Override
 //    public Node getScriptForKeyword(Platform platform, String keyword) {
 //        try (Connection connection = fetchConnection()) {
-//            assert connection != null;
-//            return getScriptForKeyword(connection, platform, keyword);
+//            //            return getScriptForKeyword(connection, platform, keyword);
 //        } catch (SQLException e) {
 //            LOG.error("getScript: fetchConnection failed", e);
 //            return null;
@@ -916,17 +907,16 @@ public class PostgresPersistenceManager implements PersistenceManager {
 //    }
 
     @Override
-    public @Nullable Node getNodeGraph(@NonNull UUID scriptId) {
+    public @Nullable Node getNodeGraph(@NonNull UUID nodeId) {
         try (Connection connection = fetchConnection()) {
-            assert connection != null;
-            return getNodeGraph(connection, scriptId);
+            return getNodeGraph(connection, nodeId);
         } catch (SQLException e) {
-            LOG.error("getScript: fetchConnection failed", e);
+            LOG.error("getNodeGraph: fetchConnection failed", e);
             return null;
         }
     }
 
-    public @Nullable Node getNodeGraph(@NonNull Connection connection, @NonNull UUID nodeId) {
+    private @Nullable Node getNodeGraph(@NonNull Connection connection, @NonNull UUID nodeId) {
         Map<UUID, Node> scriptMap = new HashMap<>(); // FIXME does the ordering matter?
         try (PreparedStatement ps = connection.prepareStatement(SELECT_SCRIPT_GRAPH_RECURSIVE)) {
             ps.setObject(1, nodeId);
@@ -999,7 +989,6 @@ public class PostgresPersistenceManager implements PersistenceManager {
     @Override
     public @Nullable User getUser(@NonNull SessionKey sessionKey) {
         try (Connection connection = fetchConnection()) {
-            assert connection != null;
             return getUser(connection, sessionKey);
         } catch (SQLException e) {
             LOG.error("getUser: fetchConnection failed", e);
@@ -1118,7 +1107,6 @@ public class PostgresPersistenceManager implements PersistenceManager {
     @Override
     public boolean insertNewUser(User user) {
         try (Connection connection = fetchConnection()) {
-            assert connection != null;
             return insertNewUserAmalgam(connection, user);
         } catch (SQLException e) {
             LOG.error("getUser: fetchConnection failed", e);
@@ -1200,7 +1188,6 @@ public class PostgresPersistenceManager implements PersistenceManager {
 
     public @NonNull Collection<CampaignUser> getPushCampaignUsers(@NonNull UUID campaignId, DeliveryStatus byStatus) {
         try (Connection connection = fetchConnection()) {
-            assert connection != null;
             return getPushCampaignUsers(
                     connection, campaignId, byStatus);
         } catch (SQLException e) {
@@ -1389,7 +1376,6 @@ public class PostgresPersistenceManager implements PersistenceManager {
 
     public boolean updatePushCampaignUsersStatus(@NonNull PushReport report) throws SQLException {
         try (Connection connection = fetchConnection()) {
-            assert connection != null;
             return updatePushCampaignUsersStatus(connection, report.campaignId, report.processedUsers.toArray(new UUID[0]));
         } catch (SQLException e) {
             LOG.error("getUsersForPushCampaign: fetchConnection failed", e);
@@ -1422,7 +1408,6 @@ public class PostgresPersistenceManager implements PersistenceManager {
 
     public boolean completePushCampaign(@NonNull UUID campaignId, Instant completionTime) throws SQLException {
         try (Connection connection = fetchConnection()) {
-            assert connection != null;
             return completePushCampaign(connection, campaignId, completionTime);
         } catch (SQLException e) {
             LOG.error("completePushCampaign: fetchConnection failed", e);
@@ -1446,8 +1431,7 @@ public class PostgresPersistenceManager implements PersistenceManager {
 
 //    public @Nullable List<CampaignUser> getUsersForPushCampaign(@NonNull UUID pushCampaignId) {
 //        try (Connection connection = fetchConnection()) {
-//            assert connection != null;
-//            return getUsersForPushCampaign(connection, pushCampaignId);
+//            //            return getUsersForPushCampaign(connection, pushCampaignId);
 //        } catch (SQLException e) {
 //            LOG.error("getUsersForPushCampaign: fetchConnection failed", e);
 //            return null;
@@ -1505,7 +1489,6 @@ public class PostgresPersistenceManager implements PersistenceManager {
 
     public PushCampaign getPushCampaign(@NonNull UUID pushCampaignId) {
         try (Connection connection = fetchConnection()) {
-            assert connection != null;
             return getPushCampaign(connection, pushCampaignId);
         } catch (SQLException e) {
             LOG.error("getPushCampaign: fetchConnection failed", e);
@@ -1579,9 +1562,7 @@ public class PostgresPersistenceManager implements PersistenceManager {
                                            String description,
                                            @NonNull UUID scriptId,
                                            @NonNull UUID routeId) {
-
         try (Connection connection = fetchConnection()) {
-            assert connection != null;
             return createPushCampaign(connection, customerId, description, scriptId, routeId);
         } catch (SQLException e) {
             LOG.error("getPushCampaign: fetchConnection failed", e);
@@ -1620,7 +1601,6 @@ public class PostgresPersistenceManager implements PersistenceManager {
 
     public boolean insertCampaignUserSegment(@NonNull UUID campaignId, @NonNull List<UUID> userIds) {
         try (Connection connection = fetchConnection()) {
-            assert connection != null;
             return insertCampaignUserSegment(connection, campaignId, userIds);
         } catch (SQLException e) {
             LOG.error("insertCampaignUserSegment: fetchConnection or transaction management failed for campaignId {}.", campaignId, e);

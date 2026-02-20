@@ -17,7 +17,7 @@ import java.util.UUID;
  * We materialize the data for all the rows linked through the amalgams table so that Scripts can make use of it.
  * A User lives in a single country but may speak multiple languages.
  * They may be identified differently by the Platforms they use to communicate. SMS and WhatsApp use a phone number while
- *  other platforms use opaque identifiers.
+ *  other platforms use opaque identifiers. By convention, we call these platform specific identifiers, platformNumbers.
  * Their primary id is their Brbl defined id, a UUID.
  * <p>
  * The validation of country codes is limited to what the platform supports.
@@ -30,6 +30,7 @@ import java.util.UUID;
  * @param countryCode           the ISO country of the nation where the User lives.
  * @param languages             the list of ISO language codes spoken by the User.
  * @param claimantId            the identifier of the Customer that claims this User instance.
+ * @param customerId            the optional Customer record. If not-null this indicates the User is also a Customer.
  * @param platformNickNames     the optional nicknames for this User on other messaging platforms.
  * @param platformProfiles      the optional Profiles associated with this User for each messaging platform.
  * @param platformStatus        the User controlled opt-in status for each Platform.

@@ -3207,3 +3207,17 @@ It didn't grasp the structure of the User model but that's reasonable since it d
 [A thought: would it help to align the User model with the table schema and define a new model (UserGroup) that handles the composition?]
 
 Overall, not sure I saved any time. Might get better next time.
+
+===== 2026-02-19 ====
+
+Spent more quality time with Gemini, this time with the Gemini Code Assist plugin installed.
+Did some design work on Chttr, a client side automated simulator.
+Got Gemini to build the start of a reasonable script interpreter that reads the graph of nodes and converts it into something that could be used for script testing.
+It doesn't seem to know when a class has compilation problems, however. I'm adding a directive to Gemini.MD that asks it to compile any new code before asserting that it's correct or complete. We'll see if that helps...
+
+===== 2026-02-20 ====
+Continuing work on Chttr. Really missing the lack of metadata in our Script model. Distinguishing between elements that just "connective tissue" and those that are meaningful is challenging...
+
+Expressing the goal is definitely the toughest part of using AI.
+
+Using Helidon SE
