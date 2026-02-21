@@ -3220,4 +3220,18 @@ Continuing work on Chttr. Really missing the lack of metadata in our Script mode
 
 Expressing the goal is definitely the toughest part of using AI.
 
-Using Helidon SE
+Write a client called ChttrClient that can receive instances of com.enoughisasgoodasafeast.Message (serialized as a string) from com.enoughisasgoodasafeast.Sndr using the HTTP server provided by com.enoughisasgoodasafeast.chatter.ChttrService then, as a response, send a different Message to com.enoughisasgoodasafeast.Rcvr using com.enoughisasgoodasafeast.HttpMOHandler to delivery messages.
+The payload of the incoming HTTP requests received by ChttrService must be parsed into a Message record and the "to" field must be used to find the matching UserActor (by its phoneNumber) from a set of UserActors.
+The text of the Message must then be used to find the Exchange element in the UserActor's script (the ChttrScript) whose mtText matches.
+The client must then respond by sending one of the moResponses elements (randomly selected) using the HttpMOHandler.
+For each such incoming message, the client must log the message, the UserActor's phoneNumber, and the Message that was sent in response.
+If there is no matching UserActor for the incoming Message, an appropriate warning must be logged.
+If there is no matching Exchange for the incoming Message, an appropriate warning must be logged.
+
+When the client is started it must accept a number of arguments to it's main method:
+    1. A UUID called "pushCampaignId"
+    2. A UUID called "nodeId".
+Pass the pushCampaignId to com.enoughisasgoodasafeast.operator.PostresPersistenceManager's getPushCampaignUsers method defaulting the byStatus argument to DeliveryStatus.PENDING. Use the returned collection to construct a list of UserActors where the phoneNumbers are provided by the platformNumbers map of the CampaignUser's user field. Use Platform.WAP as the key to extract the correct value.
+Pass the nodeId to com.enoughisasgoodasafeast.chatter.ScriptInterpreter's translateNodeGraphToChttrScript method and set the returned ChttrScript on each of the UserActors.
+It is acceptable to make modifications to the existing, referenced classes if needed.
+

@@ -12,32 +12,21 @@ import java.util.Properties;
 import static io.helidon.http.Status.Family.SUCCESSFUL;
 
 /**
- * This is a very thin wrapper around WebClient that, currently, doesn't handle any of the issues (throttling, transient outages, etc.)
- * with sending to a 3rd party messaging API (e.g. Slack, WhatsApp, etc.)
+ * A thin wrapper around WebClient that, currently, doesn't handle any of the issues (throttling, transient outages, etc.)
+ * with sending to a 3rd party messaging API (e.g. Slack, WhatsApp, etc.) or, for that matter, our own Rcvr.
  * We should not consider it ready for anything but light, integration/unit testing.
  * A real implementation should use the application.yaml configuration support (for TLS setup, metrics, tracking)
  * provided by Helidon.
- * It might also want to leverage virtual threads to avoid blocking platform threads.
- * FIXME Seriously, fix this shit.
  */
-public class HttpMTHandler implements MTHandler {
+public class HttpMTHandler extends HttpMessageHandler implements MTHandler {
 
     private static final Logger LOG = LoggerFactory.getLogger(HttpMTHandler.class);
     static {
         ((ch.qos.logback.classic.Logger) LOG).setLevel(Level.ERROR);
     }
 
-    private final String endpoint;
-    private final WebClient client;
-
     public HttpMTHandler(String endpoint) {
-        this.endpoint = endpoint;
-        LOG.info("Creating HttpMTHandler with URL {}", endpoint);
-
-         client = WebClient.builder()
-                //.addService(WebClientTracing.create())
-                .baseUri(endpoint)
-                .build();
+        super(endpoint);
     }
 
     public static MTHandler newHandler(Properties properties) {
@@ -50,30 +39,6 @@ public class HttpMTHandler implements MTHandler {
             return new HttpMTHandler(String.format("%s://%s:%d%s", protocol, host, port, pathInfo));
         } else {
             return new HttpMTHandler(String.format("%s://%s:%d/%s", protocol, host, port, pathInfo));
-        }
-    }
-
-    // TODO implement a head check here
-    public boolean ping() {
-        LOG.info("");
-        return true;
-    }
-
-    public boolean handle(Message payload) {
-        LOG.info("Sending message, '{}'", payload);
-
-        String messageAsString = String.format("%s:%s:%s", payload.from(), payload.to(), payload.text());
-        // FIXME need more robust error handling here...including retry logic.
-        ClientResponseTyped<String> res = client.post().submit(messageAsString, String.class);
-        LOG.info("Send response {}: {}", res.status(), res.entity());
-        Status status = res.status();
-        if (status.family() != SUCCESSFUL) {
-            LOG.error("Post to {} failed: {}", endpoint, status);
-            return false;
-        }
-        else {
-            LOG.info("Post to {} OK: {}", endpoint, status);
-            return true;
         }
     }
 
