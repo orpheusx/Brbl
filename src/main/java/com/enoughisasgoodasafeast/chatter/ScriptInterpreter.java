@@ -23,11 +23,11 @@ public class ScriptInterpreter {
         this.persistenceManager = persistenceManager;
     }
 
-    public void exportScript(UUID nodeId, String outputPath) {
+    public ChttrScript translateNodeGraphToChttrScript(UUID nodeId) {
         Node rootNode = persistenceManager.getNodeGraph(nodeId);
         if (rootNode == null) {
             LOG.error("Node graph not found for nodeId: {}", nodeId);
-            return;
+            return null;
         }
 
         Node.printGraph(rootNode, rootNode, 2);
@@ -36,12 +36,18 @@ public class ScriptInterpreter {
         Set<Node> visited = new HashSet<>();
         traverseGraph(rootNode, chttrScript, visited);
 
+        return chttrScript;
+    }
+    public ChttrScript exportScriptToFile(UUID nodeId, String outputPath) {
+        final ChttrScript chttrScript = translateNodeGraphToChttrScript(nodeId);
         try (FileOutputStream fileOut = new FileOutputStream(outputPath);
              ObjectOutputStream objectOut = new ObjectOutputStream(fileOut)) {
             objectOut.writeObject(chttrScript);
             LOG.info("ChttrScript serialized to {}", outputPath);
         } catch (IOException e) {
             LOG.error("Error serializing ChttrScript", e);
+        } finally {
+            return chttrScript;
         }
     }
 
@@ -93,7 +99,7 @@ public class ScriptInterpreter {
         try {
             PersistenceManager persistenceManager = PostgresPersistenceManager.createPersistenceManager(ConfigLoader.readConfig("persistence_manager_test.properties"));
             ScriptInterpreter exporter = new ScriptInterpreter(persistenceManager);
-            exporter.exportScript(nodeId, outputFile);
+            exporter.exportScriptToFile(nodeId, outputFile);
         } catch (IOException | PersistenceManagerException e) {
             LOG.error("Failed to initialize PersistenceManager or export script", e);
         }
