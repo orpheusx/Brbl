@@ -126,6 +126,7 @@ CREATE TABLE brbl_users.profiles (
 --  Remember, in Postgres, users are really an alias for role.
 
 -- brbl_admin  --> not super-user but has full access to all our schemas/tables
+-- By default, is the role created/owns the schema it has ALL access to everything in it.
 GRANT ALL ON ALL TABLES IN SCHEMA "brbl_users", "brbl_logs" TO brbl_admin;
 
 -- brbl_logs_write_role --> (no login) write to the brbl_logs.message_* tables
@@ -154,7 +155,7 @@ GRANT brbl_logs_write_role TO brbl_rcvr;
 CREATE ROLE brbl_sndr LOGIN ENCRYPTED PASSWORD 'brbl_sndr';
 GRANT brbl_logs_write_role TO brbl_sndr;
 
-brbl_operator --> (login) granted both brbl_logs_write_role and brbl_user_rw_role
+-- brbl_operator --> (login) granted both brbl_logs_write_role and brbl_user_rw_role
 CREATE ROLE brbl_operator LOGIN ENCRYPTED PASSWORD 'brbl_operator';
 GRANT brbl_logs_write_role, brbl_user_rw_role TO brbl_operator;
 

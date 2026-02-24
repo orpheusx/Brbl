@@ -352,7 +352,7 @@ public class BlasterIntegrationTest {
 
     private void updateRouteStatus(UUID routeId, RouteStatus status) throws SQLException {
         try (var connection = persistenceManager.fetchConnection();
-             var ps = connection.prepareStatement("UPDATE brbl_logic.routes SET status = ?::route_status WHERE id = ?")) {
+             var ps = connection.prepareStatement("UPDATE brbl_logic.routes SET status = ?::brbl_logic.route_status WHERE id = ?")) {
             ps.setString(1, status.name());
             ps.setObject(2, routeId);
             ps.executeUpdate();
@@ -370,7 +370,7 @@ public class BlasterIntegrationTest {
 
     private void updateCustomerStatus(UUID customerId, CustomerStatus status) throws SQLException {
         try (var connection = persistenceManager.fetchConnection();
-             var ps = connection.prepareStatement("UPDATE brbl_users.customers SET status = ?::customer_status WHERE id = ?")) {
+             var ps = connection.prepareStatement("UPDATE brbl_users.customers SET status = ?::brbl_logic.customer_status WHERE id = ?")) {
             ps.setString(1, status.name());
             ps.setObject(2, customerId);
             ps.executeUpdate();

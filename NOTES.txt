@@ -3220,7 +3220,9 @@ Continuing work on Chttr. Really missing the lack of metadata in our Script mode
 
 Expressing the goal is definitely the toughest part of using AI.
 
-Write a client called ChttrClient that can receive instances of com.enoughisasgoodasafeast.Message (serialized as a string) from com.enoughisasgoodasafeast.Sndr using the HTTP server provided by com.enoughisasgoodasafeast.chatter.ChttrService then, as a response, send a different Message to com.enoughisasgoodasafeast.Rcvr using com.enoughisasgoodasafeast.HttpMOHandler to delivery messages.
+Here's my attempt at a prompt for Gemini:
+
+Write a client called ChttrClient that can receive instances of com.enoughisasgoodasafeast.Message (serialized as a string) from com.enoughisasgoodasafeast.Sndr using the HTTP server provided by com.enoughisasgoodasafeast.chatter.ChttrService then, as a response, send a different Message to com.enoughisasgoodasafeast.Rcvr using com.enoughisasgoodasafeast.HttpMOHandler to them.
 The payload of the incoming HTTP requests received by ChttrService must be parsed into a Message record and the "to" field must be used to find the matching UserActor (by its phoneNumber) from a set of UserActors.
 The text of the Message must then be used to find the Exchange element in the UserActor's script (the ChttrScript) whose mtText matches.
 The client must then respond by sending one of the moResponses elements (randomly selected) using the HttpMOHandler.
@@ -3235,3 +3237,166 @@ Pass the pushCampaignId to com.enoughisasgoodasafeast.operator.PostresPersistenc
 Pass the nodeId to com.enoughisasgoodasafeast.chatter.ScriptInterpreter's translateNodeGraphToChttrScript method and set the returned ChttrScript on each of the UserActors.
 It is acceptable to make modifications to the existing, referenced classes if needed.
 
+Gemini got into a spiral over the different .properties that it might use to initialze various of the components involved but otherwise seems to have produced workable code.
+
+Now I'm trying to run Rcvr, Sndr and Operator along with the Rabbit broker along with ChttrClient using Docker.
+And, as usual, networking is a little confused.
+
+Running the following:
+    docker inspect -f '{{range .NetworkSettings.Networks}}{{.IPAddress}}{{end}}' 39cc8256ea4aaa15cd79122578bd88bfaea79d591acf8743ae2bf9cf3d712b7a
+where the long last argument is the ID of the container is supposed to return the IP of the container.
+It returned 172.18.0.6 so I tried sending a message to the Rcvr, triggering a conversation.
+
+curl -d '999999999999:8204383c-7a73-7ba0-1c8c-83be6886ef90:foo' http://172.18.0.6:2424/chttr
+
+but it just hangs before eventually timing out. Perhaps the IP is only legit within the containers' private network.
+
+The busybox available in Alpine OS only has wget:
+
+wget --post-data="999999999999:8204383c-7a73-7ba0-1c8c-83be6886ef90:foo" http://172.18.0.6:2424/chttr
+172.18.0.6
+
+Ah, because I added a port forwarding section to the compose file we can access the container using the host ip which can found on a Mac with:
+    ipconfig getifaddr en0
+
+curl -d '999999999999:522482859616:foo' http://192.168.1.155:2424/chttr
+curl -d '522482859616:999999999999:foo' http://192.168.1.155:4242/brblEnqueue
+
+From the log emitted by operator-1 it appears that the brbl_operator role (used by the Operator server) cannot access brbl_users.amalgams ("does not exist") or brbl_logic.routes ("type "route_status" does not exist".)
+
+
+===== 2026-02-22 ====
+
+Finally found a useful query:
+
+    SELECT
+        table_catalog,
+        table_schema,
+        table_name,
+        privilege_type,
+        grantor,
+        grantee
+    FROM
+        information_schema.table_privileges
+    WHERE
+        grantee like '%role'
+    ORDER BY
+        table_schema,
+        table_name,
+        privilege_type
+    ;
+
+Produces interesting output:
+     table_catalog | table_schema |     table_name     | privilege_type |  grantor   |       grantee
+    ---------------+--------------+--------------------+----------------+------------+----------------------
+     brbl_db_dev   | brbl_biz     | addresses          | INSERT         | brbl_admin | brbl_biz_write_role
+     brbl_db_dev   | brbl_biz     | addresses          | SELECT         | brbl_admin | brbl_biz_read_role
+     brbl_db_dev   | brbl_biz     | addresses          | UPDATE         | brbl_admin | brbl_biz_write_role
+     brbl_db_dev   | brbl_biz     | customer_addresses | INSERT         | brbl_admin | brbl_biz_write_role
+     brbl_db_dev   | brbl_biz     | customer_addresses | SELECT         | brbl_admin | brbl_biz_read_role
+     brbl_db_dev   | brbl_biz     | customer_addresses | UPDATE         | brbl_admin | brbl_biz_write_role
+     brbl_db_dev   | brbl_biz     | payment_cc         | INSERT         | brbl_admin | brbl_biz_write_role
+     brbl_db_dev   | brbl_biz     | payment_cc         | SELECT         | brbl_admin | brbl_biz_read_role
+     brbl_db_dev   | brbl_biz     | payment_cc         | UPDATE         | brbl_admin | brbl_biz_write_role
+
+     brbl_db_dev   | brbl_logic   | edges              | SELECT         | brbl_admin | brbl_logic_read_role
+     brbl_db_dev   | brbl_logic   | keywords           | SELECT         | brbl_admin | brbl_logic_read_role
+     brbl_db_dev   | brbl_logic   | nodes              | SELECT         | brbl_admin | brbl_logic_read_role
+     brbl_db_dev   | brbl_logs    | messages_mo        | INSERT         | brbl_admin | brbl_logs_write_role
+     brbl_db_dev   | brbl_logs    | messages_mo_prcd   | INSERT         | brbl_admin | brbl_logs_write_role
+     brbl_db_dev   | brbl_logs    | messages_mt        | INSERT         | brbl_admin | brbl_logs_write_role
+     brbl_db_dev   | brbl_logs    | messages_mt_dlvr   | INSERT         | brbl_admin | brbl_logs_write_role
+     brbl_db_dev   | brbl_users   | old_profiles       | INSERT         | brbl_admin | brbl_user_rw_role
+     brbl_db_dev   | brbl_users   | old_profiles       | SELECT         | brbl_admin | brbl_user_rw_role
+     brbl_db_dev   | brbl_users   | old_users          | INSERT         | brbl_admin | brbl_user_rw_role
+     brbl_db_dev   | brbl_users   | old_users          | SELECT         | brbl_admin | brbl_user_rw_role
+
+So the grants I made originally to brbl_operator (specifically brbl_user_rw_role) are persist across table renames. The old_users table is still granted to brbl_user_rw_role but the new version, users, has no such grant.
+
+    SELECT
+        table_catalog,
+        table_schema,
+        table_name,
+        privilege_type,
+        grantor,
+        grantee
+    FROM
+        information_schema.table_privileges
+    WHERE
+        table_name = 'users'
+        AND
+        table_schema = "brbl_users"
+    ORDER BY
+        table_schema,
+        table_name,
+        privilege_type
+    ;
+Only shows privileges granted to brbl_admin which is their owner anyway.
+From a performance perspective this probably makes a lot of sense since Postgres doesn't have to evaluate the ownership by names.
+
+So let's reapply the grants to update them:
+
+    REVOKE brbl_logic_read_role FROM brbl_operator ;
+    REVOKE brbl_logs_write_role FROM brbl_operator ;
+    REVOKE brbl_user_rw_role TO FROM brbl_operator ;
+
+    GRANT brbl_logic_read_role TO brbl_operator WITH INHERIT TRUE;
+    GRANT brbl_logs_write_role TO brbl_operator WITH INHERIT TRUE;
+    GRANT brbl_user_rw_role    TO brbl_operator WITH INHERIT TRUE;
+
+This didn't help grant brbl_operator the access it needs.
+
+Let's try creating a new role (with the proper plural form of the name) and grant it to brbl_operator:
+CREATE ROLE brbl_users_rw_role;
+GRANT USAGE ON SCHEMA brbl_users TO brbl_users_rw_role;
+GRANT INSERT, SELECT ON
+        brbl_users.amalgams,
+        brbl_users.companies,
+        brbl_users.customers,
+        brbl_users.profiles,
+        brbl_users.users
+TO brbl_users_rw_role;
+GRANT brbl_users_rw_role TO brbl_operator WITH INHERIT TRUE;
+GRANT UPDATE ON TABLE brbl_users.amalgams    TO brbl_user_rw_role;
+
+Verified via psql that the brbl_operator can now select from the amalgams and routes tables...
+but *only* if I include their schema in the select.
+
+Likewise, the role will need access to the types (aka enums) we've defined within the same schema.
+The USAGE of these have to be granted individually; there's no shorthand for globbing the access.
+To make sure all subsequently created types in a schema are usable:
+
+    ALTER DEFAULT PRIVILEGES IN SCHEMA your_schema_name
+    GRANT USAGE ON TYPES TO your_role_name;
+
+So the query errors we're still seeing seem likely due to these two access issues.
+
+Solutions:
+    ALTER ROLE brbl_operator SET search_path TO a,b,c; << Not preferred because they are invisible at the application level.
+
+    or preferably:
+
+    Update the USER_PROFILE_BY_PLATFORM_ID_ROUTE query (and any others) to include the schema when it references a table...
+
+Making progress. Needed to create a write role for brbl_logic tables since Operator will be writing/updating the SESSIONS table.
+
+TODO create roles for Blaster. brbl_admin is too broad and brbl_operator shouldn't be able to access the PUSH_CAMPAIGNS or CAMPAIGN_USERS tables...
+
+Also realized that the Rcvr service hard codes the Platform of incoming messages to be BRBL. Probably we should have a different default Plaform based on the endpoint.
+
+
+TODO to clean up the old sub role for the brbl_operator user...
+REASSIGN OWNED BY brbl_user_rw_role TO brbl_users_rw_role;
+DROP OWNED BY brbl_user_rw_role;
+DROP ROLE IF EXISTS brbl_user_rw_role;
+
+
+NB: At some point we should take another pass at our role building conventions and make they are symmetric and complete.
+
+
+===== 2026-02-23 ====
+
+Heard about an interesting project for client-server communication and HTMX/Alpine.js-like interactivity:
+    https://github.com/starfederation/datastar-java
+
+If we don't go with Phoenix for the Brbl native web client, this might be a good choice given it's focus on minimizing JS and high performance.

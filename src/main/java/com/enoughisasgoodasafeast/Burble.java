@@ -1,5 +1,6 @@
 package com.enoughisasgoodasafeast;
 
+import com.enoughisasgoodasafeast.chatter.ChttrClient;
 import com.enoughisasgoodasafeast.operator.Operator;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -30,6 +31,8 @@ public class Burble {
             case "operator" -> Operator.main(args);
 
 //            case "fakeoperator" -> FakeOperator.main(args);
+
+            case "chttr" -> ChttrClient.main(args);
 
             default -> LOG.error("Unrecognized program: {}", program);
 

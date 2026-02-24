@@ -43,6 +43,7 @@ class OperatorPersistenceIntegrationTest {
         assertNotNull(user.platformProfiles());
         assertEquals(1, user.platformProfiles().size());
         assertEquals(2, user.platformStatus().size());
+        LOG.info(user.platformCreationTimes().get(Platform.SMS).toString());
     }
 
     @Test

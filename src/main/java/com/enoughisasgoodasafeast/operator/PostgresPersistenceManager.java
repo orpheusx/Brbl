@@ -164,10 +164,10 @@ public class PostgresPersistenceManager implements PersistenceManager {
                 a.claimant_id     as owner_claimant_id,
                 u.status
             FROM
-                amalgams a
-            INNER JOIN users u
+                brbl_users.amalgams a
+            INNER JOIN brbl_users.users u
                 ON a.user_id = u.id
-            LEFT JOIN profiles p
+            LEFT JOIN brbl_users.profiles p
                 ON p.id = a.profile_id
             WHERE
                a.group_id =
@@ -175,10 +175,10 @@ public class PostgresPersistenceManager implements PersistenceManager {
                 SELECT
                     a.group_id as gid
                 FROM
-                    amalgams a
-                INNER JOIN users u
+                    brbl_users.amalgams a
+                INNER JOIN brbl_users.users u
                     ON a.user_id = u.id
-                INNER JOIN routes r
+                INNER JOIN brbl_logic.routes r
                     ON r.customer_id = a.customer_id
                 WHERE
                     u.platform_code = ?::public.platform
@@ -202,7 +202,7 @@ public class PostgresPersistenceManager implements PersistenceManager {
                                 (id, status, platform_id, platform_code,
                                  country, language, nickname, created_at, updated_at)
                             VALUES
-                                (?::UUID, ?::user_status, ?, ?, ?, ?, ?, ?, ?)
+                                (?::UUID, ?::brbl_users.user_status, ?, ?, ?, ?, ?, ?, ?)
                             RETURNING
                                 id AS nuc_id, created_at AS nuc_created_at
                     )
@@ -354,7 +354,7 @@ public class PostgresPersistenceManager implements PersistenceManager {
                     FROM
                         brbl_logic.routes r
                     WHERE
-                        r.status = ?::route_status
+                        r.status = ?::brbl_logic.route_status
                     """;
 
     public static final String SELECT_PUSH_CAMPAIGN_USERS_BY_DELIVERY_STATUS =
@@ -372,9 +372,9 @@ public class PostgresPersistenceManager implements PersistenceManager {
                             brbl_logic.push_campaigns pc
                                 ON pc.id = cu.campaign_id
                         WHERE
-                            pc.id = ?
+                            pc.id = ?::UUID
                             AND
-                            cu.delivered = ?
+                            cu.delivered = ?::brbl_logic.delivery_status
                     )
                     SELECT
                         a.group_id,
@@ -449,7 +449,7 @@ public class PostgresPersistenceManager implements PersistenceManager {
                     INNER JOIN
                         brbl_logic.routes r ON r.id = pc.route_id
                     WHERE
-                        pc.id = ?
+                        pc.id = ?::UUID
                     """;
 
     public static final String PUSH_CAMPAIGN_INSERT =
@@ -1083,7 +1083,7 @@ public class PostgresPersistenceManager implements PersistenceManager {
             LOG.info("Processed {} records for {}", rowCount, sessionKey);
 
             if (rowCount < 1) {
-                LOG.info("No Users found for {}", sessionKey);
+                LOG.info("getUser: No Users found for {}", sessionKey);
                 return null; // FIXME should we insert a User at this point or leave it to the caller?
             }
 

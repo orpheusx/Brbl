@@ -15,6 +15,10 @@ public class UserActor {
         return phoneNumber;
     }
 
+    public ChttrScript getScript() {
+        return script;
+    }
+
     public Exchange getNextExchange() {
         if (currentExchangeIndex < script.exchanges.size()) {
             return script.exchanges.get(currentExchangeIndex++);

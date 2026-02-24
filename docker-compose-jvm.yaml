@@ -54,3 +54,14 @@ services:
     command: Sndr
     depends_on:
       - operator
+
+  chttr:
+    #    container_name: sndr
+    image: burble-jvm:0.1.0
+    volumes:
+      - /Users/mark/Development/sndrRcvr/target:/opt/app
+    ports:
+      - "2424:2424"
+    command: Chttr 019bd1ff-c890-7a28-9758-7ce559af5e0b 89eddcb8-7fe5-4cd1-b18b-78858f0789fb
+    depends_on:
+      - sndr
