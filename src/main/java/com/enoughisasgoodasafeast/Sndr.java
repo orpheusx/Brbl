@@ -29,7 +29,7 @@ public class Sndr implements MessageProcessor {
 
     @Override
     public boolean process(Message message) {
-        LOG.info("Received outbound message: {}", message);
+        LOG.info("Processing outbound message: {}", message);
         boolean delivered = httpMtHandler.handle(message); // TODO using record method temporarily. Gateways will expect their own format.
 //        if (delivered) {
 //            LOG.info("Delivered message? {}: {}", delivered, message);

@@ -3333,7 +3333,7 @@ So the grants I made originally to brbl_operator (specifically brbl_user_rw_role
     ;
 Only shows privileges granted to brbl_admin which is their owner anyway.
 From a performance perspective this probably makes a lot of sense since Postgres doesn't have to evaluate the ownership by names.
-
+pg_catalog
 So let's reapply the grants to update them:
 
     REVOKE brbl_logic_read_role FROM brbl_operator ;
@@ -3356,6 +3356,7 @@ GRANT INSERT, SELECT ON
         brbl_users.profiles,
         brbl_users.users
 TO brbl_users_rw_role;
+
 GRANT brbl_users_rw_role TO brbl_operator WITH INHERIT TRUE;
 GRANT UPDATE ON TABLE brbl_users.amalgams    TO brbl_user_rw_role;
 
@@ -3382,13 +3383,42 @@ Making progress. Needed to create a write role for brbl_logic tables since Opera
 
 TODO create roles for Blaster. brbl_admin is too broad and brbl_operator shouldn't be able to access the PUSH_CAMPAIGNS or CAMPAIGN_USERS tables...
 
-Also realized that the Rcvr service hard codes the Platform of incoming messages to be BRBL. Probably we should have a different default Plaform based on the endpoint.
+Also realized that the Rcvr service hard codes the Platform of incoming messages to be BRBL. Probably we should have a different default Platform based on the endpoint.
 
 
 TODO to clean up the old sub role for the brbl_operator user...
 REASSIGN OWNED BY brbl_user_rw_role TO brbl_users_rw_role;
-DROP OWNED BY brbl_user_rw_role;
+REVOKE SELECT, INSERT, UPDATE ON
+    brbl_users.amalgams,
+    brbl_users.companies,
+    brbl_users.customers,
+    brbl_users.profiles,
+    brbl_users.users,
+    brbl_users.old_profiles,
+    brbl_users.old_users
+FROM brbl_user_rw_role;
+REVOKE USAGE ON SCHEMA brbl_users from brbl_user_rw_role;
 DROP ROLE IF EXISTS brbl_user_rw_role;
+
+Best query for viewing privileges for our platform:
+
+SELECT
+    table_catalog,
+    substr(table_schema,0,16) as schema,
+    substr(table_name,0,18) as name,
+    privilege_type,
+    grantee
+FROM
+    information_schema.table_privileges
+WHERE
+    table_catalog = 'brbl_db_dev'
+    AND grantee <> grantor
+    AND grantee <> 'PUBLIC'
+ORDER BY
+    table_schema,
+    table_name,
+    grantee,privilege_type
+;
 
 
 NB: At some point we should take another pass at our role building conventions and make they are symmetric and complete.
@@ -3400,3 +3430,130 @@ Heard about an interesting project for client-server communication and HTMX/Alpi
     https://github.com/starfederation/datastar-java
 
 If we don't go with Phoenix for the Brbl native web client, this might be a good choice given it's focus on minimizing JS and high performance.
+
+
+===== 2026-02-23 ====
+The keywords table is out of synch with the rest of our schema.
+The operator logic that handles cases where the incoming user doesn't already exist is effectively broken; the requirement of a non-null claimantId will require some code changes. We need to know the customer_id that owns the route being used.
+
+
+SELECT
+    -- a.group_id as gid,
+    u.platform_code as plt,
+    u.platform_id as phone,
+    c.id as custId,
+    r.channel,
+    r.default_node_id as nid
+FROM
+    brbl_users.amalgams a
+INNER JOIN brbl_users.users u
+    ON u.id = a.user_id
+INNER JOIN brbl_users.customers c
+    ON c.id = a.claimant_id
+INNER JOIN brbl_logic.routes r
+    ON r.customer_id = c.id
+WHERE
+    r.status        = 'ACTIVE' AND
+    c.status        = 'ACTIVE' AND
+    u.status        = 'IN'     AND
+    u.platform_code = 'S'
+ORDER BY
+    a.group_id
+LIMIT 20
+;
+
+'89eddcb8-7fe5-4cd1-b18b-78858f0789fb' is the node that starts the favorite color script.
+However, while its referenced by the keywords table it isn't registered to any of the routes.
+Let's review the process(); I can't recall how keywords function vs. route based script mapping...
+
+    sessionCache ->
+        createSession(SessionKey)
+            calls userCache.get(SessionKey) -->
+                findOrCreateUser(SessionKey)
+                    pm.getUser(SessionKey)
+                        select based on platform, channel, and phoneNumber (platform_id)
+                    if not found we create a new User. The claimantId is provided by
+                        findCustomerIdByRoute -->
+                            findRoute loops through the full set of cached
+                            looking for matches by the platform and channel.
+
+            calls scriptByKeywordCache.get(KeywordCacheKey derived from SessionKey)-->
+                findScriptForKeywordChannel(KeywordCacheKey)
+
+            calls defaultScript -->
+                findRoute (same as above))
+
+            uses the script from keyword cache or, if null, the defaultScript.
+            if still null "Configuration error in route table for" returns null
+
+    if sessionCache.get returns a null session -> "Cache fetch failed" returns false!
+
+So for our basic setup purposes, if we can identify an existing User claimed by an active Customer on an ACTIVE Route with a legit script/node we should the MO getting processed.
+
+Let's add a new keyword row pointing to the desired node, platform, etc but with the a channel that matches one of the routes. Let's randomly select '119839196677';
+
+INSERT INTO keywords(
+             id,      pattern, platform,    script_id,                             channel,         created_at, updated_at
+    ) VALUES(uuidv7(),'foo',   'S',         '89eddcb8-7fe5-4cd1-b18b-78858f0789fb','18484242144',   now(),      now());
+
+So, I think, we should be able to send the following and have Operator find the User and dispatch to the Node.
+
+curl -d '18484242144:119839196677:foo' http://192.168.1.155:4242/smsEnqueue
+
+Success!!! Now we need to make sure the targeted user has been loaded by Chttr.
+
+Random Note: There is a TLD for ".tr" (it's Turkey) so another business name could be:
+    chat.tr
+
+
+brbl_db_dev=# select id from users where platform_id = '18484242144';
+                  id
+--------------------------------------
+ 689935c5-12d8-d323-5fa8-9b13323fb049
+
+ Alas, the target User I selected (the one who's platform_id aka phone number is '18484242144') shares a group_id with another User record. The two get merged but we were filtering for Platform.WAP instead of SMS. Currently there's no metadata in PUSH_CAMPAIGNS to indicate the platform; it's assumed that the code that setup the user segment did the right thing and only selected User ids with a common platform value.
+
+ Then, because all that wasn't enough hassle, the rest of the of the user segment is made up of Users on WhatsApp. So we have a user segment of 1. Fine, that should work...
+
+Fired up the docker compose and see this in the log so we should see Chttr responding to the triggered script:
+
+    chttr-1     | 2026-02-24 19:48:13,126 INFO  [] [main] c.e.chatter.UserActor - UserActor has been created: phone num 18484242144 script ChttrScript[exchanges=[Exchange[mtText='What is your favorite color? 1) red 2) blue 3) flort'|moResponses=[2, blue, 1, red, 3, flort]], Exchange[mtText='Second question. What is your fave utensil: 1) fork, 2) knife or 3) spoon'|moResponses=[2, knife, 3, spoon, 1, fork]], Exchange[mtText='Another question. What is your fave shape: 1) triangle, 2) square or 3) circle'|moResponses=[2, square, 3, circle, 1, triangle]], Exchange[mtText='Third question. Which is the best third Stooge: 1) Shemp, 2) Curly or 3) Iggy'|moResponses=[2, curly, 3, iggy, 1, shemp]]]]
+
+
+curl -d '18484242144:119839196677:foo' http://192.168.1.155:4242/smsEnqueue
+
+From the docker logs:
+    operator-1  | 2026-02-24 19:50:19,032 INFO  [] [virtual-44] c.e.operator.Operator - Evaluating pattern foo for Keyword[id=019c9123-744b-79f5-9a3b-b7e51d552fe3, wordPattern=foo, platform=SMS, scriptId=89eddcb8-7fe5-4cd1-b18b-78858f0789fb, channel=119839196677]
+
+    operator-1  | 2026-02-24 19:50:19,033 INFO  [] [virtual-44] c.e.operator.Operator - Match found for KeywordCacheKey[channel=119839196677, platform=SMS, keyword=foo]
+>> COOL
+    operator-1  | 2026-02-24 19:50:19,033 INFO  [] [virtual-42] c.e.operator.Operator - Retrieved User: User[platformIds={WAP=91532e46-52e5-7d54-584b-74fb4ae4ecd0, SMS=689935c5-12d8-d323-5fa8-9b13323fb049}, groupId=12c38553-9934-b138-b3a0-ccd7f21b1b15, platformNumbers={WAP=19833043680, SMS=18484242144}, platformCreationTimes={WAP=2021-05-10T01:52:01.515Z, SMS=2018-03-04T22:36:46.876Z}, countryCode=US, languages=[HAT, POR], claimantId=8285d1a8-2dc0-6752-3758-0076224bc839, customerId=8285d1a8-2dc0-6752-3758-0076224bc839, platformNickNames={WAP=goat, SMS=alligator}, platformProfiles={SMS=Profile[id=689935c5-12d8-d323-5fa8-9b13323fb049, surname=Waelchi, givenName=Terence, otherLanguages=ENG, createdAt=2011-07-18T14:59:37.573Z, updatedAt=2026-06-29T08:51:50.124Z]}, platformStatus={WAP=IN, SMS=IN}]
+>> COOL
+    operator-1  | 2026-02-24 19:50:19,071 INFO  [] [pool-1-thread-4] c.e.OperatorConsumer - Processed message: Message[id=019c9246-7c89-7173-a84f-6e2e21b2f574, receivedAt=2026-02-25T00:50:18.889026417Z, type=MO, platform=SMS, from=18484242144, to=119839196677, text=foo]
+>> NICE
+    sndr-1      | 2026-02-24 19:50:19,095 INFO  [] [pool-1-thread-4] com.enoughisasgoodasafeast.Sndr - Received outbound message: Message[id=019c9246-7d2d-7014-9cdc-deba274f999f, receivedAt=2026-02-25T00:50:19.053305500Z, type=MT, platform=SMS, from=119839196677, to=18484242144, text=What is your favorite color? 1) red 2) blue 3) flort]
+>> EXCELLENT
+    chttr-1     | 2026-02-24 19:50:19,196 INFO  [] [[0x06f46e69 0x788580a8] WebServer socket] c.e.chatter.ChttrClient - Handling incoming message...
+>> GOOD
+    chttr-1     | 2026-02-24 19:50:19,270 INFO  [] [[0x06f46e69 0x788580a8] WebServer socket] c.e.chatter.ChttrClient - Responded to 18484242144 with: Message[id=019c9246-7dc1-7a07-9959-5a838d913cde, receivedAt=2026-02-25T00:50:19.201253792Z, type=MO, platform=WAP, from=18484242144, to=119839196677, text=blue]
+LOGGING TIMESTAMPS ARE OUT OF ORDER BUT...
+    rcvr-1      | 2026-02-24 19:50:19,250 INFO  [] [[0x1c02045a 0x7a90ef00] WebServer socket] com.enoughisasgoodasafeast.Rcvr - Platform BRBL request content: Message[id=019c9246-7df2-7444-8913-da9215ad8d30, receivedAt=2026-02-25T00:50:19.250297792Z, type=MO, platform=BRBL, from=18484242144, to=119839196677, text=blue]
+>> VERY BAD (we're hard coding the platform of the response message.)
+
+OMG I have so many hardcoded paths and constants...
+
+Ok, now we're having the opposite problem. Chttr and Operator/Sndr/Rcvr are talking to each other. Problem is, they won't stop.
+
+Need to pull Chttr out of the container setup and run it in the debugger.
+
+===== 2026-02-25 ====
+
+Watched an interesting talk:
+    "Designing the Ideal Bootstrapped Business with Jason Cohen"
+    https://www.youtube.com/watch?v=otbnC2zE2rw
+Talks about building a lifestyle business. Sounds good to me.
+A bootstrapped cash machine.
+One of the commenters described their business as "micro SaaS." Not the worst term. Good for elevator pitches.
+
+
+

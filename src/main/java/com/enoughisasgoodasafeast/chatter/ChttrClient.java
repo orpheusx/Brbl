@@ -6,6 +6,8 @@ import io.helidon.webserver.WebServer;
 import io.helidon.webserver.http.Handler;
 import io.helidon.webserver.http.ServerRequest;
 import io.helidon.webserver.http.ServerResponse;
+import org.jspecify.annotations.NonNull;
+import org.jspecify.annotations.Nullable;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -53,12 +55,13 @@ public class ChttrClient {
                 .start();
     }
 
+    // TODO Modify the way we did for Rcvr; separate handle for each supported Platform.
     private class ChttrMessageHandler implements Handler {
         @Override
         public void handle(ServerRequest req, ServerResponse res) throws Exception {
-            LOG.info("Handling incoming message...");
             res.header(CONTENT_TYPE_TEXT_PLAIN);
             String rcvPayload = req.content().as(String.class);
+            LOG.info("Handling incoming message: {}", rcvPayload);
             Message mtMessage = marshall(rcvPayload);
 
             processMessage(mtMessage);
@@ -66,7 +69,7 @@ public class ChttrClient {
             res.send("OK");
         }
 
-        private Message marshall(String payload) {
+        private @Nullable Message marshall(@NonNull String payload) {
             // Sndr uses HttpMessageHandler which sends "from:to:text".
             String[] parsed = payload.split(":", 3);
             if (parsed.length < 3) {
@@ -74,14 +77,14 @@ public class ChttrClient {
                  return null;
             }
             // In MT message, 'to' is the user's phone number.
-            return new Message(MessageType.MT, Platform.WAP, parsed[0], parsed[1], parsed[2]);
+            return new Message(MessageType.MT, Platform.SMS, parsed[0], parsed[1], parsed[2]);// FIXME Platform cannot be hardcoded!!!
         }
     }
 
-    private void processMessage(Message message) {
-        if (message == null) return;
+    private void processMessage(Message mtIncomingMessage) {
+        if (mtIncomingMessage == null) return;
 
-        String phoneNumber = message.to(); // The user is the recipient of the MT message
+        String phoneNumber = mtIncomingMessage.to(); // The user is the recipient of the MT message
         UserActor actor = userActors.get(phoneNumber);
 
         if (actor == null) {
@@ -89,10 +92,10 @@ public class ChttrClient {
             return;
         }
 
-        Exchange matchingExchange = findMatchingExchange(actor, message.text());
+        Exchange matchingExchange = findMatchingExchange(actor, mtIncomingMessage.text());
 
         if (matchingExchange == null) {
-            LOG.warn("No matching Exchange found for message text: '{}' for user: {}", message.text(), phoneNumber);
+            LOG.warn("No matching Exchange found for message text: '{}' for user: {}", mtIncomingMessage.text(), phoneNumber);
             return;
         }
 
@@ -100,11 +103,11 @@ public class ChttrClient {
             String responseText = matchingExchange.moResponses.get(ThreadLocalRandom.current().nextInt(matchingExchange.moResponses.size()));
             
             // Create MO message. 'from' is the user (phoneNumber), 'to' is the sender of the MT message.
-            Message moMessage = new Message(MessageType.MO, Platform.WAP, phoneNumber, message.from(), responseText);
+            Message moResponseMessage = new Message(MessageType.MO, mtIncomingMessage.platform(), phoneNumber, mtIncomingMessage.from(), responseText);
             
-            boolean success = moHandler.handle(moMessage);
+            boolean success = moHandler.handle(moResponseMessage);
             if (success) {
-                LOG.info("Responded to {} with: {}", phoneNumber, moMessage);
+                LOG.info("Responded to {} with: {}", phoneNumber, moResponseMessage);
             } else {
                 LOG.error("Failed to send response for {}", phoneNumber);
             }
@@ -113,12 +116,9 @@ public class ChttrClient {
         }
     }
 
-    private Exchange findMatchingExchange(UserActor actor, String text) {
-        // The prompt says: "The text of the Message must then be used to find the Exchange element in the UserActor's script (the ChttrScript) whose mtText matches."
-        // We need access to the script. UserActor has it but it's private.
-        // I'll need to modify UserActor to expose the script or add a method to find the exchange.
-        // For now, let's assume I can modify UserActor or use reflection if I really had to, but modifying is better.
-        // I will modify UserActor to expose the script.
+    private @Nullable Exchange findMatchingExchange(@NonNull UserActor actor, @NonNull String text) {
+        // Gemini wrote this functional way of finding a match. Looks nice though a regular loop is more efficient for smaller list (<1k) like this one.
+
         return actor.getScript().exchanges.stream()
                 .filter(e -> e.mtText.equals(text))
                 .findFirst()
@@ -150,13 +150,14 @@ public class ChttrClient {
             PersistenceManager persistenceManager = PostgresPersistenceManager.createPersistenceManager(properties);
 
             Collection<CampaignUser> campaignUsers = persistenceManager.getPushCampaignUsers(pushCampaignId, DeliveryStatus.PENDING);
+            LOG.info("Found {} campaign users for campaign id {}", campaignUsers.size(), pushCampaignId);
             
             ScriptInterpreter scriptInterpreter = new ScriptInterpreter(persistenceManager);
             ChttrScript script = scriptInterpreter.translateNodeGraphToChttrScript(nodeId);
 
             List<UserActor> actors = new ArrayList<>();
             for (CampaignUser cu : campaignUsers) {
-                String phoneNumber = cu.user().platformNumbers().get(Platform.WAP);
+                String phoneNumber = cu.user().platformNumbers().get(Platform.SMS); // FIXME we can't hard code this dumbass
                 if (phoneNumber != null) {
                     actors.add(new UserActor(phoneNumber, script));
                 }
@@ -166,8 +167,8 @@ public class ChttrClient {
             client.start();
 
             // Gemini included this to keep the program running
-            // even though web server already handles this.
-            // Thread.currentThread().join();
+            // even though the Helidon web server already handles it:
+            //      Thread.currentThread().join();
 
         } catch (Exception e) {
             LOG.error("Error starting ChttrClient", e);

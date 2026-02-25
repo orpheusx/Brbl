@@ -35,6 +35,8 @@ public class HttpMessageHandler {
         return true;
     }
 
+    // FIXME The Helidon WebClient will throw an UncheckedIOException if it can't connect to the endpoint.
+    //  Need to have a think about how we manage this possibility.
     public boolean handle(Message payload) {
         LOG.info("Sending message, '{}'", payload);
 

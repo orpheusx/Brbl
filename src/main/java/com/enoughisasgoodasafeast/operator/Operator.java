@@ -217,6 +217,7 @@ public class Operator implements MessageProcessor {
                         sessionKey.platform(), sessionKey.to());
                 return null;
             } else {
+                LOG.info("Creating new Session for user {}", user.get().groupId());
                 return new Session(
                         randomUUID(),
                         script,
@@ -336,7 +337,8 @@ public class Operator implements MessageProcessor {
         //if (routes != null) {
         //    for (Route route : routes) {
         //        if (route.platform() == sessionKey.platform() && route.channel().equals(sessionKey.to())) {
-        //            LOG.info("Found default script for route: {}", route);
+        //            LOG.info("Found
+        //            default script for route: {}", route);
         //            return scriptCache.get(route.default_node_id());
         //        }
         //    }

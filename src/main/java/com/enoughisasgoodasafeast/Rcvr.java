@@ -24,6 +24,7 @@ import java.time.temporal.ChronoUnit;
 import java.util.Properties;
 import java.util.concurrent.TimeoutException;
 
+
 public class Rcvr extends WebService {
 
     private static final Logger LOG = LoggerFactory.getLogger(Rcvr.class);
@@ -46,7 +47,9 @@ public class Rcvr extends WebService {
                 .routing(router -> {
                             // Supported endpoints:
                             router.get(HEALTH_ENDPOINT, new HealthCheckHandler());
-                            router.post(BRBL_ENQUEUE_ENDPOINT, new BrblMessageHandler(queueProducer, persistenceManager));
+                            router.post(BRBL_ENQUEUE_ENDPOINT, new PlatformMessageHandler(queueProducer, persistenceManager, Platform.BRBL));
+                            router.post(SMS_ENQUEUE_ENDPOINT, new PlatformMessageHandler(queueProducer, persistenceManager, Platform.SMS));
+                            router.post(WHATSAPP_ENQUEUE_ENDPOINT, new PlatformMessageHandler(queueProducer, persistenceManager, Platform.WAP));
                         }
                 )
                 .build()
@@ -79,27 +82,29 @@ public class Rcvr extends WebService {
         }
     }
 
-    private static class BrblMessageHandler extends BaseHandler {
+    private static class PlatformMessageHandler extends BaseHandler {
 
         QueueProducer queueProducer;
         PersistenceManager persistenceManager;
+        Platform platform;
 
-        public BrblMessageHandler(QueueProducer queueProducer, PersistenceManager persistenceManager) {
-            LOG.info("Setup BrblMessageHandler");
+        public PlatformMessageHandler(QueueProducer queueProducer, PersistenceManager persistenceManager, Platform platform) {
+            LOG.info("Setup PlatformMessageHandler for {}", platform);
             this.queueProducer = queueProducer;
             this.persistenceManager = persistenceManager;
+            this.platform = platform;
         }
 
         public void handle(ServerRequest req, ServerResponse res) throws Exception {
             super.handle(req, res);
-            LOG.info("{} requested", BRBL_ENQUEUE_ENDPOINT); // make debug
+            LOG.info("Platform {} requested", platform); // make debug
             String rcvPayload = req.content().as(String.class); // write this to a log?
 
             //Message moMessage = null;
             Message moMessage = marshall(rcvPayload);
-            LOG.info("{} request content: {}", BRBL_ENQUEUE_ENDPOINT, moMessage); // make debug
+            LOG.info("Platform {} request content: {}", platform, moMessage); // make debug
 
-            final boolean enqueueOk = queueProducer.enqueue(moMessage);
+            final boolean enqueueOk = queueProducer.enqueue(moMessage); // FIXME each endpoint should probably route to a different topic.
             if (!enqueueOk) {
                 LOG.error("Enqueue failed for message, {}", moMessage);
                 return;
@@ -111,18 +116,14 @@ public class Rcvr extends WebService {
                 LOG.error("Failed to log enqueued message, {}", moMessage);
                 return;
             }
-
-            /*finally {
-                // TODO increment a queue specific error counter metric in Prometheus?
-            }*/
-
+            
             res.status(OK_200);
             res.send("OK"); // Is this bit needed?
         }
 
         public Message marshall(String payload) {
             String[] parsed = payload.split(":", 3);
-            return new Message(MessageType.MO, Platform.BRBL, /*from*/parsed[0], /*to*/parsed[1], /*text*/parsed[2]);
+            return new Message(MessageType.MO, platform, /*from*/parsed[0], /*to*/parsed[1], /*text*/parsed[2]);
         }
     }
 

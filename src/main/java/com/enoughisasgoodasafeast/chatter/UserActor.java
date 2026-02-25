@@ -1,6 +1,11 @@
 package com.enoughisasgoodasafeast.chatter;
 
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+
 public class UserActor {
+
+    private static final Logger LOG = LoggerFactory.getLogger(UserActor.class);
 
     private final String phoneNumber;
     private final ChttrScript script;
@@ -9,6 +14,7 @@ public class UserActor {
     public UserActor(String phoneNumber, ChttrScript script) {
         this.phoneNumber = phoneNumber;
         this.script = script;
+        LOG.info("UserActor has been created: phone num {} script {}", phoneNumber, script);
     }
 
     public String getPhoneNumber() {
