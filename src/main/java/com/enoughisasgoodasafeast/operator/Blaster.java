@@ -147,17 +147,27 @@ public class Blaster {
             // Check User status, skip if their status is not IN. If KNOWN or OUT, log this for the report.
             // If not IN, this indicates that the user transitioned to not-IN status since the partition was created.
             // In these cases we want to log this so there aren't questions about why the user wasn't included in the blast.
-            // FIXME Record this in a report-like object.
 
-            final var platform = campaign.platform(); // FIXME need to add this to the campaign metadata even though it is duplicated (more or less) by the User's platform_code.
+            // FIXME need to add this to the campaign metadata even though it is duplicated (more or less) by the User's platform_code and the associate Route.
+            final var platform = campaign.platform();
 
-            if (!campaignUser.user().platformStatus().get(platform).equals(UserStatus.IN)) {
+            var status = campaignUser.user().platformStatus().get(platform);
+
+            if (status == null) {
                 report.invalidUsersSkipped.add(campaignUser.campaignId());
-                LOG.info("User {} not opted-in at {}", campaignUser.campaignId(), report.startPush); // FIXME switch to debug
+                LOG.error("Skip: User {} has wrong platform {} for campaign.",
+                        campaignUser.user().groupId(), campaignUser.user().platformStatus().keySet());
                 continue;
             }
 
-            // NB: SESSIONS primary key is group_id. So there's only one (currently) for any/all channels visited by the Customer's user.
+            if (!UserStatus.IN.equals(status)) {
+                report.invalidUsersSkipped.add(campaignUser.campaignId());
+                LOG.info("Skip: User {} not opted-in ({}) as of {}",
+                        campaignUser.user().groupId(), status, report.startPush); // FIXME switch to debug
+                continue;
+            }
+
+            // NB: SESSIONS primary key is group_id. So there's only one Session (currently) for any/all channels visited by the Customer's user.
             // FIXME Should we add user id to the SESSIONS table's primary key to allow more flexibility wrt session scope?
             final var lastSessionActivity = campaignUser.sessionLastUpdatedAt();
             // NB: A missing Session may simply indicate that they've been inactive for a while and the Session row was deleted in a prior cleanup.
@@ -165,7 +175,7 @@ public class Blaster {
             if (!isInactiveOrExpired) {
                 // session is considered active so don't clobber it out-of-the-blue.
                 report.usersWithActiveSessionsSkipped.add(campaignUser.user().groupId());
-                LOG.info("Skipping active session: {}", campaignUser.user().groupId()); // FIXME make this .debug
+                LOG.info("Skip: Active session: {}", campaignUser.user().groupId()); // FIXME make this .debug
                 continue;
             }
 

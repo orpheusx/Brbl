@@ -3542,7 +3542,7 @@ LOGGING TIMESTAMPS ARE OUT OF ORDER BUT...
 
 OMG I have so many hardcoded paths and constants...
 
-Ok, now we're having the opposite problem. Chttr and Operator/Sndr/Rcvr are talking to each other. Problem is, they won't stop.
+Ok, now we're having the opposite problem. Chttr and Operator/Sndr/Rcvr are talking to each other. Problem is, they won't stop...
 
 Need to pull Chttr out of the container setup and run it in the debugger.
 
@@ -3555,5 +3555,128 @@ Talks about building a lifestyle business. Sounds good to me.
 A bootstrapped cash machine.
 One of the commenters described their business as "micro SaaS." Not the worst term. Good for elevator pitches.
 
+Figured out the endless looping was not a bug. The script intentionally has a built-in cycle so it's to be expected.
+
+Running ChttrClient in debugger helped me realize that. I used the following command to initiate a response:
+
+    curl -d '1119839196677:18484242144:What is your favorite color? 1) red 2) blue 3) flort' http://192.168.1.155:2424/chttr
+
+The response fails, of course, because there's no Rcvr/Operator listening.
+
+Made some simple changes to ChttrClient to recognize cycles and stop before they happen. Should make it easier to understand the operation.
+Fix works as desired; using a set of Exchanges to track this.
+
+We should also add a history for each UserActor that prints the list of inputs and outputs it received and sent. Print them all out before the program exits.
+Is there an on-shutdown callback available from the helidon server? Yes but requires restructure of routing...
+
+===== 2026-02-26 ====
+
+Had a thought while inspecting the output of the printGraph function. The structure output could model a means of testing each of the paths in a script.
+
+We can now print out the final stats for the set of UserActors, noting which Messages have been sent and received for each.
+
+What else do we want to enable.
+
+TODO
+X To develop the rest of these features, figure out the config needed to run ChttrClient in the host with the rest of Brbl running in containers.
+X Test with more than a single UserActor. (UserActors is already a ConcurrentHashMap so we shouldn't have problems thread-wise.)
+_ Test with different Scripts.
+_ Add endpoint to ChttrClient to return the stats.
+_ Add support for keyword triggered flows so we don't have to manually initiate the flow from a curl command.
+_ Validations for the content and order of nodes/messages.
+    If we want to be really thorough we may need to keep the graph representation. The intermediate messages that only point to the next node are tied to the response selected (randomly) by ChttrClient which isn't representable by a flat list/set.
+_ Add Blaster to the mix.
+_ Update KEYWORDS table to drop the channel column, replacing it with a fk to ROUTES. This is _not_ a small change.
+_ Fix operator logic that handles cases where the incoming user doesn't already exist. The requirement of a non-null claimantId will require some code changes.
+    Need to know the customer_id that owns the route being used.
+_ Using TamboUI, create an interactive terminal application (see notebook for design). Possibly experiment with Gemini to generate the code for this?
+
+The current test case:
+brbl_db_dev=> select * from campaign_users where campaign_id  = '019bd1ff-c890-7a28-9758-7ce559af5e0b';
+             campaign_id              |               user_id                | delivered
+--------------------------------------+--------------------------------------+-----------
+ 019bd1ff-c890-7a28-9758-7ce559af5e0b | 8204383c-7a73-7ba0-1c8c-83be6886ef90 | PENDING
+ 019bd1ff-c890-7a28-9758-7ce559af5e0b | 89a96c80-f1a1-e921-6355-4437bd156334 | PENDING
+ 019bd1ff-c890-7a28-9758-7ce559af5e0b | 3ba13c74-a873-e03c-a706-9fb0e8ede5c9 | PENDING
+ 019bd1ff-c890-7a28-9758-7ce559af5e0b | 1bfde246-a9e5-4f4d-2dd8-55ca87b2f2ee | PENDING
+ 019bd1ff-c890-7a28-9758-7ce559af5e0b | 19f1efc1-133b-fc2f-12e9-1383d40d31a7 | PENDING
+ 019bd1ff-c890-7a28-9758-7ce559af5e0b | 02b1ba61-398f-ccc7-d555-5a86db7e3e00 | PENDING
+ 019bd1ff-c890-7a28-9758-7ce559af5e0b | acaf439e-9f0e-100b-7117-598b1465b49f | PENDING
+ 019bd1ff-c890-7a28-9758-7ce559af5e0b | 33cd32a1-6925-c163-2e8c-6ce32ae90c04 | PENDING
+ 019bd1ff-c890-7a28-9758-7ce559af5e0b | 456853c5-f065-d21d-545c-ed981f94a316 | PENDING
+ 019bd1ff-c890-7a28-9758-7ce559af5e0b | dcb7ca2f-ecf6-dfc0-f0b3-b8f191f59a23 | PENDING
+ 019bd1ff-c890-7a28-9758-7ce559af5e0b | 845b5658-8dce-746f-f870-d1c82df357ee | PENDING
+ 019bd1ff-c890-7a28-9758-7ce559af5e0b | ba203f27-7f5a-a65e-e302-19f81b96e3a4 | PENDING
+ 019bd1ff-c890-7a28-9758-7ce559af5e0b | cf36d602-1a71-4354-b3a6-7c3aad0a6880 | PENDING
+ 019bd1ff-c890-7a28-9758-7ce559af5e0b | 91532e46-52e5-7d54-584b-74fb4ae4ecd0 | PENDING
+ 019bd1ff-c890-7a28-9758-7ce559af5e0b | 689935c5-12d8-d323-5fa8-9b13323fb049 | PENDING
+
+-- All but one are User for WhatsApp:
+
+    select platform_code, platform_id from users where id in (select user_id from campaign_users where campaign_id  = '019bd1ff-c890-7a28-9758-7ce559af5e0b');
+
+Can we simply change them to SMS or are there existing integration tests that are pointing at these rows?
+Grepped the code base... Looks like we're okay to change them to SMS.
+
+UPDATE users
+    SET platform_code = 'S'
+WHERE id in (
+    select user_id from campaign_users where campaign_id  = '019bd1ff-c890-7a28-9758-7ce559af5e0b'
+);
 
 
+Okay, how does it all work now?
+Created shell script that runs curl for each of the user_ids. Works as expected except for
+
+curl -d '18484242144:119839196677:foo' http://192.168.1.155:4242/smsEnqueue >>  No matching UserActor found for phone number. Why?
+
+Odd since it works when its the only element in the list...
+Aha! This is a user that is linked to another user...and they are for the same platform. This violates the application logic for how Users are composed where only one record for a given Platform can be grouped together in an amalgamated User.
+
+
+===== 2026-02-27 ====
+
+SELECT a.group_id, u.id, u.platform_code, u.platform_id, u.nickname
+FROM amalgams a
+JOIN users u ON u.id=a.user_id
+WHERE a.group_id='12c38553-9934-b138-b3a0-ccd7f21b1b15';
+
+               group_id               |                  id                  | platform_code | platform_id | nickname
+--------------------------------------+--------------------------------------+---------------+-------------+-----------
+ 12c38553-9934-b138-b3a0-ccd7f21b1b15 | 689935c5-12d8-d323-5fa8-9b13323fb049 | S             | 18484242144 | alligator
+ 12c38553-9934-b138-b3a0-ccd7f21b1b15 | 91532e46-52e5-7d54-584b-74fb4ae4ecd0 | S             | 19833043680 | goat
+(2 rows)
+
+UPDATE users SET platform_code = 'W' WHERE id = '91532e46-52e5-7d54-584b-74fb4ae4ecd0';
+
+               group_id               |                  id                  | platform_code | platform_id | nickname
+--------------------------------------+--------------------------------------+---------------+-------------+-----------
+ 12c38553-9934-b138-b3a0-ccd7f21b1b15 | 689935c5-12d8-d323-5fa8-9b13323fb049 | S             | 18484242144 | alligator
+ 12c38553-9934-b138-b3a0-ccd7f21b1b15 | 91532e46-52e5-7d54-584b-74fb4ae4ecd0 | W             | 19833043680 | goat
+(2 rows)
+
+Does this fix the issue? Yes but we do need to remove the one user record that was updated to be on the 'W' platform:
+
+    DELETE FROM campaign_users
+    WHERE
+        campaign_id = '019bd1ff-c890-7a28-9758-7ce559af5e0b'
+        AND user_id = '91532e46-52e5-7d54-584b-74fb4ae4ecd0';
+
+Now we're good.
+
+
+===== 2026-02-28 ====
+
+A good comparison of various methods of client-server techniques for our kind of applications:
+
+    https://rxdb.info/articles/websockets-sse-polling-webrtc-webtransport.html
+
+WebTransport API may be an option at some point and has some technical advantages being based on HTTP/3 QUIC but its still early days.
+Right now, WebSockets definitely seems like the way to go.
+
+Crap, BlasterIntegrationTest.pushCampaignLifecycle (line 88) actually broke, because of the alligator/goat users' platform changing from 'W' to 'S'.
+See Blaster.java line 154.
+
+"Using Java find the set of distinct simple paths for a single starting node in a directed cyclic graph composed of Node and Edge."
+
+Write a Node graph to disk and provide a loader function for the AI to use.

@@ -42,7 +42,7 @@ class OperatorPersistenceIntegrationTest {
         assertNotNull(user);
         assertNotNull(user.platformProfiles());
         assertEquals(1, user.platformProfiles().size());
-        assertEquals(2, user.platformStatus().size());
+        assertEquals(2, user.platformStatus().size()); // TODO create/find an example where there are grouped
         LOG.info(user.platformCreationTimes().get(Platform.SMS).toString());
     }
 

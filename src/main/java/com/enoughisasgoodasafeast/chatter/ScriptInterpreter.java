@@ -3,12 +3,11 @@ package com.enoughisasgoodasafeast.chatter;
 import com.enoughisasgoodasafeast.ConfigLoader;
 import com.enoughisasgoodasafeast.operator.*;
 import com.enoughisasgoodasafeast.operator.PersistenceManager.PersistenceManagerException;
+import org.jspecify.annotations.Nullable;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
-import java.io.FileOutputStream;
-import java.io.IOException;
-import java.io.ObjectOutputStream;
+import java.io.*;
 import java.util.ArrayList;
 import java.util.HashSet;
 import java.util.List;
@@ -23,7 +22,7 @@ public class ScriptInterpreter {
         this.persistenceManager = persistenceManager;
     }
 
-    public ChttrScript translateNodeGraphToChttrScript(UUID nodeId) {
+    public @Nullable ChttrScript translateNodeGraphToChttrScript(UUID nodeId) {
         Node rootNode = persistenceManager.getNodeGraph(nodeId);
         if (rootNode == null) {
             LOG.error("Node graph not found for nodeId: {}", nodeId);
@@ -37,18 +36,6 @@ public class ScriptInterpreter {
         traverseGraph(rootNode, chttrScript, visited);
 
         return chttrScript;
-    }
-    public ChttrScript exportScriptToFile(UUID nodeId, String outputPath) {
-        final ChttrScript chttrScript = translateNodeGraphToChttrScript(nodeId);
-        try (FileOutputStream fileOut = new FileOutputStream(outputPath);
-             ObjectOutputStream objectOut = new ObjectOutputStream(fileOut)) {
-            objectOut.writeObject(chttrScript);
-            LOG.info("ChttrScript serialized to {}", outputPath);
-        } catch (IOException e) {
-            LOG.error("Error serializing ChttrScript", e);
-        } finally {
-            return chttrScript;
-        }
     }
 
     private void traverseGraph(Node node, ChttrScript chttrScript, Set<Node> visited) {
@@ -81,27 +68,70 @@ public class ScriptInterpreter {
         }
     }
 
-    public static void main(String[] args) {
-//        if (args.length != 2) {
-//            System.err.println("Usage: ScriptExporter <nodeId> <outputFile>");
-//            return;
-//        }
+    public ChttrScript exportScriptToFile(UUID nodeId, String outputPath) {
+        final ChttrScript chttrScript = translateNodeGraphToChttrScript(nodeId);
+        try (FileOutputStream fileOut = new FileOutputStream(outputPath);
+             ObjectOutputStream objectOut = new ObjectOutputStream(fileOut)) {
+            objectOut.writeObject(chttrScript);
+            LOG.info("ChttrScript serialized to {}", outputPath);
+        } catch (IOException e) {
+            LOG.error("Error serializing ChttrScript", e);
+        }
+        return  chttrScript;
+    }
 
-        UUID nodeId;
-//        try {
-            nodeId = UUID.fromString("89eddcb8-7fe5-4cd1-b18b-78858f0789fb"/*args[0]*/);
-//        } catch (IllegalArgumentException e) {
-//            System.err.println("Invalid nodeId: " + args[0]);
-//            return;
-//        }
-        String outputFile = "exportedScript.ser";//args[1];
+    public boolean writeNodeGraphToFile(UUID nodeId, String outputPath) {
+        Node rootNode = persistenceManager.getNodeGraph(nodeId);
+        LOG.info("Writing Node {} to {}", nodeId, outputPath);
+        Node.printGraph(rootNode, rootNode, 2);
 
-        try {
-            PersistenceManager persistenceManager = PostgresPersistenceManager.createPersistenceManager(ConfigLoader.readConfig("persistence_manager_test.properties"));
-            ScriptInterpreter exporter = new ScriptInterpreter(persistenceManager);
-            exporter.exportScriptToFile(nodeId, outputFile);
-        } catch (IOException | PersistenceManagerException e) {
-            LOG.error("Failed to initialize PersistenceManager or export script", e);
+        try (FileOutputStream fileOut = new FileOutputStream(outputPath);
+             ObjectOutputStream objectOut = new ObjectOutputStream(fileOut)) {
+            objectOut.writeObject(rootNode);
+            LOG.info("Node graph serialized to {}", outputPath);
+        } catch (IOException e) {
+            LOG.error("Error serializing Node graph", e);
+            return false;
+        }
+        return true;
+    }
+
+    public Node readNodeGraphFromFile(UUID nodeId, String inputPath) {
+        LOG.info("Reading Node {} from {}", nodeId, inputPath);
+        try (FileInputStream fileIn = new FileInputStream(inputPath)) {
+            ObjectInputStream objectIn = new ObjectInputStream(fileIn);
+            Node rootNode = (Node) objectIn.readObject();
+            if(!rootNode.id().equals(nodeId)) {
+                LOG.error("Node graph deserialized from {} does not container root Node with id {}", inputPath, nodeId);
+                return null;
+            } else {
+                return rootNode;
+            }
+        } catch (IOException | ClassNotFoundException e) {
+            throw new RuntimeException(e);
+        }
+    }
+
+    public void foo(UUID nodeId) {
+        Node rootNode = persistenceManager.getNodeGraph(nodeId);
+        // find all unique paths through the
+    }
+
+    static void main(String[] args) throws IOException, PersistenceManagerException {
+        UUID nodeId = UUID.fromString("89eddcb8-7fe5-4cd1-b18b-78858f0789fb");
+        PersistenceManager persistenceManager = PostgresPersistenceManager.createPersistenceManager(ConfigLoader.readConfig("persistence_manager_test.properties"));
+        ScriptInterpreter interpreter = new ScriptInterpreter(persistenceManager);
+        boolean writeOk = interpreter.writeNodeGraphToFile(nodeId, "nodeGraph.ser");
+        if (writeOk) {
+            LOG.info("Write ok");
+            Node rootNode = interpreter.readNodeGraphFromFile(nodeId, "nodeGraph.ser");
+            if (rootNode != null) {
+                if(rootNode.id().equals(nodeId)) {
+                    LOG.info("Read ok.");
+                } else {
+                    LOG.error("Ack! The read Node's id doesn't match {}", nodeId);
+                }
+            }
         }
     }
 }

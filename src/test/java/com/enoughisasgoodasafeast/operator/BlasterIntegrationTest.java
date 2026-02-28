@@ -39,8 +39,8 @@ public class BlasterIntegrationTest {
     final UUID nodeId = UUID.fromString("89eddcb8-7fe5-4cd1-b18b-78858f0789fb");
     final UUID modelRouteId = UUID.fromString("019bf69d-a08a-7c3a-a4ca-ed70d35327fc");
 
-    public static final int EXPECTED_SUCCESSES = 14; // matched with the elements in knownUserIds
-    public static final int EXPECTED_SKIPPED = 6; // matched with the elements in knownUserIds
+    public static final int EXPECTED_SUCCESSES = 13; // matched with the elements in knownUserIds
+    public static final int EXPECTED_SKIPPED = 7; // matched with the elements in knownUserIds
     final static List<UUID> modelUserIds = new ArrayList<>();
 
     @BeforeAll
@@ -124,7 +124,10 @@ public class BlasterIntegrationTest {
             assertFalse(pushReport.campaignNotFound);
             assertFalse(pushReport.customerStatusNotActive);
             assertFalse(pushReport.invalidUsersSkipped.isEmpty());
-            assertEquals(6, pushReport.invalidUsersSkipped.size(), "Unexpected number of invalid users skipped");
+
+            // The EXPECTED_SKIPPED would only be 6 if we properly avoided creating campaign user segments with the more than a single Platform ...
+            // Likewise, the value of EXPECTED_SUCCESSES would be one greater.
+            assertEquals(EXPECTED_SKIPPED, pushReport.invalidUsersSkipped.size(), "Unexpected number of invalid users skipped");
             assertEquals(EXPECTED_SUCCESSES, pushReport.processedUsers.size(), "Unexpected number of processed users"); // See knownUserIds list.
 
             // Fetch campaign and check its status.
@@ -183,7 +186,7 @@ public class BlasterIntegrationTest {
                 final String text = rs.getString("_text");
 
                 messages.add(
-                        new Message(id, sentAt, MessageType.MT, Platform.WAP, from, to, text)
+                        new Message(id, sentAt, MessageType.MT, Platform.SMS, from, to, text)
                 );
             }
 

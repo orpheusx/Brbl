@@ -1,21 +1,21 @@
 package com.enoughisasgoodasafeast.chatter;
 
+import org.jspecify.annotations.NonNull;
+
+import java.io.Serial;
 import java.io.Serializable;
 import java.util.List;
 import java.util.StringJoiner;
 
-public class Exchange implements Serializable {
-    private static final long serialVersionUID = 1L;
+public record Exchange(String mtText, List<String> moResponses) implements Serializable {
+    @Serial private static final long serialVersionUID = 1L;
 
-    public final String mtText;
-    public final List<String> moResponses;
-
-    public Exchange(String mtText, List<String> moResponses) {
+    public Exchange(@NonNull String mtText, @NonNull List<String> moResponses) {
         this.mtText = mtText;
         this.moResponses = moResponses;
     }
 
-    @Override
+    @NonNull
     public String toString() {
         return new StringJoiner("|", Exchange.class.getSimpleName() + "[", "]")
                 .add("mtText='" + mtText + "'")

@@ -55,6 +55,13 @@ public class ChttrClient {
                 .start();
     }
 
+    private class StatsInfoHandler implements Handler {
+        @Override
+        public void handle(ServerRequest serverRequest, ServerResponse serverResponse) throws Exception {
+
+        }
+    }
+
     // TODO Modify the way we did for Rcvr; separate handle for each supported Platform.
     private class ChttrMessageHandler implements Handler {
         @Override
@@ -79,6 +86,23 @@ public class ChttrClient {
             // In MT message, 'to' is the user's phone number.
             return new Message(MessageType.MT, Platform.SMS, parsed[0], parsed[1], parsed[2]);// FIXME Platform cannot be hardcoded!!!
         }
+
+        @Override
+        public void afterStop() {
+            // Docker Compose appears to shut off logging output before this gets called.
+            // Inspecting the container's logs directly, however, proves that is is called.
+            LOG.info("ChttrClient final stats:");
+            int numActors=0, numRcvd=0, numSent=0;
+            for (var entry : userActors.entrySet()) {
+                ++numActors;
+                final var phoneNumber = entry.getKey();
+                final var userActor = entry.getValue();
+                numRcvd += userActor.rcvdMessages.size();
+                numSent += userActor.sentMessages.size();
+                LOG.info("UserActor: {}\n\t rcvd: {} \n\t sent: {}", phoneNumber, userActor.rcvdMessages, userActor.sentMessages);
+            }
+            LOG.info("Totals: numActors: {}, numRcvd: {}, numSent: {}", numActors, numRcvd, numSent);
+        }
     }
 
     private void processMessage(Message mtIncomingMessage) {
@@ -88,8 +112,10 @@ public class ChttrClient {
         UserActor actor = userActors.get(phoneNumber);
 
         if (actor == null) {
-            LOG.warn("No matching UserActor found for phoneNumber: {}", phoneNumber);
+            LOG.warn("No matching UserActor found for phone number: {}", phoneNumber);
             return;
+        } else {
+            actor.rcvdMessages.add(mtIncomingMessage);
         }
 
         Exchange matchingExchange = findMatchingExchange(actor, mtIncomingMessage.text());
@@ -99,43 +125,44 @@ public class ChttrClient {
             return;
         }
 
-        if (matchingExchange.moResponses != null && !matchingExchange.moResponses.isEmpty()) {
-            String responseText = matchingExchange.moResponses.get(ThreadLocalRandom.current().nextInt(matchingExchange.moResponses.size()));
+        // TODO Make looping behavior configurable. For now, we check for cycles and stop if we see one.
+        if(actor.hasVisited(matchingExchange)) {
+            LOG.info("Cycle detected: stopping execution for UserActor: {}", phoneNumber);
+            LOG.info("Node causing cycle: {}", matchingExchange.mtText());
+            return;
+        } else {
+            actor.visit(matchingExchange);
+        }
+
+        if (matchingExchange.moResponses() != null && !matchingExchange.moResponses().isEmpty()) {
+            String responseText = matchingExchange.moResponses().get(ThreadLocalRandom.current().nextInt(matchingExchange.moResponses().size()));
             
             // Create MO message. 'from' is the user (phoneNumber), 'to' is the sender of the MT message.
             Message moResponseMessage = new Message(MessageType.MO, mtIncomingMessage.platform(), phoneNumber, mtIncomingMessage.from(), responseText);
             
             boolean success = moHandler.handle(moResponseMessage);
             if (success) {
-                LOG.info("Responded to {} with: {}", phoneNumber, moResponseMessage);
+                LOG.info("Response sent from {} with {}", phoneNumber, moResponseMessage);
+                actor.sentMessages.add(moResponseMessage);
             } else {
-                LOG.error("Failed to send response for {}", phoneNumber);
+                LOG.error("Response fail from {} with {}", phoneNumber, moResponseMessage);
             }
         } else {
-            LOG.info("No MO responses defined for exchange: {}", matchingExchange.mtText);
+            LOG.info("No MO responses defined for exchange: {}", matchingExchange.mtText());
         }
     }
 
     private @Nullable Exchange findMatchingExchange(@NonNull UserActor actor, @NonNull String text) {
-        // Gemini wrote this functional way of finding a match. Looks nice though a regular loop is more efficient for smaller list (<1k) like this one.
+        // Gemini wrote this functional way of finding a match. Looks cool though a regular loop is more efficient for smaller list (<1k) like this one. :-[
 
         return actor.getScript().exchanges.stream()
-                .filter(e -> e.mtText.equals(text))
+                .filter(e -> e.mtText().equals(text))
                 .findFirst()
                 .orElse(null);
     }
 
     public static void main(String[] args) {
-//        if (args.length != 2) {
-//            System.err.println("Usage: ChttrClient <pushCampaignId> <nodeId>");
-//            for (String arg : args) {
-//                System.err.println("arg: " + arg);
-//            }
-//            return;
-//        }
-
-        UUID pushCampaignId;
-        UUID nodeId;
+        UUID pushCampaignId, nodeId;
         try {
             pushCampaignId = UUID.fromString(args[1]);
             nodeId = UUID.fromString(args[2]);
