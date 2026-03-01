@@ -32,15 +32,6 @@ public record Edge(UUID id, String text, List<String> matchText, Node targetNode
         return new Edge(this.id, this.text, this.matchText, targetNode);
     }
 
-    // @Override
-    // public String toString() {
-    //     if (node == null) {
-    //         return String.format("Edge[id=%s, text='%s', matchText=%s, node=%s]", id, text, matchText(), null);
-    //     } else {
-    //         return String.format("Edge[id=%s, text='%s', matchText=%s, node=%s]", id, text, matchText(), node.id());
-    //     }
-    // }
-
     @Override
     public boolean equals(Object o) {
         if (!(o instanceof Edge edge)) return false;

@@ -13,6 +13,7 @@ import java.util.HashSet;
 import java.util.List;
 import java.util.Set;
 import java.util.UUID;
+import java.util.stream.Collectors;
 
 public class ScriptInterpreter {
     private static final Logger LOG = LoggerFactory.getLogger(ScriptInterpreter.class);
@@ -96,42 +97,85 @@ public class ScriptInterpreter {
         return true;
     }
 
-    public Node readNodeGraphFromFile(UUID nodeId, String inputPath) {
-        LOG.info("Reading Node {} from {}", nodeId, inputPath);
+    public Node readNodeGraphFromFile(String inputPath) {
+        LOG.info("Reading Node from {}", inputPath);
         try (FileInputStream fileIn = new FileInputStream(inputPath)) {
             ObjectInputStream objectIn = new ObjectInputStream(fileIn);
-            Node rootNode = (Node) objectIn.readObject();
-            if(!rootNode.id().equals(nodeId)) {
-                LOG.error("Node graph deserialized from {} does not container root Node with id {}", inputPath, nodeId);
-                return null;
-            } else {
-                return rootNode;
-            }
+            return (Node) objectIn.readObject();
         } catch (IOException | ClassNotFoundException e) {
             throw new RuntimeException(e);
         }
     }
+    
+    public @Nullable Set<List<Node>> findAllPathsInDirectedGraph(String filePath) {
+        Node rootNode = readNodeGraphFromFile(filePath);
+        if (rootNode == null) {
+            LOG.error("Failed to read node graph.");
+            return null;
+        }
+        Set<List<Node>> allPaths = new HashSet<>();
+        List<Node> currentPath = new ArrayList<>();
+        findAllPaths(rootNode, currentPath, allPaths);
 
-    public void foo(UUID nodeId) {
-        Node rootNode = persistenceManager.getNodeGraph(nodeId);
-        // find all unique paths through the
+        return allPaths;
     }
 
-    static void main(String[] args) throws IOException, PersistenceManagerException {
-        UUID nodeId = UUID.fromString("89eddcb8-7fe5-4cd1-b18b-78858f0789fb");
-        PersistenceManager persistenceManager = PostgresPersistenceManager.createPersistenceManager(ConfigLoader.readConfig("persistence_manager_test.properties"));
-        ScriptInterpreter interpreter = new ScriptInterpreter(persistenceManager);
-        boolean writeOk = interpreter.writeNodeGraphToFile(nodeId, "nodeGraph.ser");
-        if (writeOk) {
-            LOG.info("Write ok");
-            Node rootNode = interpreter.readNodeGraphFromFile(nodeId, "nodeGraph.ser");
-            if (rootNode != null) {
-                if(rootNode.id().equals(nodeId)) {
-                    LOG.info("Read ok.");
-                } else {
-                    LOG.error("Ack! The read Node's id doesn't match {}", nodeId);
+    private void findAllPaths(Node node, List<Node> currentPath, Set<List<Node>> allPaths) {
+        currentPath.add(node);
+
+        boolean isLeaf = true;
+        if (node.edges() != null && !node.edges().isEmpty()) {
+            for (Edge edge : node.edges()) {
+                Node target = edge.targetNode();
+                if (target != null) {
+                    isLeaf = false;
+                    if (!currentPath.contains(target)) {
+                        findAllPaths(target, currentPath, allPaths);
+                    } else {
+                        // Cycle detected. Add the paths up to this point, including the node that starts the cycle.
+                        List<Node> cyclePath = new ArrayList<>(currentPath);
+                        cyclePath.add(target);
+                        allPaths.add(cyclePath);
+                    }
                 }
             }
         }
+        
+        if (isLeaf) {
+            allPaths.add(new ArrayList<>(currentPath));
+        }
+
+        currentPath.remove(currentPath.size() - 1); // Backtrack
+    }
+
+    void printPath(List<Node> path) {
+        System.out.println("Path: " + formatPath(path));
+    }
+
+    private String formatPath(List<Node> path) {
+        return path.stream()
+//                .map(node -> node.label() != null ? node.label() : node.text())
+                .map(node -> node.text())
+                .collect(Collectors.joining(" -> "));
+    }
+
+    static void main(String[] args) throws IOException, PersistenceManagerException {
+//        UUID nodeId = UUID.fromString("89eddcb8-7fe5-4cd1-b18b-78858f0789fb");
+        PersistenceManager persistenceManager = PostgresPersistenceManager.createPersistenceManager(ConfigLoader.readConfig("persistence_manager_test.properties"));
+        ScriptInterpreter interpreter = new ScriptInterpreter(persistenceManager);
+//        boolean writeOk = interpreter.writeNodeGraphToFile(nodeId, "nodeGraph.ser");
+//        if (writeOk) {
+//            LOG.info("Write ok");            Node rootNode = interpreter.readNodeGraphFromFile("nodeGraph.ser");
+//            if (rootNode != null) {
+//                if(rootNode.id().equals(nodeId)) {
+//                    LOG.info("Read ok.");
+//                } else {
+//                    LOG.error("Ack! The read Node's id doesn't match {}", nodeId);
+//                }
+//            }
+//        }
+//        var rootNode = interpreter.readNodeGraphFromFile("data/nodeGraph.ser");
+//        Node.printGraph(rootNode, rootNode, 2);
+//        interpreter.findAllPathsInDirectedGraph();
     }
 }
