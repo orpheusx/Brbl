@@ -3,6 +3,7 @@ package com.enoughisasgoodasafeast.chatter;
 import com.enoughisasgoodasafeast.ConfigLoader;
 import com.enoughisasgoodasafeast.operator.*;
 import com.enoughisasgoodasafeast.operator.PersistenceManager.PersistenceManagerException;
+import org.jspecify.annotations.NonNull;
 import org.jspecify.annotations.Nullable;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -113,6 +114,10 @@ public class ScriptInterpreter {
             LOG.error("Failed to read node graph.");
             return null;
         }
+        return findAllPathsInDirectedGraph(rootNode);
+    }
+
+    public @Nullable Set<List<Node>> findAllPathsInDirectedGraph(@NonNull Node rootNode) {
         Set<List<Node>> allPaths = new HashSet<>();
         List<Node> currentPath = new ArrayList<>();
         findAllPaths(rootNode, currentPath, allPaths);
@@ -154,28 +159,11 @@ public class ScriptInterpreter {
 
     private String formatPath(List<Node> path) {
         return path.stream()
-//                .map(node -> node.label() != null ? node.label() : node.text())
-                .map(node -> node.text())
+                .map(node -> node.label())
                 .collect(Collectors.joining(" -> "));
     }
 
     static void main(String[] args) throws IOException, PersistenceManagerException {
-//        UUID nodeId = UUID.fromString("89eddcb8-7fe5-4cd1-b18b-78858f0789fb");
-        PersistenceManager persistenceManager = PostgresPersistenceManager.createPersistenceManager(ConfigLoader.readConfig("persistence_manager_test.properties"));
-        ScriptInterpreter interpreter = new ScriptInterpreter(persistenceManager);
-//        boolean writeOk = interpreter.writeNodeGraphToFile(nodeId, "nodeGraph.ser");
-//        if (writeOk) {
-//            LOG.info("Write ok");            Node rootNode = interpreter.readNodeGraphFromFile("nodeGraph.ser");
-//            if (rootNode != null) {
-//                if(rootNode.id().equals(nodeId)) {
-//                    LOG.info("Read ok.");
-//                } else {
-//                    LOG.error("Ack! The read Node's id doesn't match {}", nodeId);
-//                }
-//            }
-//        }
-//        var rootNode = interpreter.readNodeGraphFromFile("data/nodeGraph.ser");
-//        Node.printGraph(rootNode, rootNode, 2);
-//        interpreter.findAllPathsInDirectedGraph();
+        //        UUID nodeId = UUID.fromString("89eddcb8-7fe5-4cd1-b18b-78858f0789fb");
     }
 }

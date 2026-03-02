@@ -154,7 +154,6 @@ public class ChttrClient {
 
     private @Nullable Exchange findMatchingExchange(@NonNull UserActor actor, @NonNull String text) {
         // Gemini wrote this functional way of finding a match. Looks cool though a regular loop is more efficient for smaller list (<1k) like this one. :-[
-
         return actor.getScript().exchanges.stream()
                 .filter(e -> e.mtText().equals(text))
                 .findFirst()

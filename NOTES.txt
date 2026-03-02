@@ -3674,9 +3674,19 @@ A good comparison of various methods of client-server techniques for our kind of
 WebTransport API may be an option at some point and has some technical advantages being based on HTTP/3 QUIC but its still early days.
 Right now, WebSockets definitely seems like the way to go.
 
+   ---
+
 Crap, BlasterIntegrationTest.pushCampaignLifecycle (line 88) actually broke, because of the alligator/goat users' platform changing from 'W' to 'S'.
 See Blaster.java line 154.
+Fixed.
 
-"Using Java find the set of distinct simple paths for a single starting node in a directed cyclic graph composed of Node and Edge."
+"Find the set of distinct simple paths for a single starting node in a directed cyclic graph composed of Node and Edge objects."
 
-Write a Node graph to disk and provide a loader function for the AI to use.
+Wrote a pair of methods to write a graph to disk and and read it back.
+
+===== 2026-03-01 ====
+Constructed a more complex graph and confirmed that the ScriptInterpreter's findAllPathsInDirectedGraph method produces the correct set of paths.
+If we know the list of Nodes we want the script executor to follow we can find the Edge from source Node that will get us to the next Node.
+So I think we don't need to further enhance the ScriptInterpreter to include the Edges.
+
+The next task is to write ChttrValidatingClient, a variant impl that uses the set of paths to repeatedly walk through the graph and make sure everything is executed in the expected order

@@ -16,8 +16,12 @@ import static com.enoughisasgoodasafeast.Functions.randomUUID;
  */
 public record Edge(UUID id, String text, List<String> matchText, Node targetNode) implements Serializable {
 
-    public Edge(List<String> matchText, Node node) {
-        this(randomUUID(), null, matchText, node);
+    public Edge(String matchText, Node targetNode) {
+        this(List.of(matchText), targetNode);
+    }
+
+    public Edge(List<String> matchText, Node targetNode) {
+        this(randomUUID(), null, matchText, targetNode);
     }
 
     public Edge(List<String> matchText, String text, Node targetNode) {
