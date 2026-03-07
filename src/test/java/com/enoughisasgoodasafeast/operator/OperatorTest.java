@@ -238,7 +238,7 @@ public class OperatorTest {
 
         // Check the rest of the MT responses.
         assertEquals(3, queuedMessages.size(), "Unexpected number of messages queued.");
-        assertEquals(answerFlort.text(), queuedMessages.get(1).text(), "Expected text not found in 2nd queued message.");
+        assertEquals(answerFlort.responseText(), queuedMessages.get(1).text(), "Expected text not found in 2nd queued message.");
         assertEquals(endConversation.text(), queuedMessages.get(2).text());
 
         // The conversation is now effectively complete.
@@ -299,7 +299,7 @@ public class OperatorTest {
         assertEquals(5, queuedMessages.size(), "Unexpected number of messages queued.");
         assertEquals(processAnswer.text(), queuedMessages.get(1).text(), "Expected text not found in 1st queued message.");
         assertEquals(processAnswer.text(), queuedMessages.get(2).text(), "Expected text not found in 2nd queued message.");
-        assertEquals(answerFlort.text(), queuedMessages.get(3).text(), "Expected text not found in 3rd queued message.");
+        assertEquals(answerFlort.responseText(), queuedMessages.get(3).text(), "Expected text not found in 3rd queued message.");
         assertEquals(endConversation.text(), queuedMessages.get(4).text());
 
         // The conversation is complete.

@@ -1209,6 +1209,7 @@ public class PostgresPersistenceManager implements PersistenceManager {
             ps.setObject(1, campaignId);
             ps.setObject(2, byStatus, OTHER);
             ps.setObject(3, campaignId);
+            LOG.info("Query: {}", ps.toString());
             final ResultSet rs = ps.executeQuery();
 
             Map<UUID, CampaignUser> campaignUsersByGroupId = new HashMap<>();

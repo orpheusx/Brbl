@@ -3685,8 +3685,89 @@ Fixed.
 Wrote a pair of methods to write a graph to disk and and read it back.
 
 ===== 2026-03-01 ====
+
 Constructed a more complex graph and confirmed that the ScriptInterpreter's findAllPathsInDirectedGraph method produces the correct set of paths.
 If we know the list of Nodes we want the script executor to follow we can find the Edge from source Node that will get us to the next Node.
 So I think we don't need to further enhance the ScriptInterpreter to include the Edges.
 
 The next task is to write ChttrValidatingClient, a variant impl that uses the set of paths to repeatedly walk through the graph and make sure everything is executed in the expected order
+
+
+===== 2026-03-02 ====
+
+Realized the graph I'd created was missing all the expected/required PresentMulti/ProcessMulti pairs. Redrew the graph on paper and added all the connecting elements by hand.
+
+Started work on client code that converts the set of lists of nodes into something that can be easily evaluated.
+
+===== 2026-03-02 ====
+
+A few Postgres tidbits: https://www.youtube.com/@ScalingPostgres is an interesting channel.
+
+Some of the advice:
+1) avoiding recursive CTEs which are obviously expensive to query. A denormalized, materialized view or table would be better; the insert performance becomes worse, of course. Perhaps we could convince Gemini to suggest a design for this.
+2) Index foreign keys. I guess unlike primary keys these are not automatically indexed.
+Heard about some tools for performance monitoring/assessment:
+    pg_stat_statements, an extension for getting at stats data more easily.
+    pgbadger evaluates (an elaborate, stand alone Per script that analyzes logs for issues.)
+    pg_yregress, a simple regression testing tool.
+
+ https://www.minisforum.com/pages/n5_pro is focussed on being a NAS device but it supports up to 96G of ECC memory, sports a Ryzen AI 9 HX PRO 370 (12 cores/24 threads) plus an NPU and decent GPU, and 10Gb+5GbE networking. In addition to M.2/U.2 SSDs it can hold a bunch of large capacity HDDs.
+ Not cheap but ticks all the boxes for a micro SaaS, database server.
+ With 48GB, and only a small OS partition for disk, it's ~$1,463.
+
+ Alas it appears that these units are pretty fundamentally flawed due to a problematic controller: https://www.reddit.com/r/MINISFORUM/comments/1pbnql6/silent_data_corruption_on_n5_pro_nas/
+
+For checking that the filesystem is doing all the right things (the reason we're spending the $ for ECC memory) use the fio program that Jens Axboe (of io_uring and Linux AIO fame) wrote: https://github.com/axboe/fio.
+
+----
+Continuing to work on the test client design.
+
+The list of nodes is helpful but we need to know (have available) which edge was selected to arrive at the following node.
+My first notion seems like the right way to handle it albeit we need to add more to it.
+
+
+
+
+TODO
+_ Convert the smallint column used in NODE table to denote the type to be a formal enum/postgres type as we do everywhere else. We know now that Postgres store the enum as integers but it handles constraints without needing an additional CHECK (which we currently lack.)
+_ Test with different Scripts.
+_ Add endpoint to ChttrClient to return the stats.
+_ Add support for keyword triggered flows so we don't have to manually initiate the flow from a curl command.
+_ Validations for the content and order of nodes/messages.
+    If we want to be really thorough we may need to keep the graph representation. The intermediate messages that only point to the next node are tied to the response selected (randomly) by ChttrClient which isn't representable by a flat list/set.
+_ Add Blaster to the mix.
+_ Update KEYWORDS table to drop the channel column, replacing it with a fk to ROUTES. This is _not_ a small change.
+_ Fix operator logic that handles cases where the incoming user doesn't already exist. The requirement of a non-null claimantId will require some code changes.
+    Need to know the customer_id that owns the route being used.
+_ Using TamboUI, create an interactive terminal application (see notebook for design). Possibly experiment with Gemini to generate the code for this?
+
+===== 2026-03-06 ====
+Run ChttrClient with the following params:
+
+    campaignId = 019ca5aa-ae49-78a9-8586-60f653eeb403 (only a single user in this list.)
+    nodeId     = 89eddcb8-7fe5-4cd1-b18b-78858f0789fb
+
+The campaign id has only a single User.
+The graph of Nodes starts with 'What is your favorite color?...'
+
+With ChttrClient's server listening, trigger the start of the test run by calling the following endpoint:
+
+    curl http://192.168.1.155:2424/chttrStart
+
+Note: while debugging the ChttrClient, I observed the Sndr's OperatorConsumer time out and throw a java.io.UncheckedIOException for the underlying SocketTimeoutException.
+A reasonable error for dev purposes but one that we'll need to test for production. The Sndr will need to be far more tolerant of outages on the third party platform.
+
+The conversion of the List<Node> that constitutes a path through the graph of nodes doesn't include the MT for PresentMulti instances after the first.
+We only see the MO responses...
+Somehow including a break statement in the block that finds a match of the Edge with the next Node fixes most of the problem.
+
+What remains is that the Edge's response text is null. Apparently the serialized graph we're loading from file is missing the string.
+Loading the graph from the database, however, works just fine.
+Rebuilt the file and now we're good. Must have been a transitional change that caused the issue.
+
+ISSUE:
+    The list of edges produced from the disk loaded graph is missing the node that begins the cycle; the first node.
+    The list produced from the graph taken directly from the database includes it.
+Not clear to me what the desired behavior should be. To unify the behavior I could just add a cycle check (or change the list to an ordered set.)
+
+

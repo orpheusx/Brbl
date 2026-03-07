@@ -67,7 +67,7 @@ public class Multi {
                 LOG.info("Checking option for match {} -> {}", userText, option.matchText());
                 if (option.matchText().contains(userText)) { //TODO make the matching more robust/flexible. Efficient regexes?
                     LOG.info("Input, {}, matched logic: {}", userText, option.matchText());
-                    Message mt = newMTfromMO(moMessage, option.text());
+                    Message mt = newMTfromMO(moMessage, option.responseText());
                     context.registerOutput(mt);
                     //LOG.info("Enqueued {}", mt);
                     return option.targetNode();

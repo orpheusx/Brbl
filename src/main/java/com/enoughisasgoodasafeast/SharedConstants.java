@@ -10,6 +10,7 @@ public interface SharedConstants {
     String SMS_ENQUEUE_ENDPOINT = "/smsEnqueue";
     String WHATSAPP_ENQUEUE_ENDPOINT = "/wapEnqueue";
     String CHTTR_SERVICE_ENDPOINT = "/chttr";
+    String START_CHTTR_SERVICE_ENDPOINT = "/chttrStart";
     long CONNECTION_TIMEOUT_SECONDS = 30L;
     String STANDARD_RABBITMQ_PORT = "5672";
     String NO_COMPANY = "NONE";

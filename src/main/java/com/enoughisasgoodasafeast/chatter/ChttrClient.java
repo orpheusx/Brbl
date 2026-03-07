@@ -15,10 +15,10 @@ import java.time.Duration;
 import java.time.temporal.ChronoUnit;
 import java.util.*;
 import java.util.concurrent.ConcurrentHashMap;
-import java.util.concurrent.ThreadLocalRandom;
 
-import static com.enoughisasgoodasafeast.SharedConstants.CHTTR_SERVICE_ENDPOINT;
-import static com.enoughisasgoodasafeast.SharedConstants.CONNECTION_TIMEOUT_SECONDS;
+import static com.enoughisasgoodasafeast.MessageType.MO;
+import static com.enoughisasgoodasafeast.MessageType.MT;
+import static com.enoughisasgoodasafeast.SharedConstants.*;
 import static io.helidon.http.HeaderValues.CONTENT_TYPE_TEXT_PLAIN;
 
 public class ChttrClient {
@@ -49,16 +49,38 @@ public class ChttrClient {
                 )
                 .routing(router -> {
                             router.post(CHTTR_SERVICE_ENDPOINT, new ChttrMessageHandler());
+                            router.get(START_CHTTR_SERVICE_ENDPOINT, new StartTestHandler());
                         }
                 )
                 .build()
                 .start();
     }
 
-    private class StatsInfoHandler implements Handler {
-        @Override
-        public void handle(ServerRequest serverRequest, ServerResponse serverResponse) throws Exception {
+//    private class StatsInfoHandler implements Handler {
+//        @Override
+//        public void handle(ServerRequest serverRequest, ServerResponse serverResponse) throws Exception {
+//
+//        }
+//    }
 
+    private class StartTestHandler implements Handler {
+
+        // ref:  curl -d '18484242144:119839196677:foo' http://192.168.1.155:4242/smsEnqueue
+
+        @Override
+        public void handle(ServerRequest request, ServerResponse response) {
+            LOG.info("ChttrClient starting test");
+            response.send("OK");
+
+            for (UserActor actor : userActors.values()) {
+                var startMessage = new Message(MO, Platform.SMS, actor.getPhoneNumber(), "119839196677", "foo");
+                final boolean ok = moHandler.handle(startMessage);
+                if (ok) {
+                    LOG.info("Sent start message from {}", actor.getPhoneNumber());
+                } else {
+                    LOG.error("Failed to send start message from {}", actor.getPhoneNumber());
+                }
+            }
         }
     }
 
@@ -69,9 +91,13 @@ public class ChttrClient {
             res.header(CONTENT_TYPE_TEXT_PLAIN);
             String rcvPayload = req.content().as(String.class);
             LOG.info("Handling incoming message: {}", rcvPayload);
-            Message mtMessage = marshall(rcvPayload);
 
-            processMessage(mtMessage);
+            Message mtMessage = marshall(rcvPayload);
+            if (mtMessage != null) {
+                processMessage(mtMessage);
+            } else {
+                res.send(422);
+            }
 
             res.send("OK");
         }
@@ -84,13 +110,13 @@ public class ChttrClient {
                  return null;
             }
             // In MT message, 'to' is the user's phone number.
-            return new Message(MessageType.MT, Platform.SMS, parsed[0], parsed[1], parsed[2]);// FIXME Platform cannot be hardcoded!!!
+            return new Message(MT, Platform.SMS, parsed[0], parsed[1], parsed[2]);// FIXME Platform cannot be hardcoded!!!
         }
 
         @Override
         public void afterStop() {
             // Docker Compose appears to shut off logging output before this gets called.
-            // Inspecting the container's logs directly, however, proves that is is called.
+            // Inspecting the container's logs directly, however, proves that is getting called.
             LOG.info("ChttrClient final stats:");
             int numActors=0, numRcvd=0, numSent=0;
             for (var entry : userActors.entrySet()) {
@@ -105,9 +131,7 @@ public class ChttrClient {
         }
     }
 
-    private void processMessage(Message mtIncomingMessage) {
-        if (mtIncomingMessage == null) return;
-
+    private void processMessage(@NonNull Message mtIncomingMessage) {
         String phoneNumber = mtIncomingMessage.to(); // The user is the recipient of the MT message
         UserActor actor = userActors.get(phoneNumber);
 
@@ -118,47 +142,44 @@ public class ChttrClient {
             actor.rcvdMessages.add(mtIncomingMessage);
         }
 
-        Exchange matchingExchange = findMatchingExchange(actor, mtIncomingMessage.text());
+        Event event = actor.currentEvent(); // will throw if null, out of bounds
 
-        if (matchingExchange == null) {
-            LOG.warn("No matching Exchange found for message text: '{}' for user: {}", mtIncomingMessage.text(), phoneNumber);
+        if (!MT.equals(event.type())) {
+            LOG.error("Script expects {}", event.type().toString());
             return;
         }
 
-        // TODO Make looping behavior configurable. For now, we check for cycles and stop if we see one.
-        if(actor.hasVisited(matchingExchange)) {
-            LOG.info("Cycle detected: stopping execution for UserActor: {}", phoneNumber);
-            LOG.info("Node causing cycle: {}", matchingExchange.mtText());
+        if (!event.message().equals(mtIncomingMessage.text())) {
+            LOG.error("Script expects {} but got {}", event.message(), mtIncomingMessage.text());
             return;
-        } else {
-            actor.visit(matchingExchange);
         }
 
-        if (matchingExchange.moResponses() != null && !matchingExchange.moResponses().isEmpty()) {
-            String responseText = matchingExchange.moResponses().get(ThreadLocalRandom.current().nextInt(matchingExchange.moResponses().size()));
-            
+        // Advance to the next event.
+        Event nextEvent = actor.nextEvent();
+        // If it's an MO we should send it as a response, continuing until we find a non-MO event.
+        while(nextEvent != null && nextEvent.type() == MO) {
             // Create MO message. 'from' is the user (phoneNumber), 'to' is the sender of the MT message.
-            Message moResponseMessage = new Message(MessageType.MO, mtIncomingMessage.platform(), phoneNumber, mtIncomingMessage.from(), responseText);
-            
+            Message moResponseMessage = new Message(MO, mtIncomingMessage.platform(), phoneNumber, mtIncomingMessage.from(),
+                    nextEvent.message());
             boolean success = moHandler.handle(moResponseMessage);
             if (success) {
                 LOG.info("Response sent from {} with {}", phoneNumber, moResponseMessage);
                 actor.sentMessages.add(moResponseMessage);
+                nextEvent = actor.nextEvent();
             } else {
                 LOG.error("Response fail from {} with {}", phoneNumber, moResponseMessage);
+                return;
             }
-        } else {
-            LOG.info("No MO responses defined for exchange: {}", matchingExchange.mtText());
         }
     }
 
-    private @Nullable Exchange findMatchingExchange(@NonNull UserActor actor, @NonNull String text) {
-        // Gemini wrote this functional way of finding a match. Looks cool though a regular loop is more efficient for smaller list (<1k) like this one. :-[
-        return actor.getScript().exchanges.stream()
-                .filter(e -> e.mtText().equals(text))
-                .findFirst()
-                .orElse(null);
-    }
+//    private @Nullable Exchange findMatchingExchange(@NonNull UserActor actor, @NonNull String text) {
+//        // Gemini wrote this functional way of finding a match. Looks cool though a regular loop is more efficient for smaller list (<1k) like this one. :-[
+//        return actor.getScript().exchanges.stream()
+//                .filter(e -> e.mtText().equals(text))
+//                .findFirst()
+//                .orElse(null);
+//    }
 
     public static void main(String[] args) {
         UUID pushCampaignId, nodeId;
@@ -171,25 +192,36 @@ public class ChttrClient {
         }
 
         try {
-            Properties properties = ConfigLoader.readConfig("chttr.properties"); // Assuming a config file
+            var properties = ConfigLoader.readConfig("chttr.properties"); // Assuming a config file
 
-            PersistenceManager persistenceManager = PostgresPersistenceManager.createPersistenceManager(properties);
+            var persistenceManager = PostgresPersistenceManager.createPersistenceManager(properties);
 
             Collection<CampaignUser> campaignUsers = persistenceManager.getPushCampaignUsers(pushCampaignId, DeliveryStatus.PENDING);
             LOG.info("Found {} campaign users for campaign id {}", campaignUsers.size(), pushCampaignId);
-            
-            ScriptInterpreter scriptInterpreter = new ScriptInterpreter(persistenceManager);
-            ChttrScript script = scriptInterpreter.translateNodeGraphToChttrScript(nodeId);
+            if(campaignUsers.isEmpty()) {
+                throw new IllegalStateException("No campaign users found for campaign id " + pushCampaignId);
+            }
+
+            var rootNode = persistenceManager.getNodeGraph(nodeId);
+            LOG.info("Found root node for campaign id {}: {}", pushCampaignId, rootNode);
+            if(rootNode == null) {
+                throw new IllegalStateException("Root node is null");
+            }
+
+            var scripts = new ScriptInterpreter(persistenceManager).translateNodeGraphToChttrScripts(nodeId);
+            if (scripts == null || scripts.isEmpty()) {
+                throw new IllegalStateException("No scripts derived for root node " + rootNode);
+            }
 
             List<UserActor> actors = new ArrayList<>();
-            for (CampaignUser cu : campaignUsers) {
-                String phoneNumber = cu.user().platformNumbers().get(Platform.SMS); // FIXME we can't hard code this dumbass
+            for (var cu : campaignUsers) {
+                var phoneNumber = cu.user().platformNumbers().get(Platform.SMS); // FIXME we can't hard code this dumbass
                 if (phoneNumber != null) {
-                    actors.add(new UserActor(phoneNumber, script));
+                    actors.add(new UserActor(phoneNumber, scripts));
                 }
             }
 
-            ChttrClient client = new ChttrClient(properties, actors);
+            var client = new ChttrClient(properties, actors);
             client.start();
 
             // Gemini included this to keep the program running
