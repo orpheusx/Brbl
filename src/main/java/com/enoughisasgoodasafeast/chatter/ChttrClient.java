@@ -2,6 +2,7 @@ package com.enoughisasgoodasafeast.chatter;
 
 import com.enoughisasgoodasafeast.*;
 import com.enoughisasgoodasafeast.operator.*;
+import io.helidon.http.Status;
 import io.helidon.webserver.WebServer;
 import io.helidon.webserver.http.Handler;
 import io.helidon.webserver.http.ServerRequest;
@@ -64,21 +65,22 @@ public class ChttrClient {
 //    }
 
     private class StartTestHandler implements Handler {
-
         // ref:  curl -d '18484242144:119839196677:foo' http://192.168.1.155:4242/smsEnqueue
+        // TODO accept the keyword and and _to_ field as query args
 
         @Override
         public void handle(ServerRequest request, ServerResponse response) {
             LOG.info("ChttrClient starting test");
             response.send("OK");
 
+            String keyword = "foo";
             for (UserActor actor : userActors.values()) {
-                var startMessage = new Message(MO, Platform.SMS, actor.getPhoneNumber(), "119839196677", "foo");
+                var startMessage = new Message(MO, Platform.SMS, actor.getPhoneNumber(), "119839196677", keyword);
                 final boolean ok = moHandler.handle(startMessage);
                 if (ok) {
-                    LOG.info("Sent start message from {}", actor.getPhoneNumber());
+                    LOG.info("Sent initiating keyword, {},  from user number, {}", keyword, actor.getPhoneNumber());
                 } else {
-                    LOG.error("Failed to send start message from {}", actor.getPhoneNumber());
+                    LOG.error("Failed to send initiating keyword, {}, from {}", keyword, actor.getPhoneNumber());
                 }
             }
         }
@@ -96,10 +98,10 @@ public class ChttrClient {
             if (mtMessage != null) {
                 processMessage(mtMessage);
             } else {
-                res.send(422);
+                res.status(Status.BAD_REQUEST_400);
             }
 
-            res.send("OK");
+            res.send(Status.OK_200);
         }
 
         private @Nullable Message marshall(@NonNull String payload) {
@@ -198,6 +200,9 @@ public class ChttrClient {
 
             Collection<CampaignUser> campaignUsers = persistenceManager.getPushCampaignUsers(pushCampaignId, DeliveryStatus.PENDING);
             LOG.info("Found {} campaign users for campaign id {}", campaignUsers.size(), pushCampaignId);
+            for (CampaignUser campaignUser : campaignUsers) {
+                LOG.info("users: {}", campaignUser.user().platformNumbers());
+            }
             if(campaignUsers.isEmpty()) {
                 throw new IllegalStateException("No campaign users found for campaign id " + pushCampaignId);
             }

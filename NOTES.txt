@@ -3771,3 +3771,9 @@ ISSUE:
 Not clear to me what the desired behavior should be. To unify the behavior I could just add a cycle check (or change the list to an ordered set.)
 
 
+===== 2026-03-07 ====
+NB: possibly useful, small lib for checking email addresses. Might be useful for brbl-admin...
+
+    https://github.com/RohanNagar/jmail
+
+Next task: a verifier for script playback.
