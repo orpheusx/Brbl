@@ -356,6 +356,8 @@
                 <version>3.5.4</version>
                 <configuration>
                     <argLine>--enable-preview</argLine>
+                    <!-- If we don't set the following, failed tests will prevent report generation. Should be the default, frankly. -->
+                    <testFailureIgnore>true</testFailureIgnore>
                 </configuration>
             </plugin>
 

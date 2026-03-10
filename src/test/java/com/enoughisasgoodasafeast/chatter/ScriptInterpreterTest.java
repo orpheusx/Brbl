@@ -74,7 +74,7 @@ class ScriptInterpreterTest {
 //        for (List<Node> path : pathOfNodes) {
 //            final var directedExchanges = interpreter.nodeListToChttrScript(path);
 //            interpreter.printPath(path);
-//            System.out.println("exchanges for path: " + directedExchanges);
+//            LOG.info("exchanges for path: {}", directedExchanges);
 //        }
 //    }
 
@@ -85,8 +85,8 @@ class ScriptInterpreterTest {
         assertNotNull(pathOfNodes);
         var eventList = interpreter.nodePathToEventList(pathOfNodes.stream().findFirst().get());
         assertNotNull(eventList);
-        IO.println(eventList);
-        assertEquals(8, eventList.size());
+        LOG.info(eventList.toString());
+        assertEquals(5, eventList.size());
     }
 
     @Test
@@ -100,6 +100,7 @@ class ScriptInterpreterTest {
             //interpreter.printPath(simplePath);
             var events = interpreter.nodePathToEventList(path);
             assertNotNull(events);
+            LOG.info("Events from disk:\n{}", events);
             assertEquals(7, events.size());
         }
 
@@ -118,8 +119,8 @@ class ScriptInterpreterTest {
             //interpreter.printPath(simplePath);
             var events = interpreter.nodePathToEventList(path);
             assertNotNull(events);
-            IO.println(events);
-            assertEquals(8, events.size());
+            LOG.info("Events from database:\n{}", events);
+            assertEquals(7, events.size());
         }
 
 

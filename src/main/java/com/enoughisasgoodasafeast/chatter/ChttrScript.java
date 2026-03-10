@@ -14,7 +14,6 @@ public class ChttrScript implements Serializable {
     @Serial
     private static final long serialVersionUID = 1L;
 
-    private int index;
     private final List<Event> events;
 
     public ChttrScript(List<Event> events) {

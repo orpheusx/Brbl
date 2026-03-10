@@ -3715,7 +3715,7 @@ Heard about some tools for performance monitoring/assessment:
  Not cheap but ticks all the boxes for a micro SaaS, database server.
  With 48GB, and only a small OS partition for disk, it's ~$1,463.
 
- Alas it appears that these units are pretty fundamentally flawed due to a problematic controller: https://www.reddit.com/r/MINISFORUM/comments/1pbnql6/silent_data_corruption_on_n5_pro_nas/
+ Alas, it appears that these units are pretty fundamentally flawed due to a problematic controller: https://www.reddit.com/r/MINISFORUM/comments/1pbnql6/silent_data_corruption_on_n5_pro_nas/
 
 For checking that the filesystem is doing all the right things (the reason we're spending the $ for ECC memory) use the fio program that Jens Axboe (of io_uring and Linux AIO fame) wrote: https://github.com/axboe/fio.
 
@@ -3766,9 +3766,14 @@ Loading the graph from the database, however, works just fine.
 Rebuilt the file and now we're good. Must have been a transitional change that caused the issue.
 
 ISSUE:
-    The list of edges produced from the disk loaded graph is missing the node that begins the cycle; the first node.
+    The list of nodes produced from the disk loaded graph is missing the node that begins the cycle; the first node.
     The list produced from the graph taken directly from the database includes it.
-Not clear to me what the desired behavior should be. To unify the behavior I could just add a cycle check (or change the list to an ordered set.)
+
+    The code producing the the list from the graphs is correct; the graph returned by our persistence manager method does, in fact, include the first node (creating a cycle) whereas the one loaded from disk (originally created from the database instance) has *null* set as the target of the final edge.
+    Must be due to some serialization "magic."
+
+    To unify the behavior I could just add a cycle check (or change the list to an ordered set or even compare the first and last nodes for equality, trimming off the latter if they're equal.)
+    For automated conversion of Nodes trimming off the cycling Node seems ok. We can still create custom paths that follow cycles as many times as we like. The playback should work okay. (Probably wise to create an example to prove this, however.)
 
 
 ===== 2026-03-07 ====
@@ -3776,4 +3781,42 @@ NB: possibly useful, small lib for checking email addresses. Might be useful for
 
     https://github.com/RohanNagar/jmail
 
-Next task: a verifier for script playback.
+Next task: a verifier for script playback? Hard to know exactly how to approach this.
+If the response isn't what's expected it feels like we should immediately fail and stop playback.
+To do more would require more a great deal more complexity in the ChttrClient.
+Also, we don't really have any support in Operator for testing mid-conversation interrupts ("change topic" response is stubbed out in Operator.)
+
+So, for now, let's fail the current script (where one ChttrScript == one path through the graph) and proceed to the next one.
+
+On fail, increment the scriptIndex then re-send the keyword. Will this work with current Operator logic?
+To find out we'll first have to trim off the cycled node from the script path.
+But the Operator will have already sent the "favorite color" MT because that's chained from the EndOfChat node.
+This is the correct behavior so better that ChttrClient handle this.
+
+
+NB: Using my new USB gigabit Ethernet adapter creates an interface, en7, on 192.168.1.157. Starting the Docker compose file with only this interface available (I'd turned WiFi off to insure that the InputLeap (the mouse/keyboard sharing util) used the lower latency connection) will cause problems because we're using IP addresses in our .properties files.
+
+I can turn wifi back on, however, and everything works fine.
+
+
+===== 2026-03-10 ====
+
+TODO
+    _ Convert the smallint column used in NODE table to denote the type to be a formal enum/postgres type as we do everywhere else. We know now that Postgres store the enum as integers but it handles constraints without needing an additional CHECK (which we currently lack.)
+    _ Test with different Scripts.
+    _ Add endpoint to ChttrClient to return the stats.
+    X Add support for keyword triggered flows so we don't have to manually initiate the flow from a curl command.
+        Endpoint will now send the keyword for each user in the list.
+    _ Validations for the content and order of nodes/messages.
+        If we want to be really thorough we may need to keep the graph representation. The intermediate messages that only point to the next node are tied to the response selected (randomly) by ChttrClient which isn't representable by a flat list/set.
+    _ Add Blaster to the mix.
+    _ Update KEYWORDS table to drop the channel column, replacing it with a fk to ROUTES. This is _not_ a small change.
+    _ Fix operator logic that handles cases where the incoming user doesn't already exist. The requirement of a non-null claimantId will require some code changes. Need to know the customer_id that owns the route being used.
+    _ Using TamboUI, create an interactive terminal application (see notebook for design). Possibly experiment with Gemini to generate the code for this?
+
+
+Thoughts about Validation:
+Once a script has gone wrong it should be stopped; recovery is not on the client/end-user.
+We'd like to support both an interactive tool--one that can run scripts on demand--and a integration test mode that runs against a deployment via testcontainers. That's a lot. :-\
+
+To synchronize the creation of a test report we can use a semaphore.

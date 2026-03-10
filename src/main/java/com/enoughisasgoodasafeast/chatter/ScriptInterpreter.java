@@ -81,6 +81,8 @@ public class ScriptInterpreter {
                     events.add(new Event(MT, node.text()));
                 }
                 case ProcessMulti -> {
+                    if (i + 1 >= nodePath.size()) break;
+
                     Node nextNode = nodePath.get(1+i); // this is the node the path specifies
                     for (Edge edge : node.edges()) {
                         if(edge.targetNode().equals(nextNode)) {
@@ -231,6 +233,15 @@ public class ScriptInterpreter {
         List<Node> currentPath = new ArrayList<>();
         findAllPaths(rootNode, currentPath, allPaths);
 
+        // This is kind of a Band-Aid to normalize the differences loading rootNode from disk vs database.
+        // Other kinds of cycles are, obviously, not addressed (for now.)
+        for  (List<Node> path : allPaths) {
+            if(path.getFirst().equals(path.getLast())) {
+                LOG.warn("Trimming node causing cycle: '{}'", path.getLast().text());
+                path.removeLast();
+            }
+        }
+
         return allPaths;
     }
 
@@ -278,15 +289,9 @@ public class ScriptInterpreter {
         var ppm = PostgresPersistenceManager.createPersistenceManager(properties);
         var interpreter = new ScriptInterpreter(ppm);
         var dbNode = ppm.getNodeGraph(nodeId);
+
         String fileName = "./data/simpleThreeNodeGraph.ser";
         interpreter.writeNodeGraphToFile(dbNode, fileName);
         var diskNode = interpreter.readNodeGraphFromFile(fileName);
-        IO.println("How do they compare?");
-        if (diskNode.equals(dbNode)) {
-            IO.println("the same");
-        } else {
-            IO.println("different");
-        }
-
     }
 }

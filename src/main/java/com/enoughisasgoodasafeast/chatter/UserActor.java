@@ -14,10 +14,14 @@ public class UserActor {
     private final String phoneNumber;
     private final List<ChttrScript> scripts;
 
-    private int numScripts, scriptIndex, numEvents, eventIndex;
+    private final int numScripts;
+    private int scriptIndex, numEvents, eventIndex;
 
     final List<Message> rcvdMessages;
     final List<Message> sentMessages;
+
+    final List<String> unexpectedMessages;
+    final List<String> sendMessageFailures;
 
     public UserActor(String phoneNumber, List<ChttrScript> scripts) {
         this.phoneNumber = phoneNumber;
@@ -26,20 +30,24 @@ public class UserActor {
         this.numEvents = scripts.getFirst().getEvents().size();
         this.rcvdMessages = new ArrayList<>();
         this.sentMessages = new ArrayList<>();
-        LOG.info("UserActor created: phone num: {} scripts: {}", phoneNumber, scripts);
+        this.unexpectedMessages = new ArrayList<>();
+        this.sendMessageFailures = new ArrayList<>();
+        LOG.info("UserActor created: phone num: {} with {} scripts: {}", phoneNumber, scripts.size(), scripts);
     }
 
     public String getPhoneNumber() {
         return phoneNumber;
     }
 
-    // TODO Make synchronized?
-    public ChttrScript getCurrentScript() {
-        return scripts.get(scriptIndex);
-    }
-
+    // Oof, this and the next method are stinky. We need a cleaner way to keep track of our position in the immutable list of scripts
     public synchronized Event currentEvent() {
-        // These will throw at runtime.
+        if(scriptIndex >= numScripts) {
+            LOG.info("No more scripts available!");
+            return null;
+        }
+
+        LOG.info("User {} at event/script index: {}/{}", phoneNumber, eventIndex, scriptIndex); // FIXME -> debug only
+
         final ChttrScript script = scripts.get(scriptIndex);
         return script.getEvents().get(eventIndex);
     }
@@ -47,17 +55,27 @@ public class UserActor {
     public synchronized @Nullable Event nextEvent() {
         if (1 + eventIndex >= numEvents) {
             eventIndex = 0;
-            if (1 + scriptIndex >= numScripts) {
+            scriptIndex += 1;
+            if (scriptIndex >= numScripts) {
                 LOG.warn("Reached end of scripts.");
                 return null;
             }
-            ++scriptIndex;
             numEvents = scripts.get(scriptIndex).getEvents().size();
+            LOG.info("Advanced to script index: {}", scriptIndex);
 
         } else {
             ++eventIndex;
         }
+
         return currentEvent();
+    }
+
+    public synchronized void recordUnexpectedMessage(String message) {
+        unexpectedMessages.add(String.join("|", String.valueOf(scriptIndex), String.valueOf(eventIndex), message));
+    }
+
+    public synchronized void recordSendMessageFail(String message) {
+        sendMessageFailures.add(String.join("|", String.valueOf(scriptIndex), String.valueOf(eventIndex), message));
     }
 
     @Override
