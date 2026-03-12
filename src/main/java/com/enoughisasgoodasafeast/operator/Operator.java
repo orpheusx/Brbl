@@ -32,7 +32,7 @@ public class Operator implements MessageProcessor {
     public static final String ALL = "ALL";
 
     final LoadingCache<@NonNull SessionKey, Session> sessionCache = Caffeine.newBuilder()
-            .expireAfterAccess(20, TimeUnit.MINUTES) // TODO make duration part of the configuration
+            .expireAfterAccess(20, TimeUnit.MINUTES) // TODO make duration part of the configuration here and for all the other caches.
             .build(key -> createSession(key));
 
     final LoadingCache<@NonNull SessionKey, User> userCache = Caffeine.newBuilder()

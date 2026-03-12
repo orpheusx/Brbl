@@ -27,7 +27,7 @@ public class UserActor {
         this.phoneNumber = phoneNumber;
         this.scripts = scripts;
         this.numScripts = scripts.size();
-        this.numEvents = scripts.getFirst().getEvents().size();
+        this.numEvents = scripts.getFirst().events().size();
         this.rcvdMessages = new ArrayList<>();
         this.sentMessages = new ArrayList<>();
         this.unexpectedMessages = new ArrayList<>();
@@ -46,10 +46,10 @@ public class UserActor {
             return null;
         }
 
-        LOG.info("User {} at event/script index: {}/{}", phoneNumber, eventIndex, scriptIndex); // FIXME -> debug only
+        LOG.info("currentEvent: User {} at event/script index: {}/{}", phoneNumber, eventIndex, scriptIndex); // FIXME -> debug only
 
         final ChttrScript script = scripts.get(scriptIndex);
-        return script.getEvents().get(eventIndex);
+        return script.events().get(eventIndex);
     }
 
     public synchronized @Nullable Event nextEvent() {
@@ -60,7 +60,7 @@ public class UserActor {
                 LOG.warn("Reached end of scripts.");
                 return null;
             }
-            numEvents = scripts.get(scriptIndex).getEvents().size();
+            numEvents = scripts.get(scriptIndex).events().size();
             LOG.info("Advanced to script index: {}", scriptIndex);
 
         } else {

@@ -15,13 +15,14 @@ import java.time.Duration;
 import java.time.temporal.ChronoUnit;
 import java.util.*;
 import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.atomic.AtomicInteger;
 
 import static com.enoughisasgoodasafeast.MessageType.MO;
 import static com.enoughisasgoodasafeast.MessageType.MT;
 import static com.enoughisasgoodasafeast.SharedConstants.*;
 import static io.helidon.http.HeaderValues.CONTENT_TYPE_TEXT_PLAIN;
 
-// TODO add a ping call at start up to verify our MO endpoint (aka Rcvr) is running. Do same for Sndr?
+// TODO add a ping/health call at start up to verify our MO endpoint (aka Rcvr) is running. Do same for Sndr?
 public class ChttrClient {
 
     private static final Logger LOG = LoggerFactory.getLogger(ChttrClient.class);
@@ -32,12 +33,15 @@ public class ChttrClient {
     List<String> deserializationErrors = new ArrayList<>();
     List<String> unknownUserActor = new ArrayList<>();
 
+    private final AtomicInteger countdown;
+
     public ChttrClient(Properties properties, List<UserActor> actors) {
         this.properties = properties;
         for (UserActor actor : actors) {
             userActors.put(actor.getPhoneNumber(), actor);
         }
         this.moHandler = HttpMOHandler.newHandler(properties);
+        this.countdown = new AtomicInteger(actors.size());
     }
 
     public void start() {
@@ -60,29 +64,21 @@ public class ChttrClient {
                 .start();
     }
 
-//    private class StatsInfoHandler implements Handler {
-//        @Override
-//        public void handle(ServerRequest serverRequest, ServerResponse serverResponse) throws Exception {
-//
-//        }
-//    }
-
     private class ExecuteTestHandler implements Handler {
         // ref:  curl -d '18484242144:119839196677:foo' http://192.168.1.155:4242/smsEnqueue
         // TODO accept the keyword and and _to_ field (aka the channel) as query args
 
         @Override
         public void handle(ServerRequest request, ServerResponse response) {
-            LOG.info("ChttrClient executing tests");
+            LOG.info("ChttrClient executing tests...");
             response.send("OK");
 
-            String keyword = "foo";
+            String keyword = "foo"; // FIXME
             for (UserActor actor : userActors.values()) {
                 var startMessage = new Message(MO, Platform.SMS, actor.getPhoneNumber(), "119839196677", keyword);
+                LOG.info("Sending initiating keyword '{}' from user number, {}", keyword, actor.getPhoneNumber());
                 final boolean ok = moHandler.handle(startMessage);
-                if (ok) {
-                    LOG.info("Sent initiating keyword '{}' from user number, {}", keyword, actor.getPhoneNumber());
-                } else {
+                if (!ok) {
                     LOG.error("Failed to send initiating keyword, {}, from {}", keyword, actor.getPhoneNumber());
                 }
             }
@@ -122,13 +118,14 @@ public class ChttrClient {
         @Override
         public void afterStop() {
             //generateRunReport();
-            LOG.info("ChttrClient stopping");
+            LOG.info("ChttrClient stopping...");
         }
     }
 
-    private boolean generateRunReport() {
+    private void generateRunReport() {
         // Docker Compose appears to shut off logging output before this gets called.
         // Inspecting the container's logs directly, however, proves that is getting called.
+        LOG.info("Generating run report...");
         LOG.info("ChttrClient final stats:");
         int numActors=0, numRcvd=0, numSent=0;
         for (var entry : userActors.entrySet()) {
@@ -141,7 +138,6 @@ public class ChttrClient {
         }
         LOG.info("Totals: numActors: {}, numRcvd: {}, numSent: {}", numActors, numRcvd, numSent);
 
-        return (numActors > 0 && numRcvd > 0 && numSent > 0); // auto complete prompted this formulation. I think we want to return a RunReport instead.
     }
 
     private void processMessage(@NonNull Message mtIncomingMessage) {
@@ -157,13 +153,18 @@ public class ChttrClient {
         }
 
         Event event = actor.currentEvent();
-        if(event==null) { // Indicates we've received an MT after the script has completed. Should happen at most once per UserActor.
+        if(event==null) { // A null event here indicates we've completed execution of all the ChttrScripts for actor.
             LOG.info("Ignoring incoming message '{}'", mtIncomingMessage.text());
+            if( 0 == countdown.decrementAndGet()) {
+                LOG.info("All actors have completed.");
+                generateRunReport();
+            }
+
             return;
         }
 
         if (!MT.equals(event.type())) { // FIXME This doesn't really make sense. Operator can only send MTs.
-            LOG.error("Script expects {}", event.type().toString());
+            LOG.error("Script expects event of type, {}", event.type().toString());
             return;
         }
 

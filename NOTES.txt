@@ -3804,7 +3804,7 @@ I can turn wifi back on, however, and everything works fine.
 TODO
     _ Convert the smallint column used in NODE table to denote the type to be a formal enum/postgres type as we do everywhere else. We know now that Postgres store the enum as integers but it handles constraints without needing an additional CHECK (which we currently lack.)
     _ Test with different Scripts.
-    _ Add endpoint to ChttrClient to return the stats.
+    X Add endpoint or other method to ChttrClient to return the stats.
     X Add support for keyword triggered flows so we don't have to manually initiate the flow from a curl command.
         Endpoint will now send the keyword for each user in the list.
     _ Validations for the content and order of nodes/messages.
@@ -3819,4 +3819,71 @@ Thoughts about Validation:
 Once a script has gone wrong it should be stopped; recovery is not on the client/end-user.
 We'd like to support both an interactive tool--one that can run scripts on demand--and a integration test mode that runs against a deployment via testcontainers. That's a lot. :-\
 
-To synchronize the creation of a test report we can use a semaphore.
+To synchronize the creation of a test report we can use a simple AtomicInteger set with the number of UserActors that we decrement each time that actor's scripts have been completed.
+
+===== 2026-03-10 ====
+
+
+Need to add more UserActors to make sure this all works with multiple entries.
+
+The one we are currently using:
+    u.id            | 8204383c-7a73-7ba0-1c8c-83be6886ef90
+    u.platform_code | S
+    u.platform_id   | 522482859616
+    u.country       | MX
+    u.language      | FRA
+    u.nickname      | horse
+    u.status        | IN
+    u.created_at    | 2020-02-28 00:58:28.656-05
+    u.updated_at    | 2012-03-25 16:31:26.949-04
+    a.group_id      | 34237d77-b16e-9251-c90f-1a99b7b7555b
+    a.user_id       | 8204383c-7a73-7ba0-1c8c-83be6886ef90
+    a.profile_id    | 7ff56f02-243e-5844-601e-36117f6977aa
+    a.customer_id   | 6fdea5b7-9b44-e235-4044-a7984e9a0ca0
+    a.created_at    | 2020-02-28 00:58:28.656-05
+    a.updated_at    | 2012-03-25 16:31:26.949-04
+    a.claimant_id   | 6fdea5b7-9b44-e235-4044-a7984e9a0ca0
+where 'u' is users and 'a' is amalgams.
+
+How about assigning the same claimant_id to this user:
+
+    bcc0d206-2dbb-fe00-e0c0-3037b331ce1e | S    | tiger      | IN   | nil                                  |  nil
+
+    UPDATE amalgams SET customer_id = null, claimant_id = '6fdea5b7-9b44-e235-4044-a7984e9a0ca0' where user_id = 'bcc0d206-2dbb-fe00-e0c0-3037b331ce1e' ;
+
+It also needs to part of the same campaign_id, '019ca5aa-ae49-78a9-8586-60f653eeb403':
+
+    SELECT id, customer_id, completed_at, route_id FROM push_campaigns WHERE id ='019ca5aa-ae49-78a9-8586-60f653eeb403';
+
+                      id                  |             customer_id              | completed_at |               route_id
+    --------------------------------------+--------------------------------------+--------------+--------------------------------------
+     019ca5aa-ae49-78a9-8586-60f653eeb403 | 8285d1a8-2dc0-6752-3758-0076224bc839 |              | 019bf69d-a08a-7c3a-a4ca-ed70d35327fc
+    (1 row)
+
+    INSERT INTO campaign_users(campaign_id, user_id, delivered) VALUES('019ca5aa-ae49-78a9-8586-60f653eeb403', 'bcc0d206-2dbb-fe00-e0c0-3037b331ce1e', 'PENDING');
+
+Now we get two rows for the SELECT_PUSH_CAMPAIGN_USERS_BY_DELIVERY_STATUS query.
+Running the ChttrClient now shows two UserActors executing the same set of scripts. Woot!
+
+start: 2026-03-11 19:55:04,734
+  end: 2026-03-11 19:55:05,131
+32 messages sent to ChttrClient and 12 sent to Operator in ~397ms.
+
+
+The route's channel for this push campaign is 999999999999 which is not the one we've been calling. The keyword table has the channel (119839196677).
+
+TODO
+    _ Need to resolve the mismatch between keywords and routes.
+        Update KEYWORDS table to drop the channel column, replacing it with a fk to ROUTES. This is _not_ a small change.
+    _ Noticed that the session cache isn't falling back to the database. This was convenient because they would timeout but isn't what we actually want.
+    _ Convert the smallint column used in NODE table to denote the type to be a formal enum/postgres type as we do everywhere else. We know now that Postgres store the enum as integers but it handles constraints without needing an additional CHECK (which we currently lack.)
+    _ Test with different Scripts.
+    _ Validations for the content and order of nodes/messages.
+        If we want to be really thorough we may need to keep the graph representation. The intermediate messages that only point to the next node are tied to the response selected (randomly) by ChttrClient which isn't representable by a flat list/set.
+    _ Add Blaster to the integration tests.
+    _ Fix operator logic that handles cases where the incoming user doesn't already exist.
+        The requirement of a non-null claimantId will require some code changes. Need to know the customer_id that owns the route being used.
+    _ Using TamboUI, create an interactive terminal application (see notebook for design). Possibly experiment with Gemini to generate the code for this?
+
+Interesting approach to non-vibe coding from Thinking Elixir podcast:
+    https://youtu.be/w9TZnnbUZB8?t=1915
