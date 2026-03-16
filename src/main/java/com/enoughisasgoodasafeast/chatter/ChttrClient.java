@@ -123,20 +123,25 @@ public class ChttrClient {
     }
 
     private void generateRunReport() {
-        // Docker Compose appears to shut off logging output before this gets called.
-        // Inspecting the container's logs directly, however, proves that is getting called.
         LOG.info("Generating run report...");
         LOG.info("ChttrClient final stats:");
-        int numActors=0, numRcvd=0, numSent=0;
+        int numActors=0, numRcvd=0, numSent=0, numErrs=0;
         for (var entry : userActors.entrySet()) {
             ++numActors;
             final var phoneNumber = entry.getKey();
             final var userActor = entry.getValue();
             numRcvd += userActor.rcvdMessages.size();
             numSent += userActor.sentMessages.size();
-            LOG.info("UserActor: {}\n\t rcvd: {} \n\t sent: {}", phoneNumber, userActor.rcvdMessages, userActor.sentMessages);
+            numErrs += userActor.unexpectedMessages.size() + userActor.sendMessageFailures.size();
+            LOG.info("UserActor {}:\n\ttotal rcv: {}\n\ttotal dlv: {}\n\t seq errs: {}\n\t dlv errs: {}",
+                    phoneNumber,
+                    userActor.rcvdMessages.size(),
+                    userActor.sentMessages.size(),
+                    (userActor.unexpectedMessages.isEmpty()) ? "None" : userActor.unexpectedMessages.toString(),
+                    (userActor.sendMessageFailures.isEmpty()) ? "None" : userActor.sendMessageFailures.toString()
+            );
         }
-        LOG.info("Totals: numActors: {}, numRcvd: {}, numSent: {}", numActors, numRcvd, numSent);
+        LOG.info("Totals: numActors: {}, total rcv: {}, total dlv: {}, total errs: {}", numActors, numRcvd, numSent, numErrs);
 
     }
 
@@ -155,22 +160,20 @@ public class ChttrClient {
         Event event = actor.currentEvent();
         if(event==null) { // A null event here indicates we've completed execution of all the ChttrScripts for actor.
             LOG.info("Ignoring incoming message '{}'", mtIncomingMessage.text());
-            if(complete()) {
-                LOG.info("All actors have completed.");
-                generateRunReport();
-            }
-
+            complete();
             return;
         }
 
-        if (!MT.equals(event.type())) { // FIXME This doesn't really make sense. Operator can only send MTs.
-            LOG.error("Script expects event of type, {}", event.type().toString());
-            return;
-        }
+        //if (!MT.equals(event.type())) { // FIXME This doesn't really make sense. Operator can only send MTs.
+        //    LOG.error("Script expects event of type, {}", event.type().toString());
+        //    complete();
+        //    return;
+        //}
 
         if (!event.message().equals(mtIncomingMessage.text())) {
             actor.recordUnexpectedMessage(mtIncomingMessage.text());
             LOG.error("Script expects '{}' but got '{}'", event.message(), mtIncomingMessage.text());
+            complete();
             return;
         } else {
             LOG.info("User {} matched expected message: {}", actor.getPhoneNumber(), event.message());
@@ -178,9 +181,10 @@ public class ChttrClient {
 
         // Advance to the next event.
         Event nextEvent = actor.nextEvent();
+
         // If it's an MO we should send it as a response, continuing until we find a non-MO event.
         while(nextEvent != null && nextEvent.type() == MO) {
-            // Create MO message. 'from' is the user (phoneNumber), 'to' is the sender of the MT message.
+            // Create MO message: 'from' is the user (phoneNumber), 'to' is the sender of the MT message.
             Message moResponseMessage = new Message(MO, mtIncomingMessage.platform(), phoneNumber, mtIncomingMessage.from(),
                     nextEvent.message());
             boolean success = moHandler.handle(moResponseMessage);
@@ -191,13 +195,17 @@ public class ChttrClient {
             } else {
                 actor.recordSendMessageFail(moResponseMessage.text());
                 LOG.error("Response fail from {} with {}", phoneNumber, moResponseMessage);
+                complete();
                 return;
             }
         }
     }
 
-    private boolean complete() {
-        return 0 == countdown.decrementAndGet();
+    private void complete() {
+        if (0 == countdown.decrementAndGet()) {
+            LOG.info("All actors have completed.");
+            generateRunReport();
+        }
     }
 
 //    private @Nullable Exchange findMatchingExchange(@NonNull UserActor actor, @NonNull String text) {
