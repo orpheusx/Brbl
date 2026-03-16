@@ -173,7 +173,7 @@ public class Blaster {
             // NB: A missing Session may simply indicate that they've been inactive for a while and the Session row was deleted in a prior cleanup.
             final var isInactiveOrExpired = (null == lastSessionActivity) || isSessionExpired(lastSessionActivity);
             if (!isInactiveOrExpired) {
-                // session is considered active so don't clobber it out-of-the-blue.
+                // Session is considered active so don't clobber it out-of-the-blue.
                 report.usersWithActiveSessionsSkipped.add(campaignUser.user().groupId());
                 LOG.info("Skip: Active session: {}", campaignUser.user().groupId()); // FIXME make this .debug
                 continue;

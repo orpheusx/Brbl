@@ -335,9 +335,15 @@ public class PostgresPersistenceManager implements PersistenceManager {
     public static final String SELECT_ALL_KEYWORDS =
             """
                     SELECT
-                        k.id, k.pattern, k.platform, k.script_id, k.channel
+                        k.id, k.pattern, r.platform, k.script_id, r.channel
                     FROM
-                        brbl_logic.keywords k ;
+                        brbl_logic.keywords k
+                    INNER JOIN
+                        brbl_logic.routes r
+                            ON r.id = k.route_id
+                    WHERE
+                        r.status = 'ACTIVE'::brbl_logic.route_status
+                    ;
                     """;
 
     public static final String SELECT_ALL_ROUTES_WITH_STATUS =

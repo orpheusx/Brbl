@@ -97,6 +97,9 @@ public class TestingPersistenceManager implements PersistenceManager {
     @Override
     public @Nullable Session loadSession(UUID id) throws PersistenceManagerException {
         final byte[] bytes = savedSessions.get(id);
+        if(bytes == null) {
+            throw new PersistenceManagerException("No session data for id: " + id.toString());
+        }
         try {
             return SessionSerde.bytesToSession(bytes);
         } catch (IOException | ClassNotFoundException e) {

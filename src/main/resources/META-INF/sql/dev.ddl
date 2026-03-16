@@ -558,7 +558,7 @@ COMMENT ON TABLE brbl_logic.default_scripts IS 'For each unique route (platform 
 -- Grr, annoyingly, using the \d+ command for psql won't display the table comment. Only the column comments.
 
 
---> Introducing a new word to describe the combination of a Platform and a platform-specific identifier (e.g. a 10DLC, a WhatsApp number, a FB Messenger id)
+--> Introducing a new word to describe the combination of a Platform and a platform-specific identifier (e.g. a 10DLC, a WhatsApp number, an FB Messenger id)
 --> Channel remains the generic term for the latter rather than overloading the (out-of-date) meaning of a shortcode.
 --> Every Route must be "owned" by a Customer and must define a script (node_id) that will be used to respond to unsolicited MOs when no keyword matches are found.
 CREATE TYPE brbl_logic.route_status AS ENUM ('REQUESTED', 'APPROVED', 'ACTIVE', 'SUSPENDED', 'LAPSED');
@@ -734,7 +734,7 @@ LEFT JOIN profiles p
 WHERE pc.id='eb7aa81a-b314-420c-8f3d-df4755faa9bb';
 
 
--- Add a state to push_campaign to track whether its ready to be scheduled?
+-- Add a state to push_campaign to track whether it's ready to be scheduled?
 
 -- Something to have a think about sooner than later:
 --   How do we correlate the push campaign message and the MT log that's generated for it?
@@ -756,3 +756,73 @@ CREATE TABLE user_group (
 CREATE TEMP TABLE profiles (LIKE profiles);
 
 CREATE TEMP TABLE routes_t (LIKE profiles);
+
+
+-- -------------------------- Refining the relationship between keywords and routes -----------------------------------
+-- Given:
+
+-- brbl_db_dev=> \d keywords
+--                       Table "brbl_logic.keywords"
+--    Column   |           Type           | Collation | Nullable | Default
+-- ------------+--------------------------+-----------+----------+---------
+--  id         | uuid                     |           | not null |
+--  pattern    | character varying(128)   |           |          |
+--  platform   | public.platform          |           | not null |
+--  script_id  | uuid                     |           | not null |
+--  channel    | character varying(15)    |           | not null |
+--  created_at | timestamp with time zone |           | not null | now()
+--  updated_at | timestamp with time zone |           | not null | now()
+-- Indexes:
+--     "keywords_pkey" PRIMARY KEY, btree (id)
+--     "unique_platform_shortcode_pattern" UNIQUE CONSTRAINT, btree (platform, channel, pattern)
+-- Foreign-key constraints:
+--     "fk_script_id" FOREIGN KEY (script_id) REFERENCES nodes(id)
+
+-- brbl_db_dev=> \d routes
+--                                    Table "brbl_logic.routes"
+--      Column      |           Type           | Collation | Nullable |          Default
+-- -----------------+--------------------------+-----------+----------+---------------------------
+--  id              | uuid                     |           | not null |
+--  platform        | public.platform          |           | not null |
+--  channel         | character varying(15)    |           | not null |
+--  default_node_id | uuid                     |           | not null |
+--  customer_id     | uuid                     |           | not null |
+--  status          | route_status             |           | not null | 'REQUESTED'::route_status
+--  created_at      | timestamp with time zone |           | not null |
+--  updated_at      | timestamp with time zone |           | not null |
+-- Indexes:
+--     "routes_t_pkey" PRIMARY KEY, btree (id)
+--     "unique_routes_t_platform_channel" UNIQUE CONSTRAINT, btree (platform, channel)
+-- Foreign-key constraints:
+--     "fk_routes_nodes_id" FOREIGN KEY (default_node_id) REFERENCES nodes(id)
+--     "fk_routes_t_customers_id" FOREIGN KEY (customer_id) REFERENCES customers(id)
+-- Referenced by:
+--     TABLE "push_campaigns" CONSTRAINT "fk_campaign_routes_id" FOREIGN KEY (route_id) REFERENCES routes(id)
+
+-- The channel column should be dropped from keywords and replaced with a foreign key to routes.id.
+-- As a consequence, the unique_platform_shortcode_pattern constraint should be dropped.
+-- Assuming the keywords will be looked up in conjunction with routes we don't need the platform column at all.
+
+-- Currently only one route matches up with a keyword:
+select k.id,r.id,substr(k.pattern,0,24),k.channel,r.channel,r.platform,r.status from routes r join keywords k on k.channel=r.channel;
+--id                  |                  id                  | substr |   channel    |   channel    | platform | status
+----------------------------------------+--------------------------------------+--------+--------------+--------------+----------+--------
+-- 019c9123-744b-79f5-9a3b-b7e51d552fe3 | 715e3d1d-6a64-41cd-a3fa-fe12567b38ef | foo    | 119839196677 | 119839196677 | S        | ACTIVE
+
+-- Changes applied 2026/03/13
+ALTER TABLE brbl_logic.keywords
+    ADD COLUMN route_id UUID brbl_logic.routes ,
+    ADD CONSTRAINT fk_keywords_routes_id FOREIGN KEY(route_id) REFERENCES brbl_logic.routes(id)
+    ON DELETE CASCADE;
+UPDATE keywords SET route_id = '715e3d1d-6a64-41cd-a3fa-fe12567b38ef' where id = '019c9123-744b-79f5-9a3b-b7e51d552fe3';
+ALTER TABLE brbl_logic.keywords
+    DROP CONSTRAINT unique_platform_shortcode_pattern,
+    DROP COLUMN channel,
+    DROP COLUMN platform
+;
+ALTER TABLE brbl_logic.keywords
+    ADD CONSTRAINT unique_pattern_route_id UNIQUE (route_id, pattern),
+    ALTER COLUMN route_id SET NOT NULL,
+    ALTER COLUMN pattern SET NOT NULL
+;
+

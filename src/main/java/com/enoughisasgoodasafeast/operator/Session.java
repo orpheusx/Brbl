@@ -214,9 +214,10 @@ public class Session implements ScriptContext, Serializable {
     /*
      * Hook up the elements that can't be (de)serialized.
      */
-    public void postDeserialize(QueueProducer producer, PersistenceManager persistenceManager) {
+    public Session postDeserialize(QueueProducer producer, PersistenceManager persistenceManager) {
         this.producer = producer;
         this.persistenceManager = persistenceManager;
+        return this;
     }
 
     @Override

@@ -77,6 +77,9 @@ public interface PersistenceManager {
         public PersistenceManagerException(String message, Exception e) {
             super(message, e);
         }
+
+        public PersistenceManagerException(String s) {
+        }
     }
 
 

@@ -4,6 +4,7 @@ import com.enoughisasgoodasafeast.*;
 import com.enoughisasgoodasafeast.operator.PersistenceManager.PersistenceManagerException;
 import com.github.benmanes.caffeine.cache.Caffeine;
 import com.github.benmanes.caffeine.cache.LoadingCache;
+import io.jenetics.util.NanoClock;
 import org.jspecify.annotations.NonNull;
 import org.jspecify.annotations.Nullable;
 import org.slf4j.Logger;
@@ -118,25 +119,23 @@ public class Operator implements MessageProcessor {
      * Execute the node in the context of the given session and message.
      * Most simply this can result in the creation of one more MTMessages.
      * There are a variety of possible side effects including:
-     *  - inserts/updates to the database
-     *  - schedule new messages
-     *  - invoke an ML operation
-     * @param node the node being evaluated
-     * @param session the user context
+     * - inserts/updates to the database
+     * - schedule new messages
+     * - invoke an ML operation
+     *
+     * @param node      the node being evaluated
+     * @param session   the user context
      * @param moMessage the MO message being processed
      * @return the next Node in the conversation (or null if the conversation is complete?)
      * FIXME Maybe instead of null we return a symbolic Node that indicates the end of Node?
      */
     private Node evaluate(Node node, ScriptContext session, Message moMessage) throws IOException {
         Node nextNode = switch (node.type()) {
-            case EchoWithPrefix ->
-                    SimpleTestScript.SimpleEchoResponseScript.evaluate(session, moMessage);
+            case EchoWithPrefix -> SimpleTestScript.SimpleEchoResponseScript.evaluate(session, moMessage);
 
-            case ReverseText ->
-                    SimpleTestScript.ReverseTextResponseScript.evaluate(session, moMessage);
+            case ReverseText -> SimpleTestScript.ReverseTextResponseScript.evaluate(session, moMessage);
 
-            case HelloGoodbye ->
-                    SimpleTestScript.HelloGoodbyeResponseScript.evaluate(session, moMessage);
+            case HelloGoodbye -> SimpleTestScript.HelloGoodbyeResponseScript.evaluate(session, moMessage);
 
             // NOTE: practically speaking there's no reason to have any of the above. Most Scripts should
             // be of the following types or more specific versions thereof. Simple chaining conversations can
@@ -144,21 +143,18 @@ public class Operator implements MessageProcessor {
             case PresentMulti ->
                     Multi.Present.evaluate(session, moMessage); // Could re-use SendMessage logic while keeping the type difference
 
-            case ProcessMulti ->
-                    Multi.Process.evaluate(session, moMessage);
+            case ProcessMulti -> Multi.Process.evaluate(session, moMessage);
 
             // TODO Behaves like a SendMessage albeit with the expectation that there's no "next" node so we could replace impl
-            case EndOfChat -> SendMessage.evaluate(session, moMessage); //EndOfSession? 'request' that the session be cleared?
+            case EndOfChat ->
+                    SendMessage.evaluate(session, moMessage); //EndOfSession? 'request' that the session be cleared?
 
             // TODO Even easier to replace with SendMessage.evaluate(). The Editor will always pair it with an Input.Process
-            case RequestInput ->
-                    Input.Request.evaluate(session, moMessage);
+            case RequestInput -> Input.Request.evaluate(session, moMessage);
 
-            case ProcessInput ->
-                    Input.Process.evaluate(session, moMessage);
+            case ProcessInput -> Input.Process.evaluate(session, moMessage);
 
-            case SendMessage ->
-                    SendMessage.evaluate(session, moMessage);
+            case SendMessage -> SendMessage.evaluate(session, moMessage);
 
         };
 
@@ -189,42 +185,53 @@ public class Operator implements MessageProcessor {
      * @param sessionKey the key associated with the new Session
      * @return the newly constructed Session added to the sessionCache
      * @throws InterruptedException if any of the involved threads was interrupted
-     * @throws ExecutionException if any of the subtasks failed
+     * @throws ExecutionException   if any of the subtasks failed
      */
     private Session createSession(SessionKey sessionKey) throws InterruptedException, ExecutionException {
+        var start = NanoClock.utcInstant();
         try (var scope = new StructuredTaskScope.ShutdownOnFailure()) {
-
-            Supplier<User> user = scope.fork(() -> userCache.get(sessionKey));
+            Supplier<User> suppliedUser = scope.fork(()  -> userCache.get(sessionKey));
             Supplier<Node> keywordScript = scope.fork(() -> scriptByKeywordCache.get(KeywordCacheKey.newKey(sessionKey)));
             Supplier<Node> defaultScript = scope.fork(() ->
                     findDefaultScriptByRoute(sessionKey));
 
             scope.join().throwIfFailed(); // TODO consider using joinUntil() to enforce a collective timeout.
 
-            // Check if the Session table has a record for this User. We can skip this check if the User is brand new.
-            //            final Instant instant = user.get().platformCreationTimes().get(sessionKey.platform());
-            //            final Session session = ((PostgresPersistenceManager) persistenceManager).getSession(user.get().id());
-            //            if (session != null) {
-            //                // Replace the script property with the one we just fetched.
-            //
-            //                return session;
-            //            } else {
-//            persistenceManager.getActiveRoutes()loadSession
-
-            Node script = (keywordScript.get() != null) ? keywordScript.get() : defaultScript.get();
-            if (script == null) {
+            var script = (keywordScript.get() != null) ? keywordScript.get() : defaultScript.get();
+            if (script == null) { // For now let's fail hard on configuration errors even if the user has an existing session that could be used instead.
                 LOG.error("No script available by keyword match or route default. Configuration error in route table for {}:{} ",
                         sessionKey.platform(), sessionKey.to());
                 return null;
-            } else {
-                LOG.info("Creating new Session for user {}", user.get().groupId());
-                return new Session(
-                        randomUUID(),
-                        script,
-                        user.get(),
-                        getQueueProducer(sessionKey.platform()),
-                        persistenceManager);
             }
+
+            Session session = null;
+
+            var user = suppliedUser.get();
+
+            // Check if the Session table has a record for this User. We can skip this check if we just created the User
+            final Instant userCreatedAt = user.platformCreationTimes().get(sessionKey.platform());
+            try {
+                if (start.isBefore(userCreatedAt) || start.equals(userCreatedAt) || null == (session = persistenceManager.loadSession(user.groupId()))) {
+                    // brand new
+                    LOG.info("Creating new Session for user {}", suppliedUser.get().groupId());
+                    return new Session(
+                            randomUUID(),
+                            script,
+                            user,
+                            getQueueProducer(sessionKey.platform()),
+                            persistenceManager);
+                }
+            } catch (PersistenceManagerException e) {
+                LOG.error("Error loading session for user {}", user.groupId(), e);
+                return null;
+            }
+
+            // If we had an existing session, check if we were awaiting input. If not replace the script with one we looked up above.
+            if (!session.currentNode.type().equals(NodeType.ProcessMulti)) { // add other input expecting node types here.
+                session.currentNode = script;
+            }
+
+            return session.postDeserialize(getQueueProducer(sessionKey.platform()), persistenceManager);
         }
     }
 
@@ -233,7 +240,7 @@ public class Operator implements MessageProcessor {
         return queueProducer;
     }
 
-    User findOrCreateUser(SessionKey sessionKey) {
+    @NonNull User findOrCreateUser(SessionKey sessionKey) {
         User user = persistenceManager.getUser(sessionKey);
         if (user == null) {
             LOG.info("User not found.");
@@ -269,6 +276,7 @@ public class Operator implements MessageProcessor {
 
     /**
      * Load the single entry into the map of Keywords
+     *
      * @return a map of all the regex pattern-to-Keyword entries in the system.
      */
     private Map<Pattern, Keyword> loadAllKeywords(String theOneAndOnlyKey) {
@@ -277,7 +285,8 @@ public class Operator implements MessageProcessor {
 
     /**
      * Evaluate the incoming shortcode and keyword against the registered regex patterns.
-     * @param keywordCacheKey that contains the keyword and short/long code or platform specific program identifier.
+     *
+     * @param keywordCacheKey that contains the keyword and short/long code or platform specific program identxifier.
      * @return the connected Node assigned to the keyword.
      */
     private Node findScriptForKeywordChannel(KeywordCacheKey keywordCacheKey) {

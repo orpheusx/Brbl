@@ -155,7 +155,7 @@ public class ChttrClient {
         Event event = actor.currentEvent();
         if(event==null) { // A null event here indicates we've completed execution of all the ChttrScripts for actor.
             LOG.info("Ignoring incoming message '{}'", mtIncomingMessage.text());
-            if( 0 == countdown.decrementAndGet()) {
+            if(complete()) {
                 LOG.info("All actors have completed.");
                 generateRunReport();
             }
@@ -173,7 +173,7 @@ public class ChttrClient {
             LOG.error("Script expects '{}' but got '{}'", event.message(), mtIncomingMessage.text());
             return;
         } else {
-            LOG.info("Matched expected message: {}", event.message());
+            LOG.info("User {} matched expected message: {}", actor.getPhoneNumber(), event.message());
         }
 
         // Advance to the next event.
@@ -194,6 +194,10 @@ public class ChttrClient {
                 return;
             }
         }
+    }
+
+    private boolean complete() {
+        return 0 == countdown.decrementAndGet();
     }
 
 //    private @Nullable Exchange findMatchingExchange(@NonNull UserActor actor, @NonNull String text) {

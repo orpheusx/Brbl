@@ -3877,7 +3877,7 @@ TODO
         Update KEYWORDS table to drop the channel column, replacing it with a fk to ROUTES. This is _not_ a small change.
     _ Noticed that the session cache isn't falling back to the database. This was convenient because they would timeout but isn't what we actually want.
     _ Convert the smallint column used in NODE table to denote the type to be a formal enum/postgres type as we do everywhere else. We know now that Postgres store the enum as integers but it handles constraints without needing an additional CHECK (which we currently lack.)
-    _ Test with different Scripts.
+    _ Test with additional, different Scripts.
     _ Validations for the content and order of nodes/messages.
         If we want to be really thorough we may need to keep the graph representation. The intermediate messages that only point to the next node are tied to the response selected (randomly) by ChttrClient which isn't representable by a flat list/set.
     _ Add Blaster to the integration tests.
@@ -3887,3 +3887,102 @@ TODO
 
 Interesting approach to non-vibe coding from Thinking Elixir podcast:
     https://youtu.be/w9TZnnbUZB8?t=1915
+
+
+===== 2026-03-11 ====
+
+Start of the cupcake quiz: Node id: abfd6e3c-b71d-445d-87fd-89744e66e5d1
+
+Need to add support in ChttrClient to handle free-form responses.
+
+===== 2026-03-13 ====
+TODO
+    X Need to resolve the mismatch between keywords and routes.
+        Update KEYWORDS table to drop the channel column, replacing it with a fk to ROUTES. This may _not_ be a small change.
+    _ Noticed that the session cache isn't falling back to the database. This was convenient because they would timeout but isn't what we actually want.
+    _ Convert the smallint column used in NODE table to denote the type to be a formal enum/postgres type as we do everywhere else. We know now that Postgres store the enum as integers but it handles constraints without needing an additional CHECK (which we currently lack.)
+    _ Test with additional, different Scripts.
+    _ Validations for the content and order of nodes/messages.
+        If we want to be really thorough we may need to keep the graph representation. The intermediate messages that only point to the next node are tied to the response selected (randomly) by ChttrClient which isn't representable by a flat list/set.
+    _ Add Blaster to the integration tests.
+    _ Fix operator logic that handles cases where the incoming user doesn't already exist.
+        The requirement of a non-null claimantId will require some code changes. Need to know the customer_id that owns the route being used.
+    _ Using TamboUI, create an interactive terminal application (see notebook for design). Possibly experiment with Gemini to generate the code for this?
+
+
+See dev.ddl for details on schema changes that make the relationship between the keywords and routes tables normalized.
+
+===== 2026-03-14 ====
+
+More cleanup work: session cache reading from database. We had planned for this as a backup to an expired cache entry. Trying to work when it would be a benefit to actually do it, however. Certainly in the testing scenario its another impediment to simple testing of the script forking path execution. (Probably will need a special API that clears session cache entries.) There's a similar question when we're doing a push campaign.
+Might we load the session and check to see if its current node is expecting input (e.g. is of type, ProcessMulti?)
+If it is we could load the new script and insert a special Node that creates a branching point that manages the user's choice to continue the older conversation or clear it and start the new one.
+The other case that comes to mind here...if the Operator crashed or had to be restarted we could rely on the database to restore the lost sessions. Storing the script id
+
+Added loadSession to Operator.createSession() method.
+All the unit/related integration tests pass but the U.S. number (16469315348) appears to be blocking test completion, in part, I think, because its db loaded session data is pointed at the ColorQuizProcess node.
+
+To start with a clean state I deleted all rows from sessions table and restarted the docker compose.
+Everything runs fine the first time.
+The second run the second UserActor (16469315348) gets wedged because the initial message doesn't match the expected message and we don't decrement the countdown.
+    We should probably decrement the countdown because other wise the run will never complete.
+The second run the first UserActor (522482859616) triggers the creation of a new User and new Session so it doesn't suffer the same fate.
+    I think the problem may be due to the current dataset; there are 20 rows in USERS/AMALGAMS with the same platform_id (522482859616) and platform_code but different group_id and user_id.
+    Doesn't make sense to dig into debugging until the data is correct so time to clean it up...
+
+===== 2026-03-15 ====
+
+SELECT
+    a.group_id,
+    u.platform_id,
+    a.user_id,
+    a.customer_id,
+    u.created_at
+FROM
+    amalgams a
+JOIN
+    users u
+        ON u.id=a.user_id
+ORDER BY
+    u.platform_id, a.claimant_id, a.group_id
+;
+
+returns 274 rows including
+
+group_id                             | platform_id  |               user_id                |             claimant_id              |             customer_id
+-------------------------------------|--------------|--------------------------------------|--------------------------------------|-------------------------------------
+34237d77-b16e-9251-c90f-1a99b7b7555b | 522482859616 | 8204383c-7a73-7ba0-1c8c-83be6886ef90 | 6fdea5b7-9b44-e235-4044-a7984e9a0ca0 | 6fdea5b7-9b44-e235-4044-a7984e9a0ca0
+
+This is the User (522482859616) with the earliest created_at. It was generated by the BrblUsersGenerator program; the year of its creation is 2020 which means it wasn't created by hand.
+
+DELETE FROM sessions;
+DELETE FROM amalgams a WHERE id IN (SELECT * FROM users WHERE platform_id = '522482859616' AND id <> '8204383c-7a73-7ba0-1c8c-83be6886ef90');
+DELETE FROM users WHERE platform_id = '522482859616' AND id <> '8204383c-7a73-7ba0-1c8c-83be6886ef90';
+
+
+
+
+===== 2026-03-16 ====
+
+NB:
+Server stack recommendation: Debian 13, ZFS Mirrored Root, Incus 6.18 and ZFSBootMenu
+
+Hmm...
+https://github.com/garrytan/gstack : "Use Garry Tan's exact Claude Code setup: 6 opinionated tools that serve as CEO, Eng Manager, Release Manager and QA Engineer"
+
+TODO
+    X Noticed that the session cache isn't falling back to the database. This was convenient because they would timeout but isn't what we actually want.
+    _ Convert the smallint column used in NODE table to denote the type to be a formal enum/postgres type as we do everywhere else. We know now that Postgres store the enum as integers but it handles constraints without needing an additional CHECK (which we currently lack.)
+    _ Test with additional, different Scripts.
+    _ Validations for the content and order of nodes/messages.
+        If we want to be really thorough we may need to keep the graph representation. The intermediate messages that only point to the next node are tied to the response selected (randomly) by ChttrClient which isn't representable by a flat list/set.
+    _ Add Blaster to the integration tests.
+    _ Fix operator logic that handles cases where the incoming user doesn't already exist.
+        The requirement of a non-null claimantId will require some code changes. Need to know the customer_id that owns the route being used.
+    _ Using TamboUI, create an interactive terminal application (see notebook for design). Possibly experiment with Gemini to generate the code for this?
+
+
+We now try to load the Session from database if the cache misses.
+Thought a bit about cases where we might want to override this behavior but didn't arrive at any concrete plans. Some use case context will be helpful and we're not there just yet...
+
+We def will need a way to clear the cache/table for a given group_id if only for dev/testing purposes. This we need sooner than later.

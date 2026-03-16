@@ -81,6 +81,16 @@ class OperatorPersistenceIntegrationTest {
         assertTrue(createdUser.platformCreationTimes().get(Platform.SMS).isAfter(before));
     }
 
+    @Test
+    void findAllKeywords() {
+        var keywordsByPattern = pm.getKeywords();
+        assertFalse(keywordsByPattern.isEmpty()); // FIXME assumes system under test is in a known state.
+        assertEquals(8, keywordsByPattern.size()); // keywords w/out route_id value are excluded
+        assertTrue(keywordsByPattern.entrySet().stream().anyMatch(entry -> {
+            return entry.getValue().wordPattern().equals("foo"); // FIXME also not a great test
+        }));
+    }
+
     static String randomUserNumber() {
         Random gen = new Random();
         return "1" + gen.nextInt(9) +
