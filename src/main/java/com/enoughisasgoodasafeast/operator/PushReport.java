@@ -24,7 +24,7 @@ public class PushReport {
     boolean campaignNotFound;
 
     UUID customerId;
-    boolean customerStatusNotActive;
+    boolean companyStatusNotActive;
 
     UUID scriptId;
 
@@ -65,9 +65,9 @@ public class PushReport {
         end();
     }
 
-    public void campaignStatusNotActiveFail(CustomerStatus status) {
-        this.customerStatusNotActive = true;
-        LOG.error("Customer ({}) owning campaign is not ACTIVE ({}.) Skipping execution.",
+    public void campaignStatusNotActiveFail(CompanyStatus status) {
+        this.companyStatusNotActive = true;
+        LOG.error("Company ({}) owning campaign is not ACTIVE ({}.) Skipping execution.",
                 this.customerId, status.name());
         end();
     }
@@ -118,7 +118,7 @@ public class PushReport {
      * To be clear, "complete" does not imply "successful."
      */
     public boolean isPushComplete() {
-        return campaignNotFound || campaignUsersEmpty || customerStatusNotActive || nodeNotFound || scriptStatusNotProd || routeStatusNotActive;
+        return campaignNotFound || campaignUsersEmpty || companyStatusNotActive || nodeNotFound || scriptStatusNotProd || routeStatusNotActive;
     }
 
     public void end() {
@@ -133,7 +133,7 @@ public class PushReport {
                 .add("endPush=" + endPush)
                 .add("campaignNotFound=" + campaignNotFound)
                 .add("customerId=" + customerId)
-                .add("customerStatusNotActive=" + customerStatusNotActive)
+                .add("customerStatusNotActive=" + companyStatusNotActive)
                 .add("scriptId=" + scriptId)
                 .add("nodeNotFound=" + nodeNotFound)
                 .add("scriptStatusNotProd=" + scriptStatusNotProd)

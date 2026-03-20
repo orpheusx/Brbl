@@ -3965,7 +3965,7 @@ DELETE FROM users WHERE platform_id = '522482859616' AND id <> '8204383c-7a73-7b
 ===== 2026-03-16 ====
 
 NB:
-Server stack recommendation: Debian 13, ZFS Mirrored Root, Incus 6.18 and ZFSBootMenu
+Server stack recommendation: Debian 13 with ZFS Mirrored Root, Incus 6.18 and ZFSBootMenu
 
 Hmm...
 https://github.com/garrytan/gstack : "Use Garry Tan's exact Claude Code setup: 6 opinionated tools that serve as CEO, Eng Manager, Release Manager and QA Engineer"
@@ -3974,11 +3974,10 @@ TODO
     X Noticed that the session cache isn't falling back to the database. This was convenient because they would timeout but isn't what we actually want.
     _ Convert the smallint column used in NODE table to denote the type to be a formal enum/postgres type as we do everywhere else. We know now that Postgres store the enum as integers but it handles constraints without needing an additional CHECK (which we currently lack.)
     _ Test with additional, different Scripts.
-    _ Validations for the content and order of nodes/messages.
-        If we want to be really thorough we may need to keep the graph representation. The intermediate messages that only point to the next node are tied to the response selected (randomly) by ChttrClient which isn't representable by a flat list/set.
+    X Validations for the content and order of nodes/messages. Test run halts on first error and the report displays the position where it occurred.
     _ Add Blaster to the integration tests.
-    _ Fix operator logic that handles cases where the incoming user doesn't already exist.
-        The requirement of a non-null claimantId will require some code changes. Need to know the customer_id that owns the route being used.
+    X NOT A BUG - Fix operator logic that handles cases where the incoming user doesn't already exist.
+        ALREADY FIXED - The requirement of a non-null claimantId will require some code changes. Need to know the customer_id that owns the route being used.
     _ Using TamboUI, create an interactive terminal application (see notebook for design). Possibly experiment with Gemini to generate the code for this?
 
 
@@ -3986,3 +3985,187 @@ We now try to load the Session from database if the cache misses.
 Thought a bit about cases where we might want to override this behavior but didn't arrive at any concrete plans. Some use case context will be helpful and we're not there just yet...
 
 We def will need a way to clear the cache/table for a given group_id if only for dev/testing purposes. This we need sooner than later.
+
+Updated the "report" generated when test runs complete to include the script/event indexes and message text where a sequencing error (the MT input was not what the path expected) or delivery error (the ChttrClient failed to send an MO) occurred. This will halt execution for the given UserActor; we won't attempt to continue despite the error because that is the way of madness.
+
+What about the TO DO item above that claims we're not creating new users on first MO?
+Channel 119839196677
+Format: from:to:text
+// Send message from a new number (verified 17817209468 doesn't appear in users table.)
+curl -d '17817209468:119839196677:foo' http://192.168.1.155:4242/smsEnqueue
+
+Creates the new user/amalgam/session as desired. So, no, this is not an issue.
+The response to the foo keyword can't be delivered because there's no gateway setup to receive it but that's expected.
+
+Digging into our current data set...
+brbl_db_dev=> SELECT platform_id, COUNT(platform_id)
+FROM users
+GROUP BY platform_id
+HAVING COUNT(platform_id) > 1;
+ platform_id  | count
+--------------+-------
+ 527342546084 |     3
+ 19833043680  |     2
+ 523056506642 |     3
+ 524729631078 |     3
+ 523054526814 |     3
+ 524724253768 |     3
+ 16469315348  |     2
+ 522038932241 |     3
+ 524727800441 |     3
+ 523053202631 |     3
+ 523056721500 |     3
+ 522482859616 |     2
+ 529839121806 |     3
+ 523054579791 |     3
+ 522742513719 |     3
+(15 rows)
+
+Then, selecting a subset of these from amalgams
+
+brbl_db_dev=> select group_id, claimant_id, customer_id from amalgams where user_id in (
+    '019ca051-e92b-7e11-8c90-6016119b66dc',
+    'acaf439e-9f0e-100b-7117-598b1465b49f',
+    '019c9fbf-5d83-73c5-83b3-b2a1171346f6'
+);
+               group_id               |             claimant_id              | customer_id
+--------------------------------------+--------------------------------------+-------------
+ 244785c3-3f93-bb59-3dfe-49cf100c442a | 6fdea5b7-9b44-e235-4044-a7984e9a0ca0 |
+ 019c9fbf-5d83-7357-9d81-a24bdcdb2e34 | 8285d1a8-2dc0-6752-3758-0076224bc839 |
+ 019ca051-e92b-7be0-b4bb-2b87c6da9983 | 8285d1a8-2dc0-6752-3758-0076224bc839 |
+(3 rows)
+
+The same user (platform_code + platform_id) should not exist for the same claimant_id.
+The latter column is new-ish. Possible I goofed it up when I backfilled the column.
+More troubling...why should the claimant_id point at a customer. We can have multiple customers for a given company.
+Which is the one that "owns" the amalgam row? Shouldn't claimant_id point to companies?
+I think this design was reflecting the idea that not everyone who's paying for the service is representable as a company.
+Half a dozen other tables also reference the customer as it were the owning entity.
+
+SELECT
+    p.given_name, p.surname,
+    c.email, c.company_id, c.status
+FROM
+    profiles p
+JOIN amalgams a
+    on a.profile_id = p.id
+JOIN customers c
+    on c.id=a.customer_id
+WHERE
+    a.claimant_id = a.customer_id;
+
+ given_name | surname  |          email          |              company_id              | status
+------------+----------+-------------------------+--------------------------------------+--------
+ Kathline   | Medhurst | lino.corwin@hotmail.com | 8410c710-6986-e350-d3d5-28428a640e5f | ACTIVE
+ Many       | Pouros   | luciano.bogan@yahoo.com | 8410c710-6986-e350-d3d5-28428a640e5f | ACTIVE
+(2 rows)
+
+As late breaking a change as it would be...it seems like we should really bite the bullet here
+ and change the ref for all these tables from customers.id to companies.id.
+
+ If a customer is just a person their company name could simply be their name.
+ Also need to consider brbl_admin's use of these tables which are involved in sign-ups.
+ Actually I think this is where this design originated; in the sign-up process.
+
+ Maybe it's not so crazy as this? The only issue is in distinguishing which customer row owner of the routes, amalgams
+ when there are more than one with the same company. Maybe just add a boolean column to customers that denotes the primary member that does the owning?
+ If that particular customer isn't actually the owner or for some other reason changes then we have to update all the places that refer to them.
+ Ugh.
+
+ Will decide tomorrow morning.
+
+===== 2026-03-18 ====
+
+THE GREAT SCHEMA REFACTOR OF 2026!!!
+
+First step, create a new, full back up of the cluster:
+    pg_dumpall > backups/full_cluster_backup_20260318_01.sql
+
+Also created a dump of just the database (schema and data, without users/roles):
+    pg_dump -d brbl_db_dev -Fc -Z6 > backups/db_only_backup_compressed_20260318_01.sql
+
+And a schema only dump:
+    pg_dump -d brbl_db_dev --schema-only > ddl/brbl_db_schema_20260318.ddl
+
+In addition to resolving the customers/companies issue also look at pointing tables at Scripts instead of directly to Nodes...
+And per our previous To Do list: "Convert the smallint column used in NODE table to denote the type to be a formal enum/postgres type as we do everywhere else. We know now that Postgres store the enum as integers but it handles constraints without needing an additional CHECK (which we currently lack.)"
+
+Munged from the \d output for Customers table:
+
+    TABLE "amalgams"            CONSTRAINT "fk_customers_claimant_id"               FOREIGN KEY (claimant_id) REFERENCES customers(id)
+
+        Change claimant_id foreign key to COMPANIES.
+        This also eliminates the dual FKs customers.id used to express the different meanings ("is a" customer vs. "is claimed by" a customer)
+
+        Queries that use/reference the effected columns:
+            USER_PROFILE_BY_PLATFORM_ID_ROUTE includes this snippet:
+                "INNER JOIN brbl_logic.routes r
+                    ON r.customer_id = a.claimant_id"
+            Consequently there'll need to be a value to resolve the join condition; created 5 additional entries in COMPANIES.
+            SELECT_ALL_ROUTES_WITH_STATUS
+                1. add "company_id" to select columns.
+                2. getActiveRoutes() method include company_id
+                3. update the constructor for Route class.
+                4. Operator.findCustomerIdByRoute < findOrCreateUser < userCache. Logic should be okay since the field still represents the claimant.
+
+-- ---------------------------------------------------------------
+    TABLE "routes"              CONSTRAINT "fk_routes_t_customers_id"               FOREIGN KEY (customer_id) REFERENCES customers(id)
+        Anything else beyond what we need for amalgams above?
+
+        Also, re-point routes.script_id --> Scripts.id ?
+
+-- -------------------------------------------------------------
+    TABLE "scripts"             CONSTRAINT "fk_customers_t_id"                      FOREIGN KEY (customer_id) REFERENCES customers(id)
+
+        Make some of the same changes to scripts.
+
+-- ---------------------------------------------------------------
+    TABLE "push_campaigns"      CONSTRAINT "fk_campaign_customers_id"               FOREIGN KEY (customer_id) REFERENCES customers(id)
+
+        SELECT_PUSH_CAMPAIGN_USERS_BY_DELIVERY_STATUS
+            -> remove the customer_id selection in the CTE and, in the main select get the customer_id from the amalgams table.
+        The dataset we're using in BlasterIntegrationTest
+
+
+-- ---------------------------------------------------------------
+    TABLE "customer_addresses"  CONSTRAINT "customer_addresses_customer_id_fkey"    FOREIGN KEY (customer_id) REFERENCES customers(id)
+        This one probably shouldn't change (at least not until we get back to the Admin project.
+
+Reference dev.ddl for 2026-02-18
+
+
+===== 2026-03-19 ====
+
+...Continuing the Great Refactor...
+
+We've not followed the same scheme for foreign keys. Ideally it should be:
+    fk_<tableName>_<referencedTableName>
+It doesn't need the name of the column since the column is named <referencedTableName>_id
+
+Updating amalgams data:
+
+Made changes to amalgams table, added company_id, dropped claimant_id then renamed company_id to claimant_id. I used the proportions of existing customer mappings to assign company mappings.
+Modified the scripts and
+
+TODO
+    X make sure we have at least 1 Customer for each Company.
+
+
+===== 2026-03-20 ====
+
+TODO while updating BlasterIntegrationTest.pushCampaignLifecycle I noticed that we don't update the campaign_users.delivered column; it remains PENDING.
+    Probably need to revisit the enum values in light of the somewhat complicated send process. e.g. not sure INFLIGHT makes practical sense. When is a push message considered SENT given that Blaster only goes as far as queueing it.
+
+Various
+
+Review data for BlasterIntegrationTest. We really need to improve our datagen story. This is one of the campaign users being targeted.
+
+    brbl_db_dev=> select count(*) from amalgams where claimant_id='019d0375-cc81-703d-970a-e5ca9bae9fe2';
+    -[ RECORD 1 ]
+    count | 50
+
+...but the owner of that user doesn't have any push campaigns:
+    brbl_db_dev=> select count(*) from push_campaigns where company_id='019d0375-cc81-703d-970a-e5ca9bae9fe2';
+    -[ RECORD 1 ]
+    count | 0
+

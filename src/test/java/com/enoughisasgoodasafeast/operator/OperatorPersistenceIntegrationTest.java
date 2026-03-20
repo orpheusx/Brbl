@@ -37,7 +37,7 @@ class OperatorPersistenceIntegrationTest {
     @Test
     void findUserExisting() {
         final User user = pm.getUser(
-                new SessionKey(Platform.SMS, "18484242144", "119839196677", "random keyword")
+                new SessionKey(Platform.SMS, "18484242144", "113052034955", "random keyword")
         );
         assertNotNull(user);
         assertNotNull(user.platformProfiles());
@@ -57,10 +57,11 @@ class OperatorPersistenceIntegrationTest {
     }
 
     @Test
-    void findCustomerIdByRoute() {
-        final UUID customerId = op.findCustomerIdByRoute(sk);
-        assertNotNull(customerId);
-        assertEquals("8285d1a8-2dc0-6752-3758-0076224bc839", customerId.toString());
+    void findOwningCompanyIdByRouteChannel() {
+        // sk: SessionKey(Platform.SMS, "13052020804", "119839196677", "keyword");
+        final UUID companyId = op.findOwningCompanyIdByRouteChannel(sk);
+        assertNotNull(companyId);
+        assertEquals("8410c710-6986-e350-d3d5-28428a640e5f", companyId.toString());
     }
 
     @Test

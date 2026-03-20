@@ -12,8 +12,8 @@ import java.util.UUID;
  * @param scriptId the id of the script that will be used for the execution of the campaign.
  * @param createdAt when the push campaign definition was first created.
  * @param updatedAt when the latest change was made to an incomplete push campaign.
- * @param completedAt timestamp set only after we've completed sending the script's initial message. Null until then.
- * @param customerStatus the enum denoting the status of the identified Customer.
+ * @param completedAt timestamp set only after we've sent the script's initial message. Null until then.
+ * @param companyStatus the state of the 'owning' Company.
  * @param scriptStatus the status of the Script referenced by the campaign.
  * @param nodeId the id of the starting Node referenced by the Script.
  * @param channel the channel for the produced MTs.
@@ -27,7 +27,7 @@ public record PushCampaign(UUID id,
                            Instant createdAt,
                            Instant updatedAt,
                            Instant completedAt,
-                           CustomerStatus customerStatus,
+                           CompanyStatus companyStatus,
                            ScriptStatus scriptStatus,
                            UUID nodeId,
                            String channel,

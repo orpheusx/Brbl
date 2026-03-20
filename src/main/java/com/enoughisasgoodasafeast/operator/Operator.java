@@ -251,7 +251,7 @@ public class Operator implements MessageProcessor {
                     Map.of(sessionKey.platform(), utcInstant()),      // platformCreationTimes
                     deriveCountryCodeFromId(sessionKey.from()),       // countryCode
                     defaultLanguageSet(sessionKey.from(), sessionKey.to()), //  languages
-                    findCustomerIdByRoute(sessionKey),                // claimant_id
+                    findOwningCompanyIdByRouteChannel(sessionKey),                // claimant_id
                     null,                                             // customer_id
                     defaultNickNameMap(),                             // platformNicknames
                     null, // FIXME need to do a consistency check on how we handle these Platform-keyed maps. How should we represent an absence of values?
@@ -354,16 +354,17 @@ public class Operator implements MessageProcessor {
         //}
         Route route = findRoute(sessionKey);
         if (route != null) {
-            return scriptCache.get(route.default_node_id());
+            return scriptCache.get(route.defaultNodeId());
         } else {
             return null;
         }
     }
 
-    @Nullable UUID findCustomerIdByRoute(SessionKey sessionKey) {
+
+    @Nullable UUID findOwningCompanyIdByRouteChannel(SessionKey sessionKey) {
         Route route = findRoute(sessionKey);
         if (route != null) {
-            return route.customer_id();
+            return route.companyId();
         } else {
             return null;
         }

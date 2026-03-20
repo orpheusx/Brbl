@@ -207,11 +207,11 @@ public class BrblUsersGenerator {
 
     private DataSet generate(int numUsers, int numProfiles, int numCustomers, int numCompanies) {
 
-        int numAmalgams = numUsers;
+        final int numAmalgams = numUsers;
 
-        //assert numCompanies <= numCustomers;
-        //assert numProfiles <= numUsers;
-        //assert numProfiles >= numCustomers;
+        assert numCompanies <= numCustomers;
+        assert numProfiles <= numUsers;
+        assert numProfiles >= numCustomers;
 
         final var userRowsList = new ArrayList<UserRow>(numUsers);
         final var profileRowsList = new ArrayList<ProfileRow>(numProfiles);
@@ -220,7 +220,6 @@ public class BrblUsersGenerator {
         final var amalgamRowsList = new ArrayList<AmalgamRow>(numAmalgams);
 
         // Users
-        // Users
         for (int i = 0; i < numUsers; i++) {
             var userRow = randomUser();
             userRow.userStatus = UserStatus.IN;
@@ -228,13 +227,6 @@ public class BrblUsersGenerator {
                 userRow.userStatus = UserStatus.OUT;
             }
             userRow.platformId = adjustPlatformId(userRow.countryCode, userRow.platformId);
-            // if(userRow.countryCode == CountryCode.MX) {
-            //     userRow.platformId = "52" + userRow.platformId;
-            // } else {
-            //     userRow.platformId = "1" + userRow.platformId;
-            // }
-
-            //System.out.println(userRow);
             userRowsList.add(userRow);
         }
 

@@ -23,8 +23,8 @@ class PushReportTest {
 
         // Scenario 3: customerStatusNotActive
         PushReport report3 = new PushReport(dummyCampaignId);
-        report3.campaignStatusNotActiveFail(CustomerStatus.SUSPENDED);
-        assertTrue(report3.isPushComplete(), "isPushComplete should be true when customerStatusNotActive is set.");
+        report3.campaignStatusNotActiveFail(CompanyStatus.SUSPENDED);
+        assertTrue(report3.isPushComplete(), "isPushComplete should be true when campaignStatusNotActiveFail is set.");
 
         // Scenario 4: scriptStatusNotProd
         PushReport report4 = new PushReport(dummyCampaignId);
@@ -44,7 +44,7 @@ class PushReportTest {
         // Scenario 7: All failures (just to be thorough)
         PushReport report7 = new PushReport(dummyCampaignId);
         report7.campaignNotFoundFail();
-        report7.campaignStatusNotActiveFail(CustomerStatus.LAPSED);
+        report7.campaignStatusNotActiveFail(CompanyStatus.LAPSED);
         report7.scriptStatusNotProdFail(ScriptStatus.INACTIVE);
         report7.routeStatusNotActive(RouteStatus.REQUESTED);
         report7.campaignUsersEmptyFail();

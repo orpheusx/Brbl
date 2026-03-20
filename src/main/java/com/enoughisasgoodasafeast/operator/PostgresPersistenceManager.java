@@ -107,43 +107,6 @@ public class PostgresPersistenceManager implements PersistenceManager {
 //                    	)
 //                    """; // FIXME figure out if a LATERAL JOIN might replace the sub-select part of this query
 
-//    public static final String USER_PROFILE_BY_PLATFORM_ID_ROUTE =
-//            """
-//                    SELECT
-//                        u.id,
-//                    	u.group_id,
-//                    	u.platform_id,
-//                    	u.platform_code,
-//                    	u.country,
-//                    	u.language,
-//                    	u.nickname,
-//                    	u.created_at,
-//                    	p.surname,
-//                    	p.given_name,
-//                    	p.other_languages as profile_other_languages,
-//                    	p.created_at as profile_created_at,
-//                    	p.updated_at as profile_updated_at,
-//                    	r.customer_id as owner_customer_id
-//                    FROM
-//                        brbl_users.users u
-//                    LEFT JOIN
-//                        brbl_users.profiles p
-//                        ON u.group_id = p.group_id
-//                    LEFT JOIN
-//                        brbl_logic.routes r
-//                        ON r.customer_id = u.customer_id
-//                    WHERE
-//                        r.platform = ?::public.platform
-//                        AND
-//                        r.channel = ?
-//                        AND
-//                    	u.group_id = (
-//                    		SELECT group_id
-//                    		FROM brbl_users.users
-//                    		WHERE platform_id = ?
-//                    	)
-//                    """;
-
     // Unclear why we're not including users.updated_at
     public static final String USER_PROFILE_BY_PLATFORM_ID_ROUTE = """
             SELECT
@@ -160,8 +123,8 @@ public class PostgresPersistenceManager implements PersistenceManager {
                 p.other_languages as profile_other_languages,
                 p.created_at      as profile_created_at,
                 p.updated_at      as profile_updated_at,
-                a.customer_id     as owner_customer_id,
-                a.claimant_id     as owner_claimant_id,
+                a.customer_id     as opt_customer_id,
+                a.claimant_id,
                 u.status
             FROM
                 brbl_users.amalgams a
@@ -179,7 +142,7 @@ public class PostgresPersistenceManager implements PersistenceManager {
                 INNER JOIN brbl_users.users u
                     ON a.user_id = u.id
                 INNER JOIN brbl_logic.routes r
-                    ON r.customer_id = a.claimant_id
+                    ON r.company_id = a.claimant_id
                 WHERE
                     u.platform_code = ?::public.platform
                     AND r.channel = ?
@@ -353,7 +316,7 @@ public class PostgresPersistenceManager implements PersistenceManager {
                         r.platform,
                         r.channel,
                         r.default_node_id,
-                        r.customer_id,
+                        r.company_id,
                         r.status,
                         r.created_at,
                         r.updated_at
@@ -367,8 +330,7 @@ public class PostgresPersistenceManager implements PersistenceManager {
             """
                     WITH campaign_group_ids AS (
                         SELECT
-                            DISTINCT a.group_id,
-                            pc.customer_id
+                            DISTINCT a.group_id
                         FROM
                             brbl_users.amalgams a
                         INNER JOIN
@@ -398,7 +360,7 @@ public class PostgresPersistenceManager implements PersistenceManager {
                         p.surname,
                         p.created_at AS profile_created_at,
                         p.updated_at AS profile_updated_at,
-                        cgi.customer_id,
+                        a.customer_id,
                         a.claimant_id,
                         s.updated_at AS session_updated_at,
                         cu_outer.delivered
@@ -432,7 +394,7 @@ public class PostgresPersistenceManager implements PersistenceManager {
             """
                     SELECT
                         pc.id,
-                        pc.customer_id,
+                        pc.company_id,
                         pc.description,
                         pc.script_id,
                         pc.created_at,
@@ -447,7 +409,7 @@ public class PostgresPersistenceManager implements PersistenceManager {
                     FROM
                         brbl_logic.push_campaigns pc
                     INNER JOIN
-                        brbl_users.customers c ON c.id = pc.customer_id
+                        brbl_users.companies c ON c.id = pc.company_id
                     INNER JOIN
                         brbl_logic.scripts s ON s.id = pc.script_id
                     INNER JOIN
@@ -462,7 +424,7 @@ public class PostgresPersistenceManager implements PersistenceManager {
             """
                     INSERT INTO brbl_logic.push_campaigns (
                         id,
-                        customer_id,
+                        company_id,
                         description, 
                         script_id, 
                         created_at, updated_at, completed_at, 
@@ -798,8 +760,8 @@ public class PostgresPersistenceManager implements PersistenceManager {
                 String channel = rs.getString(3);
                 // r.default_node_id
                 UUID nodeId = (UUID) rs.getObject(4);
-                // r.customer_id
-                UUID customerId = (UUID) rs.getObject(5);
+                // r.company_id
+                UUID companyId = (UUID) rs.getObject(5);
                 // r.status
                 RouteStatus status = RouteStatus.valueOf(rs.getString(6)); //(RouteStatus) rs.getObject(6);
                 // r.created_at
@@ -807,7 +769,7 @@ public class PostgresPersistenceManager implements PersistenceManager {
                 // r.updated_at
                 Instant updatedAt = rs.getTimestamp(8).toInstant();
 
-                Route route = new Route(id, platform, channel, nodeId, customerId, status, createdAt, updatedAt);
+                Route route = new Route(id, platform, channel, nodeId, companyId, status, createdAt, updatedAt);
                 allRoutes.add(route);
             }
             if (allRoutes.isEmpty()) {
@@ -1009,6 +971,8 @@ public class PostgresPersistenceManager implements PersistenceManager {
             ps.setString(2, sessionKey.to()); // channel
             ps.setString(3, sessionKey.from()); // platform_id
 
+            LOG.warn(ps.toString());
+
             final ResultSet rs = ps.executeQuery();
 
             UUID groupId = null;
@@ -1075,12 +1039,12 @@ public class PostgresPersistenceManager implements PersistenceManager {
                     platformProfiles.put(platform, new Profile(id, profileSurname, profileGivenName, profileLanguages, profileCreated, profileUpdated));
                 }
 
-                UUID possiblyNullCustomerId = (UUID) rs.getObject("owner_customer_id");
+                UUID possiblyNullCustomerId = (UUID) rs.getObject("opt_customer_id");
                 if (possiblyNullCustomerId != null) {
                     customerId = possiblyNullCustomerId; // signals that the User is also a Customer
                 }
 
-                claimantId = (UUID) rs.getObject("owner_claimant_id");
+                claimantId = (UUID) rs.getObject("claimant_id");
 
                 platformStatus.put(platform, UserStatus.valueOf(rs.getString("status")));
 
@@ -1310,7 +1274,7 @@ public class PostgresPersistenceManager implements PersistenceManager {
 //                    continue;
 //                }
                 if (delivered == null) {
-                    LOG.info("Campaign {}: Skipping user {} with delivery status: {}", campaignId, userId, delivered);
+                    LOG.info("Campaign {}: Skipping user {} with null delivery status.", campaignId, userId);
                     continue;
                 }
 
@@ -1535,8 +1499,8 @@ public class PostgresPersistenceManager implements PersistenceManager {
             Timestamp ts = rs.getTimestamp(7);
             Instant completedAt = (ts != null) ? ts.toInstant() : null;
 
-            // status
-            CustomerStatus customerStatus = CustomerStatus.valueOf(rs.getString(8));
+            // status of push campaign owner
+            CompanyStatus companyStatus = CompanyStatus.valueOf(rs.getString(8));
 
             ScriptStatus scriptStatus = ScriptStatus.valueOf(rs.getString(9));
 
@@ -1555,7 +1519,7 @@ public class PostgresPersistenceManager implements PersistenceManager {
 
             return new PushCampaign(
                     id, customerId, description, scriptId, createdAt, updatedAt, completedAt,
-                    customerStatus, scriptStatus,
+                    companyStatus, scriptStatus,
                     nodeId,
                     channel, platform, routeStatus);
 
@@ -1565,12 +1529,12 @@ public class PostgresPersistenceManager implements PersistenceManager {
         }
     }
 
-    public UUID createPushCampaign(@NonNull UUID customerId,
-                                           String description,
-                                           @NonNull UUID scriptId,
-                                           @NonNull UUID routeId) {
+    public UUID createPushCampaign(@NonNull UUID companyId,
+                                   @Nullable String description,
+                                   @NonNull UUID scriptId,
+                                   @NonNull UUID routeId) {
         try (Connection connection = fetchConnection()) {
-            return createPushCampaign(connection, customerId, description, scriptId, routeId);
+            return createPushCampaign(connection, companyId, description, scriptId, routeId);
         } catch (SQLException e) {
             LOG.error("getPushCampaign: fetchConnection failed", e);
             return null;
@@ -1578,7 +1542,7 @@ public class PostgresPersistenceManager implements PersistenceManager {
     }
 
     private UUID createPushCampaign(Connection connection,
-                                   @NonNull UUID customerId,
+                                   @NonNull UUID companyId,
                                    String description,
                                    @NonNull UUID scriptId,
                                    @NonNull UUID routeId) throws SQLException {
@@ -1588,7 +1552,7 @@ public class PostgresPersistenceManager implements PersistenceManager {
 
         try (PreparedStatement ps = connection.prepareStatement(PUSH_CAMPAIGN_INSERT)) {
             ps.setObject(1, campaignId);
-            ps.setObject(2, customerId);
+            ps.setObject(2, companyId);
             ps.setString(3, description);
             ps.setObject(4, scriptId);
             ps.setTimestamp(5, now);

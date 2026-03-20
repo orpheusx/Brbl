@@ -826,3 +826,141 @@ ALTER TABLE brbl_logic.keywords
     ALTER COLUMN pattern SET NOT NULL
 ;
 
+--- 2026-02-18 THE GREAT SCHEMA REFACTOR OF 2026 ---
+
+ALTER TABLE brbl_users.amalgams
+    ADD COLUMN company_id UUID;
+
+UPDATE brbl_users.amalgams
+    SET company_id = CASE
+        -- MediumCorp
+        WHEN claimant_id = '8285d1a8-2dc0-6752-3758-0076224bc839'::UUID
+            THEN '019d0375-fa2c-7e1d-b9a2-14411de8cfc0'::UUID
+        -- MiniCorp
+        WHEN claimant_id = '6fdea5b7-9b44-e235-4044-a7984e9a0ca0'::UUID
+            THEN '019d0375-cc81-703d-970a-e5ca9bae9fe2'::UUID
+        -- MicroCorp
+        WHEN claimant_id = 'a3aa3b12-cc67-d612-0dd2-03cf1b320787'::UUID
+            THEN '8410c710-6986-e350-d3d5-28428a640e5f'::UUID
+    END
+; -- TODO make sure we have at least 1 Customer for each Company.
+
+UPDATE customers SET company_id = '019d0375-cc81-703d-970a-e5ca9bae9fe2'
+  WHERE id = 'a3aa3b12-cc67-d612-0dd2-03cf1b320787';
+UPDATE customers SET company_id = '019d0375-fa2c-7e1d-b9a2-14411de8cfc0'
+WHERE id = '6fdea5b7-9b44-e235-4044-a7984e9a0ca0';
+
+-- Given all the work we're doing we should also ...
+ALTER TABLE brbl_users.customers
+    ALTER COLUMN company_id SET NOT NULL;
+
+-- likewise...
+ALTER TABLE brbl_users.amalgams
+    ALTER COLUMN company_id SET NOT NULL;
+
+ALTER TABLE brbl_users.amalgams
+    DROP CONSTRAINT fk_customers_claimant_id,
+    DROP COLUMN claimant_id;
+
+ALTER TABLE brbl_users.amalgams
+    ADD CONSTRAINT fk_amalgams_claimant_companies
+        FOREIGN KEY(claimant_id)
+        REFERENCES brbl_users.companies(id);
+
+-- While we're at it, rename the other fk's in amalgam:
+-- Apparently, we can't do this in a single statement so...
+ALTER TABLE brbl_users.amalgams
+    RENAME CONSTRAINT fk_users_t_customer_id TO fk_amalgams_customers;
+ALTER TABLE brbl_users.amalgams
+    RENAME CONSTRAINT fk_users_t_profile_id TO fk_amalgams_profiles;
+ALTER TABLE brbl_users.amalgams
+    RENAME CONSTRAINT fk_users_t_user_id TO fk_amalgams_users;
+
+-- Make updates to routes
+ALTER TABLE brbl_logic.routes
+    ADD COLUMN company_id UUID
+;
+ALTER TABLE brbl_logic.routes
+    ADD CONSTRAINT fk_routes_companies
+        FOREIGN KEY (company_id) REFERENCES brbl_users.companies(id)
+;
+-- Use the customer mappings to determine how to assign routes.company_id
+UPDATE routes
+    SET company_id = '019d0375-cc81-703d-970a-e5ca9bae9fe2'
+    WHERE customer_id = 'a3aa3b12-cc67-d612-0dd2-03cf1b320787';
+
+UPDATE routes
+    SET company_id = '019d0375-fa2c-7e1d-b9a2-14411de8cfc0'
+    WHERE customer_id = '6fdea5b7-9b44-e235-4044-a7984e9a0ca0';
+
+UPDATE routes
+    SET company_id = '8410c710-6986-e350-d3d5-28428a640e5f'
+    WHERE customer_id = '8285d1a8-2dc0-6752-3758-0076224bc839';
+
+
+-- Cleanup routes
+ALTER TABLE brbl_logic.routes
+    DROP COLUMN customer_id
+;
+ALTER TABLE brbl_logic.routes
+    ALTER COLUMN company_id SET NOT NULL
+;
+
+-- Make updates to scripts
+ALTER TABLE brbl_logic.scripts
+    ADD COLUMN company_id UUID
+;
+
+ALTER TABLE brbl_logic.scripts
+    ADD CONSTRAINT fk_scripts_companies
+        FOREIGN KEY (company_id) REFERENCES brbl_users.companies(id)
+;
+-- Update the rows to provide company_id, using the values associated with their customer_id.
+UPDATE scripts
+SET company_id = '019d0375-cc81-703d-970a-e5ca9bae9fe2'
+WHERE customer_id = 'a3aa3b12-cc67-d612-0dd2-03cf1b320787';
+
+UPDATE scripts
+SET company_id = '019d0375-fa2c-7e1d-b9a2-14411de8cfc0'
+WHERE customer_id = '6fdea5b7-9b44-e235-4044-a7984e9a0ca0';
+
+UPDATE scripts
+SET company_id = '8410c710-6986-e350-d3d5-28428a640e5f'
+WHERE customer_id = '8285d1a8-2dc0-6752-3758-0076224bc839';
+
+-- Cleanup...
+ALTER TABLE brbl_logic.scripts
+DROP COLUMN customer_id
+;
+ALTER TABLE brbl_logic.scripts
+    ALTER COLUMN company_id SET NOT NULL
+;
+
+-- Updates to push_campaign
+ALTER TABLE brbl_logic.push_campaigns
+    ADD COLUMN company_id UUID
+;
+
+ALTER TABLE brbl_logic.push_campaigns
+    ADD CONSTRAINT fk_push_campaigns_companies
+        FOREIGN KEY (company_id) REFERENCES brbl_users.companies(id)
+;
+UPDATE brbl_logic.push_campaigns pc
+    SET pc.company_id = '8410c710-6986-e350-d3d5-28428a640e5f'
+    WHERE pc.customer_id = '8285d1a8-2dc0-6752-3758-0076224bc839';
+
+-- Cleanup push_campaigns
+ALTER TABLE brbl_logic.push_campaigns
+DROP COLUMN customer_id
+;
+ALTER TABLE brbl_logic.push_campaigns
+    ALTER COLUMN company_id SET NOT NULL
+;
+
+CREATE TYPE brbl_logic.company_status AS ENUM ('REQUESTED', 'ACTIVE', 'SUSPENDED', 'LAPSED');
+ALTER TABLE brbl_users.companies
+    ADD COLUMN status company_status NOT NULL DEFAULT 'REQUESTED';
+UPDATE companies
+    SET status = 'ACTIVE'
+    WHERE name IN ('MediumCorp', 'MiniCorp', 'MicroCorp');
+

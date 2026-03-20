@@ -19,9 +19,7 @@ import java.time.Instant;
 import java.time.temporal.ChronoUnit;
 import java.util.*;
 import java.util.concurrent.TimeoutException;
-import java.util.stream.Collectors;
 
-import static java.util.stream.Collectors.toList;
 import static org.junit.jupiter.api.Assertions.*;
 
 public class BlasterIntegrationTest {
@@ -34,6 +32,9 @@ public class BlasterIntegrationTest {
 
     final UUID modelCampaignId = UUID.fromString("019bd1ff-c890-7a28-9758-7ce559af5e0b");
     final UUID modelCustomerId = UUID.fromString("8285d1a8-2dc0-6752-3758-0076224bc839");
+    // Corresponding company id for modelCustomerId
+    final UUID modelCompanyId =  UUID.fromString("8410c710-6986-e350-d3d5-28428a640e5f");
+
     final String description = "Created by BlasterIntegrationTest";
     final UUID modelScriptId = UUID.fromString("019c1ee9-49cc-7d59-a430-f050612acd72");
     final UUID nodeId = UUID.fromString("89eddcb8-7fe5-4cd1-b18b-78858f0789fb");
@@ -88,7 +89,7 @@ public class BlasterIntegrationTest {
         assertDoesNotThrow(() -> {
             var testStart = NanoClock.utcInstant();
 
-            var pcId = persistenceManager.createPushCampaign(modelCustomerId, description, modelScriptId, modelRouteId);
+            var pcId = persistenceManager.createPushCampaign(modelCompanyId, description, modelScriptId, modelRouteId);
             LOG.info("Push campaign lifecycle started. New campaignId: {}", pcId);
 
             // Verify campaign creation.
@@ -96,6 +97,7 @@ public class BlasterIntegrationTest {
             assertNotNull(pushCampaign);
             assertEquals(ScriptStatus.PROD, pushCampaign.scriptStatus());
             assertEquals(RouteStatus.ACTIVE, pushCampaign.routeStatus());
+            assertEquals(CompanyStatus.ACTIVE, pushCampaign.companyStatus());
 
             // Create a new user segment with the same set of users as an existing one.
             final boolean ok = persistenceManager.insertCampaignUserSegment(pcId, modelUserIds);
@@ -122,7 +124,7 @@ public class BlasterIntegrationTest {
             assertFalse(pushReport.campaignUsersStatusUpdateFail);
             assertFalse(pushReport.nodeNotFound);
             assertFalse(pushReport.campaignNotFound);
-            assertFalse(pushReport.customerStatusNotActive);
+            assertFalse(pushReport.companyStatusNotActive);
             assertFalse(pushReport.invalidUsersSkipped.isEmpty());
 
             // The EXPECTED_SKIPPED would only be 6 if we properly avoided creating campaign user segments with the more than a single Platform ...
@@ -276,7 +278,7 @@ public class BlasterIntegrationTest {
         final UUID testUserGroupId = UUID.fromString("34237d77-b16e-9251-c90f-1a99b7b7555b"); // and the corresponding group_id in amalgams.
 
         // Create a new push campaign
-        final UUID pcId = persistenceManager.createPushCampaign(modelCustomerId, "testExec_ActiveSessionUsersSkipped", modelScriptId, modelRouteId);
+        final UUID pcId = persistenceManager.createPushCampaign(modelCompanyId, "testExec_ActiveSessionUsersSkipped", modelScriptId, modelRouteId);
         assertNotNull(pcId);
 
         // Add only the test user to the campaign
@@ -323,7 +325,7 @@ public class BlasterIntegrationTest {
     @Test
     void testExec_CampaignUsersEmpty() throws SQLException {
         // Create a push campaign without adding any users to it
-        final UUID pcId = persistenceManager.createPushCampaign(modelCustomerId, "testExec_CampaignUsersEmpty", modelScriptId, modelRouteId);
+        final UUID pcId = persistenceManager.createPushCampaign(modelCompanyId, "testExec_CampaignUsersEmpty", modelScriptId, modelRouteId);
         assertNotNull(pcId);
 
         final var pushReport = blaster.exec(pcId);
@@ -337,7 +339,7 @@ public class BlasterIntegrationTest {
         UUID pcId = null;
         try {
             // Create a push campaign linked to modelRouteId (which is assumed to be ACTIVE initially)
-            pcId = persistenceManager.createPushCampaign(modelCustomerId, "testExec_RouteStatusNotActive", modelScriptId, modelRouteId);
+            pcId = persistenceManager.createPushCampaign(modelCompanyId, "testExec_RouteStatusNotActive", modelScriptId, modelRouteId);
             assertNotNull(pcId);
 
             // Set the route status to INACTIVE
@@ -371,9 +373,9 @@ public class BlasterIntegrationTest {
         }
     }
 
-    private void updateCustomerStatus(UUID customerId, CustomerStatus status) throws SQLException {
+    private void updateCompanyStatus(UUID customerId, CompanyStatus status) throws SQLException {
         try (var connection = persistenceManager.fetchConnection();
-             var ps = connection.prepareStatement("UPDATE brbl_users.customers SET status = ?::brbl_logic.customer_status WHERE id = ?")) {
+             var ps = connection.prepareStatement("UPDATE brbl_users.companies SET status = ?::brbl_logic.company_status WHERE id = ?")) {
             ps.setString(1, status.name());
             ps.setObject(2, customerId);
             ps.executeUpdate();
@@ -381,23 +383,23 @@ public class BlasterIntegrationTest {
     }
 
     @Test
-    void testExec_CustomerStatusNotActive() throws SQLException {
+    void testExec_CompanyStatusNotActive() throws SQLException {
         UUID pcId = null;
         try {
             // Create a push campaign linked to modelCustomerId (which is assumed to be ACTIVE initially)
-            pcId = persistenceManager.createPushCampaign(modelCustomerId, "Inactive Customer Test", modelScriptId, modelRouteId);
+            pcId = persistenceManager.createPushCampaign(modelCompanyId, "Inactive Customer Test", modelScriptId, modelRouteId);
             assertNotNull(pcId);
 
             // Set the customer status to INACTIVE
-            updateCustomerStatus(modelCustomerId, CustomerStatus.SUSPENDED);
+            updateCompanyStatus(modelCompanyId, CompanyStatus.SUSPENDED);
 
             final var pushReport = blaster.exec(pcId);
 
-            assertTrue(pushReport.customerStatusNotActive, "PushReport should indicate customerStatusNotActive.");
-            assertTrue(pushReport.isPushComplete(), "PushReport should be complete when customer is not active.");
+            assertTrue(pushReport.companyStatusNotActive, "PushReport should indicate companyStatusNotActive.");
+            assertTrue(pushReport.isPushComplete(), "PushReport should be complete when Company is not active.");
         } finally {
             // Revert customer status back to ACTIVE for subsequent tests
-            updateCustomerStatus(modelCustomerId, CustomerStatus.ACTIVE);
+            updateCompanyStatus(modelCompanyId, CompanyStatus.ACTIVE);
             // Cleanup the created campaign if necessary. For now, we assume campaigns are transient.
         }
     }

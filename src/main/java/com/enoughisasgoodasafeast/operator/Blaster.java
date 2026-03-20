@@ -98,9 +98,9 @@ public class Blaster {
 
         LOG.info("Fetched: {}", campaign);
 
-        final var customerStatus = campaign.customerStatus();
-        if (!customerStatus.equals(CustomerStatus.ACTIVE)) {
-            report.campaignStatusNotActiveFail(customerStatus);
+        final var companyStatus = campaign.companyStatus();
+        if (!companyStatus.equals(CompanyStatus.ACTIVE)) {
+            report.campaignStatusNotActiveFail(companyStatus);
             return report;
         }
 
