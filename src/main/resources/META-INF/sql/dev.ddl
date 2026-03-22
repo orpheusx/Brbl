@@ -964,3 +964,8 @@ UPDATE companies
     SET status = 'ACTIVE'
     WHERE name IN ('MediumCorp', 'MiniCorp', 'MicroCorp');
 
+--- 2026-02-21 Follow-up tweaks related to THE GREAT SCHEMA REFACTOR OF 2026 ---
+CREATE TYPE brbl_logic.schedule_status AS ENUM ('ACTIVE', 'INACTIVE');
+ALTER TABLE brbl_logic.schedules
+    ADD COLUMN status schedule_status NOT NULL DEFAULT 'INACTIVE';
+

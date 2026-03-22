@@ -390,6 +390,40 @@ public class PostgresPersistenceManager implements PersistenceManager {
                         a.group_id, u.id
                     """;
 
+    /* Try fetching the campaign user list without a CTE. */
+    public static final String SELECT_PUSH_CAMPAIGN_USERS_BY_DELIVERY_STATUS_2 =
+            """
+                    SELECT
+                        a.group_id, a.user_id AS user_id, a.profile_id AS profile_id,
+                        u.country, u.created_at AS user_created_at, u.language, u.nickname, u.platform_code, u.platform_id, u.status,
+                        p.given_name, p.other_languages, p.surname, p.created_at AS profile_created_at, p.updated_at AS profile_updated_at,
+                        a.customer_id, a.claimant_id,
+                        s.updated_at AS session_updated_at,
+                        cu.delivered
+                    FROM
+                        brbl_users.amalgams a
+                    INNER JOIN
+                        brbl_users.users u
+                            ON u.id = a.user_id
+                    LEFT JOIN
+                        brbl_users.profiles p
+                            ON p.id = a.profile_id
+                    LEFT JOIN
+                        brbl_logic.sessions s
+                            ON s.group_id = a.group_id
+                    LEFT JOIN
+                        brbl_logic.campaign_users cu
+                            ON cu.user_id = u.id
+                    INNER JOIN
+                        brbl_logic.push_campaigns pc
+                            ON pc.id = cu.campaign_id
+                    WHERE
+                        pc.id = ?::UUID
+                        AND
+                        cu.delivered = ?::brbl_logic.delivery_status
+                    ORDER BY
+                        a.group_id, u.id
+                    """;
     public static final String SELECT_PUSH_CAMPAIGN =
             """
                     SELECT
@@ -1158,11 +1192,178 @@ public class PostgresPersistenceManager implements PersistenceManager {
 
     public @NonNull Collection<CampaignUser> getPushCampaignUsers(@NonNull UUID campaignId, DeliveryStatus byStatus) {
         try (Connection connection = fetchConnection()) {
-            return getPushCampaignUsers(
+            return getPushCampaignUsers2(
                     connection, campaignId, byStatus);
         } catch (SQLException e) {
-            LOG.error("getUsersForPushCampaign failed", e);
+            LOG.error("getUsersForPushCampaign2 failed", e);
             return new ArrayList<>(0);
+        }
+    }
+
+    @NonNull
+    private Collection<CampaignUser> getPushCampaignUsers2(@NonNull Connection connection, @NonNull UUID campaignId, DeliveryStatus byStatus) throws SQLException {
+        try (PreparedStatement ps = connection.prepareStatement(SELECT_PUSH_CAMPAIGN_USERS_BY_DELIVERY_STATUS_2)) {
+
+            // FIXME campaign_users table references the users.id column instead of amalgams.group_id.
+            //      In retrospect this seems dumb since we need to pull together the complete set of user rows to create the User
+            //      and the campaign row contains the route_id (which gives us the Platform that will get us the correct platform number.
+
+            CampaignUserReport report = new CampaignUserReport();
+
+            ps.setObject(1, campaignId);
+            ps.setObject(2, byStatus, OTHER);
+            LOG.info("getPushCampaignUsers2 query: {}", ps);
+            final ResultSet rs = ps.executeQuery();
+
+            Map<UUID, CampaignUser> campaignUsersByGroupId = new HashMap<>();
+
+            // NB: customer_id and delivered will be null for linked users
+            while (rs.next()) {
+
+                final Map<Platform, UUID> plaformIdMap = new HashMap<>();
+                final Map<Platform, String> plaformNumberMap = new HashMap<>();
+                final Map<Platform, UserStatus> platformStatusMap = new HashMap<>();
+                final Map<Platform, Instant> platformCreationTimesMap = new HashMap<>();
+                final Map<Platform, String> platformNickNames = new HashMap<>();
+                final Map<Platform, Profile> platformProfiles = new HashMap<>();
+                final Set<LanguageCode> languages = new HashSet<>();
+
+                // a.group_id,
+                final UUID groupId = (UUID) rs.getObject("group_id");
+
+                // a.user_id AS user_id,
+                final UUID userId = (UUID) rs.getObject("user_id");
+
+                // a.profile_id AS profile_id,
+                final UUID profileId = (UUID) rs.getObject("profile_id");
+
+                // u.country,
+                final CountryCode country = CountryCode.valueOf(rs.getString("country"));
+
+                // u.created_at,
+                final Instant userCreatedAt = rs.getTimestamp("user_created_at").toInstant();
+
+                // u.language,
+                final LanguageCode languageCode = LanguageCode.valueOf(rs.getString("language"));
+
+                // u.nickname,
+                final String nickName = rs.getString("nickname");
+
+                // u.platform_code,
+                final Platform userPlatform = Platform.byCode(rs.getString("platform_code"));
+
+                // u.platform_id,
+                String platformId = rs.getString("platform_id");
+
+                // u.status,
+                UserStatus userStatus = UserStatus.valueOf(rs.getString("status"));
+
+                // p.given_name (nullable)
+                final String givenName = rs.getString("given_name");
+
+                // p.other_languages (nullable)
+                final String otherLanguages = rs.getString("other_languages");
+
+                // p.surname (nullable)
+                final String surname = rs.getString("surname");
+
+                // p.created_at AS profile_created_at (nullable)
+                final Timestamp pca = rs.getTimestamp("profile_created_at");
+                Instant profileCreatedAt = (pca == null) ? null : pca.toInstant();
+
+                // p.updated_at AS profile_updated_at (nullable)
+                final Timestamp pua = rs.getTimestamp("profile_updated_at");
+                final Instant profileUpdatedAt = (pua == null) ? null : pua.toInstant();
+
+                // cgi.customer_id  // pc_outer.customer_id (nullable)
+                final UUID customerId = (UUID) rs.getObject("customer_id");
+                final UUID claimantId = (UUID) rs.getObject("claimant_id");
+
+                // s.updated_at AS session_updated_at
+                final Timestamp sua = rs.getTimestamp("session_updated_at");
+                final Instant sessionUpdatedAt = (sua == null) ? null : sua.toInstant();
+
+                // FIXME delete this block since we don't use an existing session
+                //final byte[] data = rs.getBytes("session_data");
+                //Session session = (data == null) ? null: bytesToSession(data);
+
+                // cu_outer.delivered
+                DeliveryStatus delivered = null;
+                final var deliveryStatus = rs.getString("delivered");
+                if (deliveryStatus != null) {
+                    delivered = DeliveryStatus.valueOf(deliveryStatus);
+                }
+
+                // FIXME move to beginning of loop and skip the rest if
+                //  both deliveryStatus is wrong and status isn't IN?
+                if (!userStatus.equals(UserStatus.IN)) {
+                    LOG.info("Campaign {}: Skipping user {} with opt-in status: {}", campaignId, userId, userStatus);
+                    report.campaignUserIds.add(userId);
+                }
+
+                // delivered will be null for linked rows that are only present to construct the full User model.
+//                if (delivered != null && !delivered.equals(DeliveryStatus.PENDING)) {
+//                    LOG.info("Campaign {}: Skipping user {} with delivery status: {}", campaignId, userId, delivered);
+//                    continue;
+//                }
+                if (delivered == null) {
+                    LOG.info("Campaign {}: Skipping user {} with null delivery status.", campaignId, userId);
+                    continue;
+                }
+
+                languages.add(languageCode);
+                plaformIdMap.put(userPlatform, userId);
+                plaformNumberMap.put(userPlatform, platformId);
+                platformStatusMap.put(userPlatform, userStatus);
+                platformNickNames.put(userPlatform, nickName);
+                platformCreationTimesMap.put(userPlatform, userCreatedAt);
+
+                if (profileCreatedAt != null) {
+                    platformProfiles.put(userPlatform, new Profile(profileId, surname, givenName, otherLanguages, profileCreatedAt, profileUpdatedAt));
+                }
+
+                final var user = new User(
+                        plaformIdMap,
+                        groupId,
+                        plaformNumberMap,
+                        platformCreationTimesMap,
+                        country.name(),
+                        languages,
+                        claimantId,
+                        customerId,
+                        platformNickNames,
+                        platformProfiles,
+                        platformStatusMap);
+
+                var campaignUser = new CampaignUser(
+                        campaignId,
+                        groupId,
+                        user,
+                        delivered,
+                        sessionUpdatedAt);
+
+                // Using Map's compute method is another way of doing the following. Not sure if it would be better/clearer.
+                final var existingCampaignUser = campaignUsersByGroupId.get(groupId);
+                if (existingCampaignUser != null) {
+                    existingCampaignUser.merge(campaignUser);
+                } else {
+                    campaignUsersByGroupId.put(groupId, campaignUser);
+                }
+
+            }
+
+            //IO.println("Total users processed: " + campaignUsersByGroupId.size());
+            //List<CampaignUser> serializeThis = new ArrayList<>(campaignUsersByGroupId.values());
+            // The output for 14 records is just under 7K. This is less than 140 lines (7,245 bytes or 7,243 chars) of plain text.
+            //File file = new File("FourteenCampaignUsers.ser");
+            //try (FileOutputStream fos = new FileOutputStream(file);
+            //     ObjectOutputStream oos = new ObjectOutputStream(fos)) {
+            //    oos.writeObject(serializeThis);
+            //} catch (IOException e) {
+            //    throw new RuntimeException(e);
+            //}
+
+            return campaignUsersByGroupId.values();
         }
     }
 

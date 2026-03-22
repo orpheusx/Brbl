@@ -228,6 +228,18 @@ public class BlasterIntegrationTest {
                 });
     }
 
+    @Test
+    void getPushCampaignUsers2() throws SQLException {
+        UUID campaignId = UUID.fromString("019cca9f-4cad-7e37-835c-0b950eca2eea");
+        final Collection<CampaignUser> pushCampaignUsers = persistenceManager.getPushCampaignUsers(campaignId, DeliveryStatus.PENDING);
+        assertEquals(20, pushCampaignUsers.size());
+        pushCampaignUsers
+                .forEach(campaignUser -> {
+                    assertEquals(campaignId, campaignUser.campaignId());
+                    assertEquals(DeliveryStatus.PENDING, campaignUser.deliveryStatus());
+                });
+    }
+
     // @Test // Leave inactive until we figure out how to make it repeatable while also meaningful?
     void updateCampaignUsersStatus() {
         assertDoesNotThrow(() -> {

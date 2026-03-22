@@ -3973,7 +3973,7 @@ https://github.com/garrytan/gstack : "Use Garry Tan's exact Claude Code setup: 6
 TODO
     X Noticed that the session cache isn't falling back to the database. This was convenient because they would timeout but isn't what we actually want.
     _ Convert the smallint column used in NODE table to denote the type to be a formal enum/postgres type as we do everywhere else. We know now that Postgres store the enum as integers but it handles constraints without needing an additional CHECK (which we currently lack.)
-    _ Test with additional, different Scripts.
+    _ Test with ChttrClient with additional, different Scripts.
     X Validations for the content and order of nodes/messages. Test run halts on first error and the report displays the position where it occurred.
     _ Add Blaster to the integration tests.
     X NOT A BUG - Fix operator logic that handles cases where the incoming user doesn't already exist.
@@ -4156,16 +4156,53 @@ TODO
 TODO while updating BlasterIntegrationTest.pushCampaignLifecycle I noticed that we don't update the campaign_users.delivered column; it remains PENDING.
     Probably need to revisit the enum values in light of the somewhat complicated send process. e.g. not sure INFLIGHT makes practical sense. When is a push message considered SENT given that Blaster only goes as far as queueing it.
 
-Various
+All tests are now passing so, yay!
 
-Review data for BlasterIntegrationTest. We really need to improve our datagen story. This is one of the campaign users being targeted.
+Issues:
+    X Add status to Schedules.
+        It's just a sketch of a table at the moment (because we haven't picked a job triggering mechanism yet) but it should likely have a status column that track, at least, whether it is active or not.
+    X Remove the CTE from SELECT_PUSH_CAMPAIGN_USERS_BY_DELIVERY_STATUS; it's just making work for ourselves.
+        (HOLD) Add group_id column to campaign_users and populate it.
+            ALTER TABLE campaign_users ADD COLUMN group_id UUID;
+            UPDATE campaign_users SET group_id ...
 
-    brbl_db_dev=> select count(*) from amalgams where claimant_id='019d0375-cc81-703d-970a-e5ca9bae9fe2';
-    -[ RECORD 1 ]
-    count | 50
+        Switch "LEFT JOIN brbl_logic.campaign_users cu ON cu.user_id = u.id" to join instead on a.group_id.
+        Random Thought: do we need to filter out Users that don't include the platform targeted by the push campaign?
+    _ Convert the smallint column used in NODE table to denote the type to be a formal enum/postgres type as we do everywhere else. We know now that Postgres store the enum as integers but it handles constraints without needing an additional CHECK (which we currently lack.)
+    _ Test with ChttrClient with additional, different Scripts.
+    _ Add Blaster to the ChttrClient integration tests.
+    _ Review data for BlasterIntegrationTest.
+        Even with as many constraints as we've defined there are still gaps. For example, this is one of the campaign users being targeted:
+            brbl_db_dev=> select count(*) from amalgams where claimant_id='019d0375-cc81-703d-970a-e5ca9bae9fe2';
+            -[ RECORD 1 ]
+            count | 50
 
-...but the owner of that user doesn't have any push campaigns:
-    brbl_db_dev=> select count(*) from push_campaigns where company_id='019d0375-cc81-703d-970a-e5ca9bae9fe2';
-    -[ RECORD 1 ]
-    count | 0
+        ...but the owner of that user doesn't have any push campaigns:
+            brbl_db_dev=> select count(*) from push_campaigns where company_id='019d0375-cc81-703d-970a-e5ca9bae9fe2';
+            -[ RECORD 1 ]
+            count | 0
 
+        brbl_db_dev=> select a.group_id, u.id, u.platform_code, u.platform_id, a.claimant_id from users u join amalgams a on a.user_id=u.id where u.platform_id = '524727800441';
+                       group_id               |                  id                  | platform_code | platform_id  |             claimant_id
+        --------------------------------------+--------------------------------------+---------------+--------------+--------------------------------------
+         086a7f14-335a-4222-2387-0e225d502cb2 | dcb7ca2f-ecf6-dfc0-f0b3-b8f191f59a23 | S             | 524727800441 | 019d0375-cc81-703d-970a-e5ca9bae9fe2
+         019ca051-e966-784e-9376-79d6575f4bdf | 019ca051-e966-7713-8ca0-87b6d26c57e0 | S             | 524727800441 | 019d0375-fa2c-7e1d-b9a2-14411de8cfc0
+         019c9fbf-5db8-7e8c-bab1-3bbff9e2efe1 | 019c9fbf-5db8-7af9-8966-eb01212fc1c5 | S             | 524727800441 | 019d0375-fa2c-7e1d-b9a2-14411de8cfc0
+
+         The second two rows show two different group_ids for the same user (platform_code+platform_id) owned by the same company.
+
+
+We really need to improve our datagen story. Do this next?
+
+Goals for this rewrite:
+1. Instead of starting with the User and building upwards let's try going top down starting with the Company, then Customer, and so on.
+2. Define a small set of "known" values for each entity. These are designed to be used with unit and/or integration tests.
+3. Generate the rest semi-randomly.
+4. Output as TSV files with headers to be loaded by the COPY command:
+
+    COPY table_name (column1, column2, ...)
+    FROM '/absolute/path/to/your/file.csv'
+    DELIMITER E'\t'
+    CSV HEADER;
+
+===== 2026-03-22 ====
