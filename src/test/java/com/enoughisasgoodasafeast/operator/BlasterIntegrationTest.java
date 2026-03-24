@@ -232,11 +232,17 @@ public class BlasterIntegrationTest {
     void getPushCampaignUsers2() throws SQLException {
         UUID campaignId = UUID.fromString("019cca9f-4cad-7e37-835c-0b950eca2eea");
         final Collection<CampaignUser> pushCampaignUsers = persistenceManager.getPushCampaignUsers(campaignId, DeliveryStatus.PENDING);
+        // FIXME we're expecting 20 CampaignUsers where the nested User have a single Platform;
+        //  It's expected that the Blaster.exec method knows what platform is targeted by the PushCampaign
+        //  (via it's specified Route) and only sends for the matching ones.
+        //  The test data should challenge this more by including Users that
+        //  have multiple platforms.
         assertEquals(20, pushCampaignUsers.size());
         pushCampaignUsers
                 .forEach(campaignUser -> {
                     assertEquals(campaignId, campaignUser.campaignId());
                     assertEquals(DeliveryStatus.PENDING, campaignUser.deliveryStatus());
+                    LOG.info(campaignUser.user().platformNumbers().toString());
                 });
     }
 

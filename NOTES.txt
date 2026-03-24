@@ -4205,4 +4205,61 @@ Goals for this rewrite:
     DELIMITER E'\t'
     CSV HEADER;
 
-===== 2026-03-22 ====
+===== 2026-03-23 ====
+
+-- Clone our tables to test BrblGenerator --
+CREATE TABLE test_users AS TABLE users WITH NO DATA;
+CREATE TABLE test_profiles AS TABLE profiles WITH NO DATA;
+CREATE TABLE test_customers AS TABLE customers WITH NO DATA;
+CREATE TABLE test_amalgams AS TABLE amalgams WITH NO DATA;
+CREATE TABLE test_companies AS TABLE companies WITH NO DATA;
+
+COPY test_companies(id, name, created_at, updated_at, status)
+    FROM '/Users/mark/Development/sndrRcvr/dml/test_companies.tsv'
+    DELIMITER E'\t'
+    CSV HEADER;
+COPY test_users (id,platform_code,platform_id,country,language,nickname,status,created_at,updated_at)
+    FROM '/Users/mark/Development/sndrRcvr/dml/test_users.tsv'
+    DELIMITER E'\t'
+    CSV HEADER;
+COPY test_profiles (id,surname,given_name,other_languages,created_at,updated_at)
+    FROM '/Users/mark/Development/sndrRcvr/dml/test_profiles.tsv'
+    DELIMITER E'\t'
+    CSV HEADER;
+COPY test_customers(id, created_at, updated_at, email, company_id, status)
+    FROM '/Users/mark/Development/sndrRcvr/dml/test_customers.tsv'
+    DELIMITER E'\t'
+    CSV HEADER;
+COPY test_amalgams(group_id, user_id, profile_id, customer_id, created_at, updated_at, claimant_id)
+    FROM '/Users/mark/Development/sndrRcvr/dml/test_amalgams.tsv'
+    DELIMITER E'\t'
+    CSV HEADER;
+
+DELETE FROM test_amalgams ;
+DELETE FROM test_companies;
+DELETE FROM test_users ;
+DELETE FROM test_profiles ;
+DELETE FROM test_customers ;
+
+SELECT COUNT(*) FROM test_amalgams ;
+SELECT COUNT(*) FROM test_companies;
+SELECT COUNT(*) FROM test_users ;
+SELECT COUNT(*) FROM test_profiles ;
+SELECT COUNT(*) FROM test_customers ;
+
+
+===== 2026-03-24 ====
+
+Check that all the elements are connected as expected; the test_* tables don't have any foreign keys set:
+    select a.group_id as group, a.user_id as user, c.name, u.platform_code as code, u.platform_id, p.given_name, p.surname, s.email
+        from test_amalgams a inner join test_companies c on c.id=a.claimant_id inner join test_users u on u.id=a.user_id left join test_profiles p on p.id=a.profile_id left join test_customers s on s.id=a.customer_id
+        order by a.group_id, a.user_id ;
+CONFIRMED!
+
+Now create some repeatedly testable, "bespoke" data.
+
+
+
+So now we need to figure how to fix up the foreign key references from scripts, routes, and push campaigns to companies.
+Likewise from campaign_users to push_campaigns.
+And finally decide if campaign_users

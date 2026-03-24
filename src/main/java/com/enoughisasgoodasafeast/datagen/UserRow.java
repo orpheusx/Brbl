@@ -8,23 +8,29 @@ import com.enoughisasgoodasafeast.operator.CountryCode;
 import com.enoughisasgoodasafeast.operator.LanguageCode;
 import com.enoughisasgoodasafeast.operator.Platform;
 import com.enoughisasgoodasafeast.operator.UserStatus;
+import io.jenetics.util.NanoClock;
 import org.jeasy.random.annotation.Randomizer;
 import org.jeasy.random.randomizers.*;
+
+import static com.enoughisasgoodasafeast.Functions.randomUUID;
+import static io.jenetics.util.NanoClock.*;
 
 /**
  * A class used with EasyRandom to generate records for the USERS table.
  */
 public class UserRow {
-//    id            | uuid
-//    platform_code | public.platform
-//    platform_id   | character varying(36)
-//    customer_id   | uuid
-//    country       | public.country_code
-//    language      | public.language_code
-//    nickname      | character varying(36)
-//    status        | user_status
-//    created_at    | timestamp with time zone
-//    updated_at    | timestamp with time zone
+    //    id            | uuid
+    //    platform_code | public.platform
+    //    platform_id   | character varying(36)
+    //    customer_id   | uuid
+    //    country       | public.country_code
+    //    language      | public.language_code
+    //    nickname      | character varying(36)
+    //    status        | user_status
+    //    created_at    | timestamp with time zone
+    //    updated_at    | timestamp with time zone
+
+    public static final String[] headers = {"id", "platform_code", "platform_id", "country", "language", "nickname", "status", "created_at", "updated_at"};
 
     UUID id;
     Platform platform;
@@ -50,6 +56,7 @@ public class UserRow {
 
     Instant updatedAt;
 
+
     public UserRow(UUID id, Platform platform, String platformId, CountryCode countryCode, LanguageCode languageCode, String nickname, UserStatus userStatus, Instant createdAt, Instant updatedAt) {
         this.id = id;
         this.platform = platform;
@@ -61,6 +68,19 @@ public class UserRow {
         this.createdAt = createdAt;
         this.updatedAt = updatedAt;
     }
+
+    public UserRow with(Platform platform) {
+        return new UserRow(randomUUID(), platform, this.platformId, this.countryCode, this.languageCode, this.nickname, this.userStatus, utcInstant(), utcInstant());
+    }
+
+    public String[] headers() {
+        return headers;
+    }
+
+    public String[] values() {
+        return new String[]{id.toString(), platform.code(), platformId, countryCode.name(), languageCode.name(), nickname, userStatus.name(), createdAt.toString(), updatedAt.toString()};
+    }
+
 
     @Override
     public String toString() {
