@@ -4235,18 +4235,6 @@ COPY test_amalgams(group_id, user_id, profile_id, customer_id, created_at, updat
     DELIMITER E'\t'
     CSV HEADER;
 
-DELETE FROM test_amalgams ;
-DELETE FROM test_companies;
-DELETE FROM test_users ;
-DELETE FROM test_profiles ;
-DELETE FROM test_customers ;
-
-SELECT COUNT(*) FROM test_amalgams ;
-SELECT COUNT(*) FROM test_companies;
-SELECT COUNT(*) FROM test_users ;
-SELECT COUNT(*) FROM test_profiles ;
-SELECT COUNT(*) FROM test_customers ;
-
 
 ===== 2026-03-24 ====
 
@@ -4257,7 +4245,7 @@ Check that all the elements are connected as expected; the test_* tables don't h
 CONFIRMED!
 
 Now create some repeatedly testable, "bespoke" data.
-
+Done
 
 
 So now we need to figure how to fix up the foreign key references from scripts, routes, and push campaigns to companies.

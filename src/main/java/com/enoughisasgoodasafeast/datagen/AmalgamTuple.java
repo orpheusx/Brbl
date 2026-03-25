@@ -12,16 +12,16 @@ import static com.enoughisasgoodasafeast.Functions.randomUUID;
  */
 public record AmalgamTuple(AmalgamRow amalgamRow, UserRow userRow, ProfileRow profileRow, CustomerRow customerRow, CompanyRow companyRow) {
 
-    public AmalgamTuple(UserRow userRow, ProfileRow profileRow, CustomerRow customerRow, CompanyRow companyRow) {
+    public AmalgamTuple(UserRow userRow, ProfileRow profileRow, CustomerRow customerRow, CompanyRow companyRow, String... id) {
         final var ar = new AmalgamRow(
-                randomUUID(),
+                (id != null && id.length > 0) ? UUID.fromString(id[0]) : randomUUID(),
                 userRow.id,
-                (null==profileRow) ? null : profileRow.id,
-                (null==customerRow) ? null : customerRow.id,
+                (null == profileRow) ? null : profileRow.id,
+                (null == customerRow) ? null : customerRow.id,
                 userRow.createdAt,
                 userRow.updatedAt,
                 companyRow.id
-                );
+        );
         this(ar, userRow, profileRow, customerRow, companyRow);
     }
 
