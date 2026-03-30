@@ -8,7 +8,6 @@ import com.enoughisasgoodasafeast.operator.CountryCode;
 import com.enoughisasgoodasafeast.operator.LanguageCode;
 import com.enoughisasgoodasafeast.operator.Platform;
 import com.enoughisasgoodasafeast.operator.UserStatus;
-import io.jenetics.util.NanoClock;
 import org.jeasy.random.annotation.Randomizer;
 import org.jeasy.random.randomizers.*;
 
@@ -69,8 +68,12 @@ public class UserRow {
         this.updatedAt = updatedAt;
     }
 
-    public UserRow with(Platform platform) {
+    public UserRow withIdPlatform(Platform platform) {
         return new UserRow(randomUUID(), platform, this.platformId, this.countryCode, this.languageCode, this.nickname, this.userStatus, utcInstant(), utcInstant());
+    }
+
+    public UserRow withIdPlatform(String uuid, Platform platform) {
+        return new UserRow(UUID.fromString(uuid), platform, platformId, this.countryCode, this.languageCode, this.nickname, this.userStatus, utcInstant(), utcInstant());
     }
 
     public String[] headers() {

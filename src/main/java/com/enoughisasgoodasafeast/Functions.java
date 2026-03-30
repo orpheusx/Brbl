@@ -1,6 +1,8 @@
 package com.enoughisasgoodasafeast;
 
 import com.fasterxml.uuid.impl.TimeBasedEpochRandomGenerator;
+
+import java.io.IO;
 import java.util.Random;
 import java.util.UUID;
 
@@ -11,5 +13,11 @@ public class Functions {
 
     public static UUID randomUUID() {
         return UUID_GENERATOR.generate();
+    }
+
+    static void main() {
+        for (int i = 0; i < 10; i++) {
+            IO.println(randomUUID());
+        }
     }
 }

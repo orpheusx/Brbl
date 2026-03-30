@@ -59,19 +59,29 @@ public class BrblGenerator {
             "019d2055-9235-7c95-8610-1945de2d2910"
     };
 
+    // The five ids here are correlated by index to the elements in knownUserIds
+    // which means that the second half of knownUserIds are unlinked.
+    public static final String[] knownLinkedUserIds = {
+            "019d2553-bdcc-7433-b100-b4fb88d92b0a",
+            "019d2553-bdcc-7abb-8a6e-f607f0045a15",
+            "019d2553-bdcc-7a2a-82d1-5becd6ff7f9d",
+            "019d2553-bdcc-72a1-a01f-596c19c9455c",
+            "019d2553-bdcc-7142-81f2-4539a656bbda"
+    };
+
     // public static final Platform[] knownPlatformsForUser = {SMS, SMS, SMS, SMS, SMS, SMS, SMS, SMS, SMS, SMS};
 
     public static final String[] knownNumbersForUsers = {
-            "17817209450",
-            "17817209451",
-            "17817209452",
+            "14167209458",  // Toronto area code.
+            "526641112222", // A very fake number in Mexico City.
+            "17817209450", // The rest are for U.S.
+            "14157209451", // California
+            "17817209452", // Massachusetts
             "17817209453",
             "17817209454",
-            "17817209455",
+            "19297209455", // NYC
             "17817209456",
             "19787209457",
-            "14167209458",  // Toronto
-            "526641112222", // a very fake number in Mexico City
     };
 
     public static final CountryCode[] knownCountryCodes = {US, US, US, US, US, US, US, US, CA, MX};
@@ -88,7 +98,7 @@ public class BrblGenerator {
     };
 
     // The group_id values for each amalgam.
-    // NB: Must be equal to number knownNumbersForUsers.
+    // NB: Expected to be equal to size of knownNumbersForUsers.
     public static final String[] knownAmalgamIds = {
             "019d2055-9235-7e29-b0de-8903d9f662db",
             "019d2055-9235-7ce6-bfc6-4ccbb9c16a89",
@@ -135,7 +145,7 @@ public class BrblGenerator {
         // assert numUsers > numCustomers && numCustomers > numProfiles;
         assert knownUserIds.length == knownAmalgamIds.length;
 
-        for (int j = 0, k = 0, m = 0; j < numUsers; j++, k++, m++) {
+        for (int j = 0, k = 0, m = 0; j < numUsers; j++, k++, m++) { // Only supporting SMS users, for now.
             var user = newUser(knownUserIds[j], SMS, knownNumbersForUsers[j], IN, knownCountryCodes[j]);
 
             ProfileRow profile = null;
@@ -153,11 +163,11 @@ public class BrblGenerator {
         }
 
         // Add some linked users
-        int numLinkedUsers = 2;
+        int numLinkedUsers = knownLinkedUserIds.length;
         for (int p = 0; p < numLinkedUsers; p++) {
             var tuple = companyAmalgams.amalgamTuples().get(p);
             Platform platform = (SMS == tuple.userRow().platform) ? WAP : SMS;
-            UserRow linkedUser = tuple.userRow().with(platform);
+            UserRow linkedUser = tuple.userRow().withIdPlatform(knownLinkedUserIds[p], platform); // recall that WhatsApp uses the same phone number used for SMS.
             companyAmalgams.addTuple(new AmalgamTuple(tuple.amalgamRow().groupId, linkedUser, company));
         }
 
@@ -213,7 +223,7 @@ public class BrblGenerator {
             for (int p = 0; p < numLinkedUsers; p++) {
                 var tuple = companyAmalgams.amalgamTuples().get(p);
                 Platform platform = (SMS == tuple.userRow().platform) ? WAP : SMS;
-                UserRow linkedUser = tuple.userRow().with(platform);
+                UserRow linkedUser = tuple.userRow().withIdPlatform(platform);
                 companyAmalgams.addTuple(new AmalgamTuple(tuple.amalgamRow().groupId, linkedUser, company));
             }
             generatedData.add(companyAmalgams);
@@ -362,6 +372,10 @@ public class BrblGenerator {
         var generator = new BrblGenerator();
         int minUsers = 10;
         int maxUsers = 40; // FIXME increase to 100
+
+        if (standardCompanyNames.length != standardCompanyStatuses.length) {
+            throw new IllegalStateException("The standardCompanyNames and standardCompanyStatuses arrays must be the same length");
+        }
 
 
         var knownDataList = generator.generateKnown();

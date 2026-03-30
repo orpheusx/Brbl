@@ -4245,9 +4245,82 @@ Check that all the elements are connected as expected; the test_* tables don't h
 CONFIRMED!
 
 Now create some repeatedly testable, "bespoke" data.
-Done
+Done. Output will be written to "known_<tableName>.tsv" while the larger, random data will go to "random_<tableName>.tsv."
 
-
-So now we need to figure how to fix up the foreign key references from scripts, routes, and push campaigns to companies.
+Next, we need to figure how to fix up the foreign key references from scripts, routes, and push campaigns to companies.
 Likewise from campaign_users to push_campaigns.
-And finally decide if campaign_users
+Alternatively, build a
+And finally decide if campaign_users should still point directly to the users table or switch to the group_id column of the amalgams tables.
+Note: in this regard, have a think about the user linking process, specifically how we connect two amalgams after we've recorded traffic for both. Can we show their full history after the linking process is performed?
+
+===== 2026-03-25 ====
+The companies table is referenced by:
+    TABLE "amalgams"        CONSTRAINT "fk_amalgams_claimant_companies" FOREIGN KEY (claimant_id) REFERENCES companies(id)
+    TABLE "customers"       CONSTRAINT "fk_customers_t_company_id"      FOREIGN KEY (company_id) REFERENCES companies(id)
+    TABLE "push_campaigns"  CONSTRAINT "fk_push_campaigns_companies"    FOREIGN KEY (company_id) REFERENCES companies(id)
+    TABLE "routes"          CONSTRAINT "fk_routes_companies"            FOREIGN KEY (company_id) REFERENCES companies(id)
+    TABLE "scripts"         CONSTRAINT "fk_scripts_companies"           FOREIGN KEY (company_id) REFERENCES companies(id)
+
+We have only 3 distinct company_ids are being used amalgams, customers, routes, scripts:
+     019d0375-cc81-703d-970a-e5ca9bae9fe2 "MiniCorp"
+     019d0375-fa2c-7e1d-b9a2-14411de8cfc0 "MediumCorp"
+     8410c710-6986-e350-d3d5-28428a640e5f "MicroCorp"
+
+Only 1 is used in push_campaigns:
+     8410c710-6986-e350-d3d5-28428a640e5f "MicroCorp"
+
+The script->node relations look good even though many could be improved. This pair doesn't make sense and both parts should be deleted.
+               node_id                |              script_id               |     text
+ b74c667d-5c38-4e30-829a-7b6b5092db48 | cd97acb7-b721-46fe-83ff-d9b88e210775 | Question
+
+The sole edge and route referencing this Node can also be deleted...DONE.
+
+The bulk of our scripts consist of a single Node with a sole Edge (one with no dst value.) Not much of a conversation though most provide a decent start at one.
+The one starting with "What is your favorite color?" is fully fleshed out.
+
+===== 2026-03-26 ====
+
+Migrating data to avoid mucking up existing brbl_logic->brbl_users relationships completely...
+
+Renamed existing companies to end in _OLD
+Renamed existing users' nicknames to start with "old_"
+Renamed existing profiles' surnames to start with "old_"
+Renamed existing customer' email to start with "old_"
+
+LOAD the known_*.tsv and random_*.tsv files into their tables.
+
+If we're going to generate our brbl_logic data as well then we may as well keep all the data pointing at the older brbl_user rows.
+
+Claim: We should move all the datagen classes into test where they won't be included in the uber jar and we can separate all the known UUIDs into a constants file where other tests can reference them.
+Issue: Intellij won't easily run main methods of classes in the src/test directory.
+
+
+===== 2026-03-29 ====
+Working on data generation for nodes and edges for the last two days.
+
+Goals:
+1) Output that's loadable via TSV files imported via the client /copy command by brbl_admin user.
+2) Identifiers that are easily referenceable by unit/integration tests as well as other bits of data generation code.
+3) Produces custom brbl_users data that is known (per previous goal) as well as randomized data with prescribed/constrained properties.
+4) (Relatively) easy to update, add to, or expand. For node/edge relationships, it must be easier to write/maintain/understand than just writing the code directly.
+
+The poorly named ScriptBuilder is a start at fulfilling goal #4.
+To make it easier to create new collections of nodes/edges subclass ScriptBuilder to replace the constant arrays? Or separate those arrays into a shared class where named sets of constants could be added?
+ScriptBuilder
+NB: Once we have the node about the largest ocean in the db, we need to try it out with the ScriptInterpreterTest's findAllPathsInDirectedGraphComplex method. Why? Because if the user guesses the wrong entry the edge takes them back to the src node. This is a kind of cycle we've not run before.
+
+===== 2026-03-30 ====
+
+Been thinking of a good, self-contained project to really give Gemini a go. Something I can describe to it in Plan mode and have it do all/most of the work in a separate git repo:
+    A simple, interactive chat client; a combination http client/server that runs as a CLI. Nothing fancier than that initially. Using Quarkus or Helidon? And implementing the terminal interface using TamboUI.
+NB:
+    Learn some nifty Intellij shortcuts:
+        - Quickly activating column mode: Double tap Option, holding it down on the second tap then arrow up or down to add cursors in column mode.
+        - Holding option+Shift and then clicking will place additional cursors.
+        - Cmd+g will select the next instance of the word the cursor is currently in. Keep typing Cmd+g to select additional instances.
+        - Control+Command+g will select all instances in the current file.
+        - Shift+Cmd+v brings up the clipboard history. Type enter to paste the current selection.
+        - Opt+uparrow to select the current block. Continuing to type uparrow expands the selection to the next logical block.
+        - Cmd+c selects an entire line.
+
+
