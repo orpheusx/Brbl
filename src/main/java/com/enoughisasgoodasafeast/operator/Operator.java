@@ -13,10 +13,7 @@ import org.slf4j.LoggerFactory;
 import java.io.IOException;
 import java.time.Instant;
 import java.util.*;
-import java.util.concurrent.ExecutionException;
-import java.util.concurrent.StructuredTaskScope;
-import java.util.concurrent.TimeUnit;
-import java.util.concurrent.TimeoutException;
+import java.util.concurrent.*;
 import java.util.function.Supplier;
 import java.util.regex.Pattern;
 
@@ -28,13 +25,16 @@ public class Operator implements MessageProcessor {
 
     private static final Logger LOG = LoggerFactory.getLogger(Operator.class);
 
-    private static final int EXPECTED_INPUT_COUNT = 1;
+    //private static final int EXPECTED_INPUT_COUNT = 1;
 
     public static final String ALL = "ALL";
 
+    // TODO replace with a mechanism that check the country code and returns a set appropriate for that country.
+    public static final Set<LanguageCode> DEFAULT_LANGUAGE_CODE_SET = Set.of(LanguageCode.ENG);
+
     final LoadingCache<@NonNull SessionKey, Session> sessionCache = Caffeine.newBuilder()
             .expireAfterAccess(20, TimeUnit.MINUTES) // TODO make duration part of the configuration here and for all the other caches.
-            .build(key -> createSession(key));
+            .build(key -> findOrCreateSession(key));
 
     final LoadingCache<@NonNull SessionKey, User> userCache = Caffeine.newBuilder()
             .expireAfterAccess(20, TimeUnit.MINUTES)
@@ -115,53 +115,53 @@ public class Operator implements MessageProcessor {
         return ScriptEngine.process(session, message);
     }
 
-    /**
-     * Execute the node in the context of the given session and message.
-     * Most simply this can result in the creation of one more MTMessages.
-     * There are a variety of possible side effects including:
-     * - inserts/updates to the database
-     * - schedule new messages
-     * - invoke an ML operation
-     *
-     * @param node      the node being evaluated
-     * @param session   the user context
-     * @param moMessage the MO message being processed
-     * @return the next Node in the conversation (or null if the conversation is complete?)
-     * FIXME Maybe instead of null we return a symbolic Node that indicates the end of Node?
-     */
-    private Node evaluate(Node node, ScriptContext session, Message moMessage) throws IOException {
-        Node nextNode = switch (node.type()) {
-            case EchoWithPrefix -> SimpleTestScript.SimpleEchoResponseScript.evaluate(session, moMessage);
-
-            case ReverseText -> SimpleTestScript.ReverseTextResponseScript.evaluate(session, moMessage);
-
-            case HelloGoodbye -> SimpleTestScript.HelloGoodbyeResponseScript.evaluate(session, moMessage);
-
-            // NOTE: practically speaking there's no reason to have any of the above. Most Scripts should
-            // be of the following types or more specific versions thereof. Simple chaining conversations can
-            // simply have a single logic list.
-            case PresentMulti ->
-                    Multi.Present.evaluate(session, moMessage); // Could re-use SendMessage logic while keeping the type difference
-
-            case ProcessMulti -> Multi.Process.evaluate(session, moMessage);
-
-            // TODO Behaves like a SendMessage albeit with the expectation that there's no "next" node so we could replace impl
-            case EndOfChat ->
-                    SendMessage.evaluate(session, moMessage); //EndOfSession? 'request' that the session be cleared?
-
-            // TODO Even easier to replace with SendMessage.evaluate(). The Editor will always pair it with an Input.Process
-            case RequestInput -> Input.Request.evaluate(session, moMessage);
-
-            case ProcessInput -> Input.Process.evaluate(session, moMessage);
-
-            case SendMessage -> SendMessage.evaluate(session, moMessage);
-
-        };
-
-        session.registerEvaluated(node);
-        return nextNode;
-
-    }
+//    /**
+//     * Execute the node in the context of the given session and message.
+//     * Most simply this can result in the creation of one more MTMessages.
+//     * There are a variety of possible side effects including:
+//     * - inserts/updates to the database
+//     * - schedule new messages
+//     * - invoke an ML operation
+//     *
+//     * @param node      the node being evaluated
+//     * @param session   the user context
+//     * @param moMessage the MO message being processed
+//     * @return the next Node in the conversation (or null if the conversation is complete?)
+//     * FIXME Maybe instead of null we return a symbolic Node that indicates the end of Node?
+//     */
+//    private Node evaluate(Node node, ScriptContext session, Message moMessage) throws IOException {
+//        Node nextNode = switch (node.type()) {
+//            case EchoWithPrefix -> SimpleTestScript.SimpleEchoResponseScript.evaluate(session, moMessage);
+//
+//            case ReverseText -> SimpleTestScript.ReverseTextResponseScript.evaluate(session, moMessage);
+//
+//            case HelloGoodbye -> SimpleTestScript.HelloGoodbyeResponseScript.evaluate(session, moMessage);
+//
+//            // NOTE: practically speaking there's no reason to have any of the above. Most Scripts should
+//            // be of the following types or more specific versions thereof. Simple chaining conversations can
+//            // simply have a single logic list.
+//            case PresentMulti ->
+//                    Multi.Present.evaluate(session, moMessage); // Could re-use SendMessage logic while keeping the type difference
+//
+//            case ProcessMulti -> Multi.Process.evaluate(session, moMessage);
+//
+//            // TODO Behaves like a SendMessage albeit with the expectation that there's no "next" node so we could replace impl
+//            case EndOfChat ->
+//                    SendMessage.evaluate(session, moMessage); //EndOfSession? 'request' that the session be cleared?
+//
+//            // TODO Even easier to replace with SendMessage.evaluate(). The Editor will always pair it with an Input.Process
+//            case RequestInput -> Input.Request.evaluate(session, moMessage);
+//
+//            case ProcessInput -> Input.Process.evaluate(session, moMessage);
+//
+//            case SendMessage -> SendMessage.evaluate(session, moMessage);
+//
+//        };
+//
+//        session.registerEvaluated(node);
+//        return nextNode;
+//
+//    }
 
 
     @Override
@@ -175,19 +175,19 @@ public class Operator implements MessageProcessor {
     /*
      * Check for an active Session without triggering the builder method.
      */
-    public @Nullable Session getActiveSession(SessionKey sessionKey) {
-        return sessionCache.getIfPresent(sessionKey);
-    }
+//    public @Nullable Session getActiveSession(SessionKey sessionKey) {
+//        return sessionCache.getIfPresent(sessionKey);
+//    }
 
     /**
      * Builder method used with the LoadingCache.
      *
      * @param sessionKey the key associated with the new Session
-     * @return the newly constructed Session added to the sessionCache
+     * @return the newly constructed Session
      * @throws InterruptedException if any of the involved threads was interrupted
-     * @throws ExecutionException   if any of the subtasks failed
+     * @throws ExecutionException   if any of the subtasks threw an exception
      */
-    private Session createSession(SessionKey sessionKey) throws InterruptedException, ExecutionException {
+    private @Nullable Session findOrCreateSession(SessionKey sessionKey) throws InterruptedException, ExecutionException {
         var start = NanoClock.utcInstant();
         try (var scope = new StructuredTaskScope.ShutdownOnFailure()) {
             Supplier<User> suppliedUser = scope.fork(()  -> userCache.get(sessionKey));
@@ -204,9 +204,14 @@ public class Operator implements MessageProcessor {
                 return null;
             }
 
-            Session session = null;
+            Session session;
 
             var user = suppliedUser.get();
+            if (user == null) {
+                // We should have logged a critical error in the userCache's provider method, findOrCreateUser.
+                LOG.error("findOrCreateSession: no user provided for {}", sessionKey);
+                return null;
+            }
 
             // Check if the Session table has a record for this User. We can skip this check if we just created the User
             final Instant userCreatedAt = user.platformCreationTimes().get(sessionKey.platform());
@@ -240,20 +245,29 @@ public class Operator implements MessageProcessor {
         return queueProducer;
     }
 
-    @NonNull User findOrCreateUser(SessionKey sessionKey) {
+    @Nullable User findOrCreateUser(@NonNull SessionKey sessionKey) {
         User user = persistenceManager.getUser(sessionKey);
         if (user == null) {
-            LOG.info("User not found.");
+            LOG.info("Existing user not found.");
+
+            var owningId = findOwningCompanyIdByRouteChannel(sessionKey);
+            if(owningId == null) {
+                // very bad
+                LOG.error("CRITICAL_CONFIG_ERROR: findOrCreateUser: No owning company found for route {}:{}. (User: {})",
+                        sessionKey.platform(), sessionKey.to(), sessionKey.from());
+                return null;
+            }
+
             user = new User(
-                    Map.of(sessionKey.platform(), randomUUID()),      // platformIds
-                    randomUUID(),                                     // groupId
-                    Map.of(sessionKey.platform(), sessionKey.from()), // platformNumbers
-                    Map.of(sessionKey.platform(), utcInstant()),      // platformCreationTimes
-                    deriveCountryCodeFromId(sessionKey.from()),       // countryCode
-                    defaultLanguageSet(sessionKey.from(), sessionKey.to()), //  languages
-                    findOwningCompanyIdByRouteChannel(sessionKey),                // claimant_id
-                    null,                                             // customer_id
-                    defaultNickNameMap(),                             // platformNicknames
+                    Map.of(sessionKey.platform(), randomUUID()),            // platformIds
+                    randomUUID(),                                           // groupId
+                    Map.of(sessionKey.platform(), sessionKey.from()),       // platformNumbers
+                    Map.of(sessionKey.platform(), utcInstant()),            // platformCreationTimes
+                    deriveCountryCodeFromId(sessionKey.from()),             // countryCode
+                    defaultLanguageSet(sessionKey.from(), sessionKey.to()), // languages
+                    owningId,                                               // claimant_id
+                    null,                                                   // customer_id
+                    defaultNickNameMap(),                                   // platformNicknames
                     null, // FIXME need to do a consistency check on how we handle these Platform-keyed maps. How should we represent an absence of values?
                     defaultPlatformStatusMap(UserStatus.IN) // FIXME is this right initial value?
             );
@@ -365,7 +379,7 @@ public class Operator implements MessageProcessor {
         Route route = findRoute(sessionKey);
         if (route != null) {
             return route.companyId();
-        } else {
+        } else { // If this is null we have a MAJOR configuration error. Routes without an owner cannot exist!
             return null;
         }
     }
@@ -382,13 +396,13 @@ public class Operator implements MessageProcessor {
         return null;
     }
 
-    private Map<Platform, String> defaultPlatformIdMap(String from) {
-        return Map.of(defaultPlatform, from);
-    }
+//    private Map<Platform, String> defaultPlatformIdMap(String from) {
+//        return Map.of(defaultPlatform, from);
+//    }
 
-    private Map<Platform, Instant> defaultPlatformTimeCreatedMap(Instant createdAt) {
-        return Map.of(defaultPlatform, createdAt);
-    }
+//    private Map<Platform, Instant> defaultPlatformTimeCreatedMap(Instant createdAt) {
+//        return Map.of(defaultPlatform, createdAt);
+//    }
 
     private Map<Platform, UserStatus> defaultPlatformStatusMap(UserStatus userStatus) {
         return Map.of(defaultPlatform, userStatus);
@@ -402,7 +416,7 @@ public class Operator implements MessageProcessor {
         // TODO:
         // the associated shortcode/longcode should probably have expected language code(s)
         // we could also use the 'from' to guess. E.g. if the number is Mexican we could assume 'SPA'
-        return Set.of(LanguageCode.ENG);
+        return DEFAULT_LANGUAGE_CODE_SET;
     }
 
     public static void main(String[] args) throws IOException, TimeoutException, PersistenceManagerException {

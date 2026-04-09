@@ -1,6 +1,6 @@
-<?xml version="1.0" encoding="UTF-8"?>
+<?xml version="1.0" encoding="UTF-8" ?>
 <project xmlns="http://maven.apache.org/POM/4.0.0"
-         xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+	xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
          xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 http://maven.apache.org/xsd/maven-4.0.0.xsd">
     <modelVersion>4.0.0</modelVersion>
 
@@ -228,11 +228,10 @@
 <!--        </dependency>-->
 
         <!-- https://mvnrepository.com/artifact/org.testcontainers/rabbitmq -->
-        <!-- CVE-2024-25710 (high) and CVE-2024-26308 (medium) -->
         <dependency>
             <groupId>org.testcontainers</groupId>
             <artifactId>rabbitmq</artifactId>
-            <version>1.20.4</version>
+            <version>1.21.4</version>
             <scope>test</scope>
         </dependency>
 
@@ -266,7 +265,7 @@
             <dependency>
                 <groupId>io.helidon</groupId>
                 <artifactId>helidon-dependencies</artifactId>
-                <version>4.1.4</version> <!-- TODO latest version is 4.2.1 -->
+                <version>4.4.0</version> <!-- TODO latest version is 4.4.0-final -->
                 <type>pom</type>
                 <scope>import</scope>
             </dependency>

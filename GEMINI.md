@@ -10,7 +10,7 @@ This project, internally named "Burble," is a robust, data-driven messaging plat
   - **Opr8r (Operator):** Core logic engine. Dequeues MOs, processes them based on stateful "Scripts" (conversational graphs), and enqueues responses (MTs).
   - **Sndr (Sender):** Dequeues MTs from RabbitMQ and delivers them to external gateways (e.g., SMS, WhatsApp).
   - **BrblCli:** A management CLI for system interaction and simulation.
-  - **Chttr:** A client that reads "Scripts" and uses them to simulate end-user interaction with the platform.
+  - **Chttr:** A client that reads "Scripts" and uses them to simulate end-user interaction with the platform. The client is an automated testing tool.
 - **Messaging Conventions:** RabbitMQ queues follow the pattern `<platform>.<region>.<direction>` (e.g., `whatsapp.us.mo`, `test.local.mt`).
 
 ## Building and Running
@@ -39,7 +39,7 @@ This project, internally named "Burble," is a robust, data-driven messaging plat
 
 - **Java Preview Features:** Always use `--enable-preview` in compiler and runtime arguments.
 - **Database Schema:**
-  - `brbl_logic`: Conversational nodes, edges, and keywords.
+  - `brbl_logic`: Conversational nodes, edges, and keywords. Also routes, scripts, push_campaigns, and campaign_users.
   - `brbl_logs`: Message history and processing logs.
   - `brbl_users`: User profiles and session data.
 - **Testing Strategy:**

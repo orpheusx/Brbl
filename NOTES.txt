@@ -4316,11 +4316,108 @@ Been thinking of a good, self-contained project to really give Gemini a go. Some
 NB:
     Learn some nifty Intellij shortcuts:
         - Quickly activating column mode: Double tap Option, holding it down on the second tap then arrow up or down to add cursors in column mode.
-        - Holding option+Shift and then clicking will place additional cursors.
+        - Holding Option+Shift and then clicking will place additional cursors.
         - Cmd+g will select the next instance of the word the cursor is currently in. Keep typing Cmd+g to select additional instances.
         - Control+Command+g will select all instances in the current file.
         - Shift+Cmd+v brings up the clipboard history. Type enter to paste the current selection.
         - Opt+uparrow to select the current block. Continuing to type uparrow expands the selection to the next logical block.
         - Cmd+c selects an entire line.
 
+Reworked ScriptBuilder to construct valid nodes. The elements in the text format (see ScriptBuilder.script) represent the conversational parts that visible to the end user. When we generate the actual data, we fill in the additional nodes and edges that are needed for the ScriptEngine to process the conversation.
 
+Created a batch script, all_batch1.sql that uses the psql command to load the content of the referenced files: nodes, edges, scripts.
+The commands look like this:
+    \copy nodes(id, created_at, text, type, label, updated_at) FROM '/Users/mark/Development/sndrRcvr/nodes_batch1.tsv' WITH (DELIMITER E'\t', HEADER true, NULL 'null');
+
+Note: new lines in the command cause problems so be sure to keep each of them on a single line.
+
+===== 2026-03-31 ====
+
+Possible code names for our manual chat client. Synonyms for "chat"
+1. Confab (short for confabulation)
+2. Chinwag
+3. Prattle
+
+I think Confab is the way to go. For it's related, other meanings i.e. 'making shit up.'
+
+NB: /copy while in the Gemini shell will copy the last response to the clipboard. Easier to do that than scrolling it's complicated set of terminal panes to get all of the given output.
+
+I installed the Conductor extension for Gemini CLI which is a sort of old-school wizard for setting up all the plan related files and constructing "tracks" for breaking down the steps needed to implement the project. I followed the instructions here: https://github.com/gemini-cli-extensions/conductor
+
+All the Q&A went fine, it asked some reasonable questions and wrote a number of .md files to record the answers.
+Then it started setting up the first track and got completely bamboozled about why it couldn't seem to put the output files (index.md, metadata.json, plan.md, and spec.md) into the ./tracks/basic_tui_20260331/ folder. They were instead written into the top level Confab directory.
+In the process it noted that it's not allowed to use the mv command.
+So, I cancelled it after it had spun for the better part of 10 minutes and moved them myself.
+Then I ran /conductor:status.
+It seemed to be happy at that point and presented at status report:
+
+    ### Project Status Report
+
+    - **Current Date/Time:** Tuesday, March 31, 2026, 12:00 PM
+    - **Project Status:** On Track
+    - **Current Phase and Task:** None (The project is ready to begin Phase 1: Foundation and Identity Data).
+    - **Next Action Needed:** Write Unit Tests for `IdentityStore` (Reading from files).
+    - **Blockers:** None identified.
+    - **Phases (total):** 3
+    - **Tasks (total):** 3 (Major tasks: Identity Persistence, TUI Framework/Selection, Message Grid/Input)
+    - **Progress:** 0/15 sub-tasks completed (0%)
+
+    ---
+
+    **Summary:**
+    The `basic_tui_20260331` track has been successfully initialized. The implementation plan is broken down into three logical phases focusing on the foundation, core UI framework, and the main message interaction components. No tasks have been started yet, and the project is ready to proceed with Phase 1.
+
+So now I'm going to let it take a whack at writing some code by running:
+
+    /conductor:implement
+
+It plugged away for a while and created an "IdentityStore" that can load text files with lists of phone numbers for the users and channels. Per the generated conductor/workflow.md, file it follows a TDD methodology, writing and running the tests first. (Note: the workflow.md file is quite extensive and detailed.)
+Then it created a HelloWorld level impl of ConfabApplication and started on IdentitySelectionScreen. Presumably it would proceed to plug in the screen but, at that point, we ran out of our free token allotment:
+
+    Usage limit reached for gemini-3-flash-preview.
+    Access resets at 8:03 PM EDT.
+
+I guess that's the time I started using it and the reset is 24 hours after that? Shame it burned so many tokens trying and failing to just write those initial .md files.
+Also, sadly, at the top of the session it noted:
+
+    │ We're making changes to Gemini CLI that may impact your workflow.
+    │ What's Changing: We are adding more robust detection of policy-violating use cases and restricting models for free tier users.
+    │ How it affects you: If you need use of Gemini pro models you will need to upgrade to a supported paid plan.
+    │ Read more: https://goo.gle/geminicli-updates
+
+Yep, beginning of the end for their free tier. The paid version looks to be the same as most of the other companies; $20/month.
+
+While we're waiting for the reset we can create a branch and explore TamboUI a bit...
+
+
+
+===== 2026-04-04 ====
+
+Interesting project that uses Postgres native wire protocol to greatly improve access performance:
+	https://dev.to/cies/postgres-pipelines-from-the-jvm-with-bpdbi-14cd
+Derived from SmallRye reactive client but now using virtual threads instead of the reactive stuff.
+It's Postgres-specific but that should be fine for us. The library is pretty small, too.
+On the other it has implicitly received less testing in the real world. Hmm...
+
+===== 2026-04-08 ====
+
+Experimenting with Confab chat client triggered lurking exceptions in Operator's user/session cache provider methods. Specifically the null return value when route existed but wasn't owned by a company which is a problem for creating a new User since that's how it sets its claimant.
+So the user doesn't get created so the getUser method fails and the
+The resulting uncaught exception killed Operator's queue consumer client.
+
+After a good bit of back and forth, we're back to accepting (**for now**) the possibility of retry storms for messages we can't process (due to configuration errors.)
+We do have better logging now and reminded ourselves of how the caches work but decided against acking messages that can't be processed.
+To solve the loop storm issue (which could happen for other reasons) we will need to dig deeper into RabbitMQ's retry handling.
+A timer-based retry mechanism seems like a reasonable approach but will need to do more research. Have Gemini research this?)
+
+So now let's fix the configuration data so we can start testing the happy path with Confab, our TUI simulator.
+
+The data were attempting to use:
+    User #14167209458
+    Route channel# 197823456789
+
+Assertions:
+    the route must be owned by an ACTIVE company.
+    the user must either exist and be claimed by an ACTIVE company or be new.
+
+We left off on our data generation project in the middle. So

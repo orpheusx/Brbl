@@ -1,15 +1,10 @@
 package com.enoughisasgoodasafeast;
 
 import ch.qos.logback.classic.Level;
-import io.helidon.http.Status;
-import io.helidon.webclient.api.ClientResponseTyped;
-import io.helidon.webclient.api.WebClient;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import java.util.Properties;
-
-import static io.helidon.http.Status.Family.SUCCESSFUL;
 
 /**
  * A thin wrapper around WebClient that, currently, doesn't handle any of the issues (throttling, transient outages, etc.)
@@ -42,8 +37,8 @@ public class HttpMTHandler extends HttpMessageHandler implements MTHandler {
         }
     }
 
-    public static void main(String[] args) {
-        final HttpMTHandler handler = new HttpMTHandler("http://localhost:2424/mtReceive");
+    static void main() {
+        final HttpMTHandler handler = new HttpMTHandler("http://localhost:2424/chttr");
         final boolean ok = handler.handle(Message.newMO("1234567890", "01234", "fromhost"));
         LOG.info("send ok?: {}", ok);
     }
