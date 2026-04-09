@@ -300,7 +300,7 @@ public class Operator implements MessageProcessor {
     /**
      * Evaluate the incoming shortcode and keyword against the registered regex patterns.
      *
-     * @param keywordCacheKey that contains the keyword and short/long code or platform specific program identxifier.
+     * @param keywordCacheKey that contains the keyword and short/long code or platform specific program identifier.
      * @return the connected Node assigned to the keyword.
      */
     private Node findScriptForKeywordChannel(KeywordCacheKey keywordCacheKey) {
