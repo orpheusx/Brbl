@@ -938,7 +938,7 @@ public class PostgresPersistenceManager implements PersistenceManager {
                 if (node == null) {
                     // columnIndex 2, // createdAt
                     String text = rs.getString(3);  // text
-                    NodeType type = NodeType.forValue(rs.getInt(4));  // type
+                    NodeType type = NodeType.valueOf(rs.getString(4));  // type
                     String label = rs.getString(5); // label
 
                     node = new Node(id, text, type, null, label); // no next entries yet...

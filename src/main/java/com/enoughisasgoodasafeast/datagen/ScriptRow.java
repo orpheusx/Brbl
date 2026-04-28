@@ -23,7 +23,7 @@ import java.util.UUID;
 import static com.enoughisasgoodasafeast.Functions.randomUUID;
 import static io.jenetics.util.NanoClock.utcInstant;
 
-public class ScriptRow {
+public class ScriptRow implements BrblRow {
 
     public static final String INSERT_SQL = """
             INSERT INTO brbl_logic.scripts
@@ -45,6 +45,18 @@ public class ScriptRow {
     Instant createdAt;
     Instant updatedAt;
 
+    public ScriptRow(UUID id, String name, String description, UUID customerId, UUID nodeId) {
+        this.id = id;
+        this.name = name;
+        this.description = description;
+        this.customerId = customerId;
+        this.nodeId = nodeId;
+        this.status = ScriptStatus.PROD;
+        this.language = LanguageCode.ENG;
+        this.createdAt = utcInstant();
+        this.updatedAt = utcInstant();
+    }
+
     public ScriptRow(String name, String description, UUID customerId, UUID nodeId) {
         this.id = randomUUID();
         this.name = name;
@@ -60,6 +72,17 @@ public class ScriptRow {
     String getValuesSql() {
         return String.format(VALUES_SQL,
                 id, name, description, customerId, nodeId, status, language, createdAt, updatedAt);
+    }
+
+    public String[] headers() {
+        return new String[] {
+                "id", "name", "description", "customer_id", "node_id", "status", "language", "created_at", "updated_at"
+        };
+    }
+
+    public String[] values() {
+        return new String[]{id.toString(), name, description, customerId.toString(), nodeId.toString(),
+                status.name(), language.name(), createdAt.toString(), updatedAt.toString()};
     }
 
     @Override

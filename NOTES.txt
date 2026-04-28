@@ -4408,16 +4408,256 @@ The resulting uncaught exception killed Operator's queue consumer client.
 After a good bit of back and forth, we're back to accepting (**for now**) the possibility of retry storms for messages we can't process (due to configuration errors.)
 We do have better logging now and reminded ourselves of how the caches work but decided against acking messages that can't be processed.
 To solve the loop storm issue (which could happen for other reasons) we will need to dig deeper into RabbitMQ's retry handling.
-A timer-based retry mechanism seems like a reasonable approach but will need to do more research. Have Gemini research this?)
+A timer-based retry mechanism seems like a reasonable approach but will need to do more research. (Have Gemini research this?)
 
 So now let's fix the configuration data so we can start testing the happy path with Confab, our TUI simulator.
 
 The data were attempting to use:
-    User #14167209458
-    Route channel# 197823456789
+    User #14167209458           << three user rows have this phone number, two are linked. Third is owned by a different company.
+    Route channel# 197823456789 << doesn't exist!
+
+    Instead let's try
+    Route channel# 114727770842 (id: 62e66813-3df3-4d29-972b-7db6418dffb1) owned by 019d0375-fa2c-7e1d-b9a2-14411de8cfc0
+    use  user with same owner >> 17898169979
+    update this route's default_script_id (really node_id) to point at '019d3522-ac0e-7e2a-95cc-d2db38b8fafc'
+
+    Ok, so everything worked as expected up to the point where we send the response to Confab's MT server.
+    The Sndr's HttpMessageHandler throws
+        java.lang.IllegalStateException: No entity
+    ConfabApplication's log shows:
+        ... WebServer socket] c.e.confab.ConfabApplication - Received message
+        ... WebServer socket] c.e.confab.ConfabApplication - Added message Quiz Topics: What would you like to talk about? 1) animals, 2) AI, or 3) geography (from: 114727770842 to: 17898169979
+    but the message isn't displayed. Did something blow up in Confab such that it didn't respond to the Sndr? (Need to add a catch to avoid killing BrblConsumer's queue client...Done. For now, we're returning always returning true to avoid retry storms.)
+
+    Testing Confab's MT receive functionality using curl...
+
 
 Assertions:
     the route must be owned by an ACTIVE company.
     the user must either exist and be claimed by an ACTIVE company or be new.
 
-We left off on our data generation project in the middle. So
+We left off on our data generation project in the middle. So let's finish it up.
+
+===== 2026-04-10 ====
+Some really nice features added in the latest Helidon release:
+    https://medium.com/helidon/helidon-4-4-0-released-d10be2fb8039
+
+Rate limits and completed observability are the most interesting for us.
+There's also improvements in support for Lang4J. I don't know much about it at the moment but seems like we could benefit from it later on.
+
+Data Generation.
+
+    Searching the repo with the following regex finds all the places where we have hardcoded UUIDs: [0-9a-fA-F]{8}(-[0-9a-fA-F]{4}){3}-[0-9a-fA-F]{12}
+
+    TestingPersistenceManager.java
+    OperatorPersistenceIntegrationTest.java
+    EndToEndMessagingIT.java
+    ScriptBuilderTest.java
+    ScriptInterpreterTest.java
+    BlasterIntegrationTest.java - references the most UUIDs
+
+    Not too bad so let's save ourselves the trouble and
+    1) make a new, full backup of the data.
+    2) delete all rows from
+        - brbl_users.amalgams
+        - brbl_users.customers
+        - brbl_users.profiles
+        - brbl_logic.campaign_users
+
+     DO NOT DELETE ANYTHING FROM NODE OR EDGE OR SCRIPTS TABLES. NOT YET (event though only the following two are usable):
+        script_id                               node_id
+         019d405b-a373-79f7-8d65-4cd91f8df9b5	019d3522-ac0e-7e2a-95cc-d2db38b8fafc << 'Quiz Topics: What would you like to talk about? 1) animals, 2) AI, or 3) geography'
+         019c1ee9-49cc-7d59-a430-f050612acd72	89eddcb8-7fe5-4cd1-b18b-78858f0789fb << 'What is your favorite color? 1) red 2) blue 3) flort'
+        We could print their graphs and produce an exclusion list for the delete statement...
+
+
+===== 2026-04-14 ====
+
+Awaiting Gemini usage reset to (hopefully) complete the Confab application.
+Using it yesterday I discovered a bug in the prototype script produced by ScriptBuilder. The "talk about animals" and the "talk about AI" options were flipped. Fixed the script but will need to delete the current graph and replace with newly generated TSVs.
+
+Docker got all bollocks'd up and refused to start. Ultimately had to delete all the containers and images...
+
+rm -rf ~/Library/Containers/com.docker.docker
+rm -rf ~/Library/Application\ Support/Docker\ Desktop
+
+A plist refused to be deleted but enough of the other stuff was removed to let the daemon start up. Of course, I had to go through all the login nonsense and rebuild our Burble jvm image (see Dockerfile.jvm.)
+Had to rebuild our application image:
+    docker build --no-cache -t burble-jvm:0.1.0 -f Dockerfile.dev.jvm .
+
+With the no-cache flag it didn't seem to actually rebuild the image.
+
+operator-1  | 2026-04-14 16:45:47,592 INFO  [] [pool-1-thread-6] c.e.operator.Operator - Process message: Message[id=019d8dbe-3ac2-706c-9414-5afeb0c5c282, receivedAt=2026-04-14T20:45:47.586211757Z, type=MO, platform=SMS, from=17898169979, to=114727770842, text=foo]
+operator-1  | 2026-04-14 16:45:47,594 ERROR [] [pool-1-thread-6] c.r.c.impl.ForgivingExceptionHandler - Consumer com.enoughisasgoodasafeast.OperatorConsumer@62f89b55 (amq.ctag-UvmWwIjHC4wG1t5_GX_CmA) method handleDelivery for channel AMQChannel(amqp://guest@192.168.1.155:5672/,1) threw an exception for channel AMQChannel(amqp://guest@192.168.1.155:5672/,1)
+operator-1  | java.lang.NullPointerException: Cannot invoke "com.enoughisasgoodasafeast.operator.Node.type()" because "node" is null
+operator-1  |   at com.enoughisasgoodasafeast.operator.ScriptEngine.evaluate(ScriptEngine.java:99)
+operator-1  |   at com.enoughisasgoodasafeast.operator.ScriptEngine.process(ScriptEngine.java:59)
+operator-1  |   at com.enoughisasgoodasafeast.operator.Operator.process(Operator.java:115)
+operator-1  |   at com.enoughisasgoodasafeast.operator.Operator.process(Operator.java:111)
+operator-1  |   at com.enoughisasgoodasafeast.OperatorConsumer.handleDelivery(OperatorConsumer.java:41)
+
+Along with the flipped "talk about animals" vs "talk about AI" options in the node graph, I also got the following when I used the terminating branch ("Goodbye for now. :-)") in the operator output:
+
+     c.e.operator.Operator - Process message: Message[id=019d8dbe-3ac2-706c-9414-5afeb0c5c282, receivedAt=2026-04-14T20:45:47.586211757Z, type=MO, platform=SMS, from=17898169979, to=114727770842, text=foo]
+     c.r.c.impl.ForgivingExceptionHandler - Consumer com.enoughisasgoodasafeast.OperatorConsumer@62f89b55 (amq.ctag-UvmWwIjHC4wG1t5_GX_CmA) method handleDelivery for channel AMQChannel(amqp://guest@192.168.1.155:5672/,1) threw an exception for channel AMQChannel(amqp://guest@192.168.1.155:5672/,1)
+     java.lang.NullPointerException: Cannot invoke "com.enoughisasgoodasafeast.operator.Node.type()" because "node" is null
+       at com.enoughisasgoodasafeast.operator.ScriptEngine.evaluate(ScriptEngine.java:99)
+       at com.enoughisasgoodasafeast.operator.ScriptEngine.process(ScriptEngine.java:59)
+       at com.enoughisasgoodasafeast.operator.Operator.process(Operator.java:115)
+       at com.enoughisasgoodasafeast.operator.Operator.process(Operator.java:111)
+       at com.enoughisasgoodasafeast.OperatorConsumer.handleDelivery(OperatorConsumer.java:41)
+
+Perhaps not so suprising. We haven't defined an end-of-conversation node type.
+Before we do the data set overhaul for the database, let's define the node type enum and replace the integer column with it.
+
+    CREATE TYPE brbl_logic.node_type AS enum ('PRESENT_MULTI','PROCESS_MULTI','END_OF_CHAT','REQUEST_INPUT','PROCESS_INPUT','SEND_MESSAGE');
+    ALTER TYPE brbl_logic.node_type OWNER TO brbl_admin;
+    GRANT SELECT ON brbl_logic.nodes TO brbl_logic_read_role;
+    ALTER TABLE brbl_logic.nodes ADD COLUMN ntype node_type;
+
+    UPDATE nodes SET ntype = CASE
+                WHEN type = 3 THEN 'PRESENT_MULTI'::node_type
+                WHEN type = 4 THEN 'PROCESS_MULTI'::node_type
+                WHEN type = 5 THEN 'END_OF_CHAT'::node_type
+                WHEN type = 6 THEN 'REQUEST_INPUT'::node_type
+                WHEN type = 7 THEN 'PROCESS_INPUT'::node_type
+                WHEN type = 8 THEN 'SEND_MESSAGE'::node_type
+            END WHERE type > 2;
+
+This left 12 rows without a non-null ntype. They look like they're associated with our primordial favorite food quiz but their numeric type designates them as ReverseText nodes. Which makes no sense.
+
+I made a backup before dealing with these outliers. (Should have done it before any of this but I am teh dumb):
+    pg_dump -d brbl_db_dev -Fc -Z6 > db_only_backup_compressed_20260415_01.sql
+
+Making the queries work was pretty easy. Now to fix the column naming...
+    ALTER TABLE brbl_logic.nodes RENAME COLUMN type TO num_type;
+
+ScriptInterpreterTest uses a serialized node graph; gotta regenerate it to get the tests to pass. FIXED.
+
+Temporarily adding node_type to node row with id = 'aaeff8e2-3497-47b8-a958-854e1efa284f'
+'What kind of food? 1) vegetables 2) meat 3) fruit'
+Ah but all the nodes in the graph will need a value here for the query to work.
+
+To keep track here are the 12 ids of the nodes with dubious num_types and how I updated them:
+
+
+    aaeff8e2-3497-47b8-a958-854e1efa284f    PROCESS_MULTI       What kind of food? 1) vegetables 2) meat 3) fruit
+    f0e48c6b-a637-4889-8707-ad9a2607b29f    END_OF_CHAT         Talk to you tomorrow.
+    d1ecd32a-72ad-413a-bda5-49e5bc0a65b8    PROCESS_MULTI       Sorry, that's not one of the food choices. Try again?
+    00caf78f-1856-41e4-8deb-665c039d3aff    PROCESS_MULTI       Sorry, that's not one of the veggie choices. Try again?
+    f3c2c323-25e2-4ed0-ad97-6c8fd55cca35    PRESENT_MULTI       What's your fave vegetable? 1) carrots 2) broccoli, 3) peppers
+    93dada9c-884b-4264-8025-03751ea53c44    PROCESS_MULTI       Sorry, that's not one of the meat choices. Try again?
+    9a477f6d-1a03-4177-a1b7-228ce52ae8e0    PRESENT_MULTI       What's your fave meat? 1) beef 2) pork, 3) chicken
+    353cf69d-de2a-4f44-a76c-c13fb056a7a7    PROCESS_MULTI       Sorry, that's not one of the fruit choices. Try again?
+    cc0f528d-6569-423d-94d7-5e5e9fe2ea1a    PRESENT_MULTI       What's your fave fruit? 1) apples 2) bananas, 3) grapes
+    9cf29d9e-a001-4353-af0a-a1556002a2de                        probably not
+    a5323479-fc4b-4968-8606-9f8c64ca157d                        This is a node
+    1b3e7a11-5b2b-4212-8fac-29bafd5d5b56                        Incomplete message for notification script.
+
+The last three look like random, disconnected crap that we want to delete.
+
+The printGraph function with node id aaeff8e2-3497-47b8-a958-854e1efa284f works fine for the graph now. So I'm not sure what were doing before but this seems like a graph worth saving.
+
+Let's focus on:
+    Route id: 62e66813-3df3-4d29-972b-7db6418dffb1
+        Channel# 114727770842
+        Default_node_id: 019d3522-ac0e-7e2a-95cc-d2db38b8fafc
+    Company id: 019d0375-fa2c-7e1d-b9a2-14411de8cfc0
+        Name: MediumCorp_OLD
+    User id: 019bcc7e-3e61-7ffa-aca8-616047c4a4a7
+        platform_id# 17898169979
+
+Found a clone of the food quiz node. It's id 0fc4ef6c-082f-4e90-b2f4-e14dbac78623.
+It's likely the one we were using because the num_type (née type) column value already has a legit NodeType value.
+This is the one to preserve.
+It's also the one the keywords table references for 'food'
+
+Testing the food node graph...
+No keywords are being used, just the default_node_id for the route.
+
+Temporarily changing this from 019d3522-ac0e-7e2a-95cc-d2db38b8fafc (animals,ai,geography) to 0fc4ef6c-082f-4e90-b2f4-e14dbac78623 (food)
+
+Script works, terminating with a "Talk to you tomorrow" MT.
+Trying to continue yields:
+
+rcvr-1      | 2026-04-16 09:27:40,695 INFO  [] [[0x61b49645 0x30a2dc17] WebServer socket] com.enoughisasgoodasafeast.Rcvr - Platform SMS requested
+rcvr-1      | 2026-04-16 09:27:40,695 INFO  [] [[0x61b49645 0x30a2dc17] WebServer socket] com.enoughisasgoodasafeast.Rcvr - Platform SMS request content: Message[id=019d9679-d797-7a9d-9c41-1e71e84850ad, receivedAt=2026-04-16T13:27:40.695275222Z, type=MO, platform=SMS, from=17898169979, to=114727770842, text=food]
+rcvr-1      | 2026-04-16 09:27:40,696 INFO  [] [Thread-0] c.e.RabbitQueueProducer -  [x] Enqueued msg 'Message[id=019d9679-d797-7a9d-9c41-1e71e84850ad, receivedAt=2026-04-16T13:27:40.695275222Z, type=MO, platform=SMS, from=17898169979, to=114727770842, text=food]'
+operator-1  | 2026-04-16 09:27:40,698 INFO  [] [pool-1-thread-7] c.e.operator.Operator - Process message: Message[id=019d9679-d797-7a9d-9c41-1e71e84850ad, receivedAt=2026-04-16T13:27:40.695275222Z, type=MO, platform=SMS, from=17898169979, to=114727770842, text=food]
+operator-1  | 2026-04-16 09:27:40,699 ERROR [] [pool-1-thread-7] c.r.c.impl.ForgivingExceptionHandler - Consumer com.enoughisasgoodasafeast.OperatorConsumer@27d0002e (amq.ctag-_SC2pTEAgOU2k4zXFGy0sQ) method handleDelivery for channel AMQChannel(amqp://guest@192.168.1.155:5672/,1) threw an exception for channel AMQChannel(amqp://guest@192.168.1.155:5672/,1)
+operator-1  | java.lang.NullPointerException: Cannot invoke "com.enoughisasgoodasafeast.operator.Node.type()" because "node" is null
+operator-1  |   at com.enoughisasgoodasafeast.operator.ScriptEngine.evaluate(ScriptEngine.java:99)
+...
+operator-1  | 2026-04-16 09:27:40,704 WARN  [] [pool-1-thread-8] c.e.BrblConsumer - handleShutdownSignal called with consumerTag amq.ctag-_SC2pTEAgOU2k4zXFGy0sQ and exception: com.rabbitmq.client.ShutdownSignalException: clean channel shutdown; protocol method: #method<channel.close>(reply-code=200, reply-text=Closed due to exception from Consumer (amq.ctag-_SC2pTEAgOU2k4zXFGy0sQ) method handleDelivery for channel AMQChannel(amqp://guest@192.168.1.155:5672/,1), class-id=0, method-id=0)
+
+So, yeah, we still have work to do on our client/script handling.
+
+
+Deleted the three nodes WHERE ntype IS NULL
+    9cf29d9e-a001-4353-af0a-a1556002a2de', 'a5323479-fc4b-4968-8606-9f8c64ca157d', '1b3e7a11-5b2b-4212-8fac-29bafd5d5b56')
+
+Renamed NODES.ntype to NODES.type, returning it to our original design:
+    ALTER TABLE brbl_logic.nodes RENAME COLUMN ntype TO type ;
+And restored the SQL in PostgresPersistenceManager accordingly.
+
+
+===== 2026-04-20 ====
+Lots of other things happening and taking me away from work here...
+
+Decided to approach the data cleanup by generating tsv files for anything we want to preserve. Then we can delete everything else and start again clean.
+The original node graphs seemed worth preserving:
+The root node:
+    "What is your favorite color? 1) red 2) blue 3) flort"
+        1 ->  Another question. What is your fave shape: 1) triangle, 2) square or 3) circle
+             All answers loop back to top.
+        2 -> "Second question. What is your fave utensil: 1) fork, 2) knife or 3) spoon"
+             All answers loop back to top.
+        3 -> "Third question. Which is the best third Stooge: 1) Shemp, 2) Curly or 3) Iggy"
+             All answers loop back to top.
+I was going to all of the Nodes through Node.printGraph function to build up a list of all the nodes and edges involved.
+We can, as I realized, simply pull the lists for the "root" node and it will include all the nodes and edges involved.
+I tested it's function by adding a keyword pointing at the favorite shape node. It works fine, looping us back into the full graph.
+Note: pointing to one of the sub nodes in a cyclic graph will blow up the printGraph function.
+
+A number of graphs have terminating points, however. If the user tries to initiate a new chat at this point it will blow up because the session with was left with a null currentNode value. We could clear such sessions on END_OF_CHAT or add handling that keeps the sessions but checks the keyword table or uses the route's default.
+
+
+===== 2026-04-20 ====
+
+generated_conversations_en.tsv has all the generated questions I asked Gemini to produce. Useful as raw material but not ready to run as conversations.
+
+We'll export all the nodes and edges referenced in /Users/mark/Library/Application Support/JetBrains/DataGrip2025.3/consoles/db/853224fb-e702-46bd-9838-12d280f929ed/console.sql
+
+Created
+    nodes_colorquiz.tsv,nodes_foodquiz.tsv, nodes_people.tsv
+    edges_colorquiz.tsv, edges_foodquiz.tsv, edges_people.tsv
+
+Now to delete all the nodes and edges.
+Keywords, routes and scripts all have foreign key relationships to nodes.
+Also push_campaigns have an fk to scripts and campaign_users to push_campaigns.
+Deleting the push_campaign/campaign_users will break BlasterIntegrationTest but we should be able to fix it to use the known users data set.
+
+
+===== 2026-04-23 ====
+
+I think we don't need to preserve any of the campaign_users or push_campaign data.
+
+Saved a copy of the keywords data to keywords_all.tsv. The patterns I defined are useful to have.
+
+===== 2026-04-24 ====
+Deleted all the data.
+
+Reload ordering:
+    nodes_colorquiz.tsv, nodes_foodquiz.tsv, nodes_people.tsv
+    edges_colorquiz.tsv, edges_foodquiz.tsv, edges_people.tsv
+    known_companies.tsv
+
+===== 2026-04-28 ====
+
+Created BrblLogicTsvGenerator to generate routes, keywords, and scripts.
+Currently it's a subclass of BrblUsersTsvGenerator. Need to either merge them or extract the common functionality into a base (abstract) class. Also, need to extract all the static constants to a separate interface that our unit/integration tests can reference; this is the basis of the design: to generate a set of "well known" data that can be regenerated and loaded into containerized Postgres instance.
+
+Still need to create equivalent code that contains the node and edge data currently stored in nodes_*.tsv and edges_*.tsv.
+
+TODO: low priority but, for uniformity, we should change the Platform enum to use the name instead of the code; the enum type stores an integer either way so better to make it more readable/grokkable by new users.
+

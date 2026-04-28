@@ -6,7 +6,7 @@ import java.time.Instant;
 import java.util.StringJoiner;
 import java.util.UUID;
 
-public class CompanyRow {
+public class CompanyRow implements BrblRow {
     // id         | uuid
     // name       | character varying(64)
     // created_at | timestamp with time zone
@@ -27,6 +27,11 @@ public class CompanyRow {
         this.status = status;
         this.createdAt = createdAt;
         this.updatedAt = updatedAt;
+    }
+
+    @Override
+    public String[] headers() {
+        return headers;
     }
 
     public String[] values() {

@@ -15,6 +15,8 @@ import static com.enoughisasgoodasafeast.datagen.Functions.adjustPlatformId;
 import static java.io.IO.println;
 
 /**
+ * @deprecated a little *too* quick and dirty. Also, outputting SQL is problematic. Prefer TSV data instead.
+ *
  * A quick data producing program that uses EasyRandom and a bit of Faker to generate roughly correct data for
  * the brbl_users schema and the few tables that relate to it.
  * We're just overwrite some of the baseline values with direct calls to core Faker functions. A better implementation
@@ -40,7 +42,7 @@ import static java.io.IO.println;
  * brbl_logs  . messages_mt
  * brbl_logs  . messages_mt_dlvr
  */
-public class BrblUsersGenerator {
+public class BrblUsersSqlGenerator {
 
     private final Faker faker;
     private final Faker chFaker; // for Chinese data
@@ -48,7 +50,7 @@ public class BrblUsersGenerator {
     private final EasyRandom easyRandom;
     private DataSet dataSet;
 
-    public BrblUsersGenerator() {
+    public BrblUsersSqlGenerator() {
         this.faker = new Faker(Locale.ENGLISH);
         this.chFaker = new Faker(Locale.SIMPLIFIED_CHINESE);
         this.esFaker = new Faker(new Locale("es", "419")); // Latin America
@@ -67,7 +69,7 @@ public class BrblUsersGenerator {
     }
 
     static void main() throws IOException {
-        var generator = new BrblUsersGenerator();
+        var generator = new BrblUsersSqlGenerator();
 
         // println(generator.chFaker.name().firstName() + " " + generator.chFaker.name().lastName()); //returns e.g. "风华 俞" which should be displayed with "lastName" first
 

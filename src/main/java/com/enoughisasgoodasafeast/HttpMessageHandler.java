@@ -40,17 +40,23 @@ public class HttpMessageHandler {
     public boolean handle(Message payload) {
         LOG.info("Sending message, '{}'", payload);
 
-        String messageAsString = String.format("%s:%s:%s", payload.from(), payload.to(), payload.text());
-        // FIXME need more robust error handling here...including retry logic.
-        ClientResponseTyped<String> res = client.post().submit(messageAsString, String.class);
-        LOG.info("Send response {}: {}", res.status(), res.entity());
-        Status status = res.status();
-        if (status.family() != SUCCESSFUL) {
-            LOG.error("Post to {} failed: {}", endpoint, status);
-            return false;
-        } else {
-            LOG.info("Post to {} OK: {}", endpoint, status);
-            return true;
+        try {
+            String messageAsString = String.format("%s:%s:%s", payload.from(), payload.to(), payload.text());
+            // FIXME need more robust error handling here...including retry logic.
+            ClientResponseTyped<String> res = client.post().submit(messageAsString, String.class);
+            LOG.info("Send response {}: {}", res.status(), res.entity());
+            Status status = res.status();
+            if (status.family() != SUCCESSFUL) {
+                LOG.error("Post to {} failed: {}", endpoint, status);
+                return false;
+            } else {
+                LOG.info("Post to {} OK: {}", endpoint, status);
+                return true;
+            }
+        } catch (RuntimeException e) {
+            LOG.error("Caught {} sending to {}", e.getMessage(), endpoint);
+            LOG.warn("FIXME: Acking message despite failure.");
+            return true; // FIXME retry policy needs to be worked out.
         }
     }
 

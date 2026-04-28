@@ -7,7 +7,7 @@ package com.enoughisasgoodasafeast.datagen;
 // platform        | public.platform          |           | not null |
 // channel         | character varying(15)    |           | not null |
 // default_node_id | uuid                     |           | not null |
-// customer_id     | uuid                     |           | not null |
+// company_id     | uuid                     |           | not null |
 // status          | route_status             |           | not null | 'REQUESTED'::route_status
 // created_at      | timestamp with time zone |           | not null |
 // updated_at      | timestamp with time zone |           | not null |
@@ -23,13 +23,19 @@ import java.util.UUID;
 import static com.enoughisasgoodasafeast.Functions.randomUUID;
 import static io.jenetics.util.NanoClock.*;
 
-public class RouteRow {
+public class RouteRow implements BrblRow {
 
     public static final String INSERT_SQL = """
             INSERT INTO brbl_logic.routes
-                (id, platform, channel, default_node_id, customer_id, status, created_at, updated_at)
+                (id, platform, channel, default_node_id, company_id, status, created_at, updated_at)
                 VALUES
             """;
+
+    public static final String[] headers = {"id", "platform", "channel", "default_node_id", "company_id", "status", "created_at", "updated_at"};
+
+    public String[] headers() {
+        return headers;
+    }
 
     public static final String VALUES_SQL = """
             ('%s', '%s', '%s', '%s', '%s', '%s', '%s', '%s'),
@@ -39,17 +45,28 @@ public class RouteRow {
     Platform platform;
     String channel;
     UUID defaultNodeId;
-    UUID customerId;
+    UUID companyId;
     RouteStatus status;
     Instant createdAt;
     Instant updatedAt;
 
-    public RouteRow(String channel, UUID defaultNodeId, UUID customerId) {
+    public RouteRow(String channel, UUID defaultNodeId, UUID companyId) {
         this.id = randomUUID();
         this.platform = Platform.SMS;
         this.channel = Functions.adjustPlatformId(CountryCode.US, channel);
         this.defaultNodeId = defaultNodeId;
-        this.customerId = customerId;
+        this.companyId = companyId;
+        this.status = RouteStatus.ACTIVE;
+        this.createdAt = utcInstant();
+        this.updatedAt = utcInstant();
+    }
+
+    public RouteRow(UUID id, String channel, UUID defaultNodeId, Platform platform, UUID companyId) {
+        this.id = id;
+        this.platform = platform;
+        this.channel = Functions.adjustPlatformId(CountryCode.US, channel);
+        this.defaultNodeId = defaultNodeId;
+        this.companyId = companyId;
         this.status = RouteStatus.ACTIVE;
         this.createdAt = utcInstant();
         this.updatedAt = utcInstant();
@@ -57,7 +74,13 @@ public class RouteRow {
 
     String getValuesSql() {
         return String.format(VALUES_SQL,
-                id, platform.code(), channel, defaultNodeId, customerId, status, createdAt, updatedAt);
+                id, platform.code(), channel, defaultNodeId, companyId, status, createdAt, updatedAt);
+    }
+
+    public String[] values() {
+        return new String[]{id.toString(), platform.code(), channel, defaultNodeId.toString(),
+                companyId.toString(), status.name(), createdAt.toString(), updatedAt.toString()
+        };
     }
 
     @Override
@@ -67,7 +90,7 @@ public class RouteRow {
                 .add("platform=" + platform)
                 .add("channel='" + channel + "'")
                 .add("defaultNodeId=" + defaultNodeId)
-                .add("customerId=" + customerId)
+                .add("companyId=" + companyId)
                 .add("status=" + status)
                 .add("createdAt=" + createdAt)
                 .add("updatedAt=" + updatedAt)

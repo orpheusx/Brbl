@@ -232,7 +232,7 @@ public class Operator implements MessageProcessor {
             }
 
             // If we had an existing session, check if we were awaiting input. If not replace the script with one we looked up above.
-            if (!session.currentNode.type().equals(NodeType.ProcessMulti)) { // add other input expecting node types here.
+            if (!session.currentNode.type().equals(NodeType.PROCESS_MULTI)) { // add other input expecting node types here.
                 session.currentNode = script;
             }
 

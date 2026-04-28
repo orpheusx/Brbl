@@ -97,35 +97,24 @@ public class ScriptEngine {
      */
     private static Node evaluate(Node node, ScriptContext session, Message moMessage) throws IOException {
         Node nextNode = switch (node.type()) {
-            case EchoWithPrefix ->
-                    SimpleTestScript.SimpleEchoResponseScript.evaluate(session, moMessage);
 
-            case ReverseText ->
-                    SimpleTestScript.ReverseTextResponseScript.evaluate(session, moMessage);
-
-            case HelloGoodbye ->
-                    SimpleTestScript.HelloGoodbyeResponseScript.evaluate(session, moMessage);
-
-            // NOTE: practically speaking there's no reason to have any of the above. Most Scripts should
-            // be of the following types or more specific versions thereof. Simple chaining conversations can
-            // simply have a single logic list.
-            case PresentMulti ->
+            case PRESENT_MULTI ->
                     Multi.Present.evaluate(session, moMessage); // Could re-use SendMessage logic while keeping the type difference
 
-            case ProcessMulti ->
+            case PROCESS_MULTI ->
                     Multi.Process.evaluate(session, moMessage);
 
             // TODO Behaves like a SendMessage albeit with the expectation that there's no "next" node so we could replace impl
-            case EndOfChat -> SendMessage.evaluate(session, moMessage); //EndOfSession? 'request' that the session be cleared?
+            case END_OF_CHAT -> SendMessage.evaluate(session, moMessage); //EndOfSession? 'request' that the session be cleared?
 
             // TODO Even easier to replace with SendMessage.evaluate(). The Editor will always pair it with an Input.Process
-            case RequestInput ->
+            case REQUEST_INPUT ->
                     Input.Request.evaluate(session, moMessage);
 
-            case ProcessInput ->
+            case PROCESS_INPUT ->
                     Input.Process.evaluate(session, moMessage);
 
-            case SendMessage ->
+            case SEND_MESSAGE ->
                     SendMessage.evaluate(session, moMessage);
 
         };

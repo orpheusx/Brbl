@@ -7,7 +7,6 @@ import org.junit.jupiter.api.Test;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
-import java.io.IO;
 import java.io.IOException;
 import java.util.List;
 import java.util.UUID;
@@ -131,24 +130,24 @@ class ScriptInterpreterTest {
 
     private Node constructComplexGraph() {
         // Remember PresentMulti doesn't make sense unless paired with a0 ProcessMulti.
-        var a0 = new Node("a0: present bS,c0,d0", NodeType.PresentMulti, A0);
-        var a1 = new Node("a0: process bS,c0,d0", NodeType.ProcessMulti, A1);
+        var a0 = new Node("a0: present bS,c0,d0", NodeType.PRESENT_MULTI, A0);
+        var a1 = new Node("a0: process bS,c0,d0", NodeType.PROCESS_MULTI, A1);
 
-        var bS = new Node("bS: send to e0", NodeType.SendMessage, B0);
+        var bS = new Node("bS: send to e0", NodeType.SEND_MESSAGE, B0);
 
-        var c0 = new Node("c0: present e0,f0", NodeType.PresentMulti, C0);
-        var c1 = new Node("c1: process e0,f0", NodeType.ProcessMulti, C1);
+        var c0 = new Node("c0: present e0,f0", NodeType.PRESENT_MULTI, C0);
+        var c1 = new Node("c1: process e0,f0", NodeType.PROCESS_MULTI, C1);
 
-        var d0 = new Node("d0: present f0", NodeType.PresentMulti, D0);
-        var d1 = new Node("d1: process f0", NodeType.ProcessMulti, D1);
+        var d0 = new Node("d0: present f0", NodeType.PRESENT_MULTI, D0);
+        var d1 = new Node("d1: process f0", NodeType.PROCESS_MULTI, D1);
 
-        var e0 = new Node("e0: present a0,g0", NodeType.PresentMulti, E0);
-        var e1 = new Node("e1: process a0,g0", NodeType.ProcessMulti, E1);
+        var e0 = new Node("e0: present a0,g0", NodeType.PRESENT_MULTI, E0);
+        var e1 = new Node("e1: process a0,g0", NodeType.PROCESS_MULTI, E1);
 
-        var f0 = new Node("f0: present a0,g0", NodeType.PresentMulti, F0);
-        var f1 = new Node("f1: process a0,g0", NodeType.ProcessMulti, F1);
+        var f0 = new Node("f0: present a0,g0", NodeType.PRESENT_MULTI, F0);
+        var f1 = new Node("f1: process a0,g0", NodeType.PROCESS_MULTI, F1);
 
-        var g0 = new Node("g0: eoc", NodeType.EndOfChat, G0);
+        var g0 = new Node("g0: eoc", NodeType.END_OF_CHAT, G0);
 
         // Connect all the presentMulti nodes to their corresponding processMulti nodes, no matching is used here.
         var a0_a1 = new Edge("a0 to a1", a1);

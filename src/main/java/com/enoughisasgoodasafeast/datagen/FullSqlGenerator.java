@@ -8,17 +8,17 @@ import java.nio.file.Paths;
 import java.util.List;
 import java.util.Map;
 
-public class FullGenerator {
+public class FullSqlGenerator {
     static void main() throws IOException {
-        BrblUsersGenerator usersGen = new BrblUsersGenerator();
-        BrblLogicGenerator logicGen = new BrblLogicGenerator();
+        BrblUsersSqlGenerator usersGen = new BrblUsersSqlGenerator();
+        BrblLogicSqlGenerator logicGen = new BrblLogicSqlGenerator();
 
-        final BrblUsersGenerator.DataSet userDataSet = usersGen.generateUserGraphs(100, 30, 10, 50);
+        final BrblUsersSqlGenerator.DataSet userDataSet = usersGen.generateUserGraphs(100, 30, 10, 50);
         final List<String>  userSql = usersGen.dataToSQL(userDataSet);
         sqlToFile("brbl_users.sql", userSql);
 
         final Map<NodeRow, List<EdgeRow>> nodeEdgeMap = logicGen.generateNodeEdgeMap();
-        final BrblLogicGenerator.DataSet routeScriptDataSet = logicGen.generateRoutesAndScripts(nodeEdgeMap, userDataSet.customers());
+        final BrblLogicSqlGenerator.DataSet routeScriptDataSet = logicGen.generateRoutesAndScripts(nodeEdgeMap, userDataSet.customers());
         final List<String> logicSql = logicGen.dataToSQL(nodeEdgeMap, routeScriptDataSet);
         sqlToFile("brbl_logic.sql", logicSql);
     }

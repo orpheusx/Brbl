@@ -30,15 +30,8 @@ public class Sndr implements MessageProcessor {
     @Override
     public boolean process(Message message) {
         LOG.info("Processing outbound message: {}", message);
-        boolean delivered = httpMtHandler.handle(message); // TODO using record method temporarily. Gateways will expect their own format.
-//        if (delivered) {
-//            LOG.info("Delivered message? {}: {}", delivered, message);
-//            boolean isInsertOk = postgresPersistenceManager.insertDeliveredMT(message);
-//            if (!isInsertOk) {
-//                 TODO increment a database specific error counter metric in Prometheus?
-//                LOG.error("Failed to log enqueued message, {}", message);
-//            }
-//        }
+        boolean delivered = httpMtHandler.handle(message);
+        LOG.info("Message delivery: {}: {}", delivered, message);
         return delivered;
     }
 

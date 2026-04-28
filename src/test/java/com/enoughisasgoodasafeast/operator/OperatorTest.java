@@ -80,13 +80,13 @@ public class OperatorTest {
         operator = new Operator(fakeQueueConsumer, queueProducer, persistenceManager);
 
         // Construct a script for testing purposes
-        Node presentQuestion = new Node(COLOR_QUIZ_START_TEXT, NodeType.PresentMulti, "ColorQuizStart");
-        processAnswer = new Node(COLOR_QUIZ_UNEXPECTED_INPUT, NodeType.ProcessMulti, "ColorQuizProcessResponse");
+        Node presentQuestion = new Node(COLOR_QUIZ_START_TEXT, NodeType.PRESENT_MULTI, "ColorQuizStart");
+        processAnswer = new Node(COLOR_QUIZ_UNEXPECTED_INPUT, NodeType.PROCESS_MULTI, "ColorQuizProcessResponse");
         presentQuestion.edges().add(
                 new Edge(List.of("n/a"), "n/a", processAnswer)
         );
 
-        endConversation = new Node(COLOR_QUIZ_END_CONVERSATION, NodeType.EndOfChat, "ColorQuizEnd");
+        endConversation = new Node(COLOR_QUIZ_END_CONVERSATION, NodeType.END_OF_CHAT, "ColorQuizEnd");
 
         Edge answerRed = new Edge(List.of("red"), "Red is the color of life.", endConversation);
         Edge answerBlue = new Edge(List.of("blue"), "Blue is my fave, as well.", endConversation);
@@ -99,7 +99,7 @@ public class OperatorTest {
                 TestingPersistenceManager.SCRIPT_ID, presentQuestion);
 
         // Define a default script for the platform-channel, adding it with the default route.
-        Node defaultScript = new Node("Welcome! You can talk to us about the following topics...", NodeType.EndOfChat, "CustomerTopicStarter");
+        Node defaultScript = new Node("Welcome! You can talk to us about the following topics...", NodeType.END_OF_CHAT, "CustomerTopicStarter");
         Route route = new Route(Platform.SMS, mo1.to(), defaultScript.id(), randomUUID());
         operator.activeRoutesCache.put(
                 Operator.ALL,
@@ -111,7 +111,7 @@ public class OperatorTest {
     @Test
     void processAndCheckResponse() {
 
-        Node node1 = new Node(SCRIPT_RESPONSE, NodeType.SendMessage);
+        Node node1 = new Node(SCRIPT_RESPONSE, NodeType.SEND_MESSAGE);
         Edge edge1 = new Edge(List.of("1", "2", "3"), null);
         node1.edges().add(edge1);
 
@@ -154,7 +154,7 @@ public class OperatorTest {
 
     @Test
     void getUserSessionUncachedCached() {
-        Node node1 = new Node(SCRIPT_RESPONSE, NodeType.SendMessage);
+        Node node1 = new Node(SCRIPT_RESPONSE, NodeType.SEND_MESSAGE);
         Edge edge1 = new Edge(List.of("1", "2", "3"), null);
         node1.edges().add(edge1);
 
@@ -229,7 +229,7 @@ public class OperatorTest {
 
         assertEquals(1, queuedMessages.size(), "Unexpected number of messages queued.");
         assertTrue(requireNonNull(queuedMessages.getFirst()).text().contains("favorite color"), "Expected text not found in first queued message.");
-        assertEquals(NodeType.ProcessMulti, session.getCurrentNode().type(), "Session node state has unexpected type."); // The current node should be awaiting a response
+        assertEquals(NodeType.PROCESS_MULTI, session.getCurrentNode().type(), "Session node state has unexpected type."); // The current node should be awaiting a response
 
         // Send a valid response
         assertDoesNotThrow(() -> {
@@ -281,7 +281,7 @@ public class OperatorTest {
         assertEquals(1, queuedMessages.size(), "Unexpected number of messages queued.");
         assertTrue(requireNonNull(queuedMessages.getFirst()).text().contains("favorite color"), "Expected text not found in first queued message.");
         // The current node should now be awaiting a response
-        assertEquals(NodeType.ProcessMulti, session.getCurrentNode().type(), "Session node state has unexpected type.");
+        assertEquals(NodeType.PROCESS_MULTI, session.getCurrentNode().type(), "Session node state has unexpected type.");
 
         // Now provide bad input to the question posed
         for (int i = 1; i < 3; i++) { // TODO At some point we should add handling for repeated failures. Until then we continue to handle bad input the same way.
@@ -290,7 +290,7 @@ public class OperatorTest {
             LOG.info("Bad input response: {}", errorMessage.text());
             assertTrue(errorMessage.text().contains(processAnswer.text()), "Expected error response not found.");
             // Since we don't advance when there's an error we should still be on the ProcessMulti
-            assertEquals(NodeType.ProcessMulti, session.getCurrentNode().type(), "Session node state has unexpected type.");
+            assertEquals(NodeType.PROCESS_MULTI, session.getCurrentNode().type(), "Session node state has unexpected type.");
         }
 
         // Now provide good input to the question posed and check that we advance to the end of the conversation.
@@ -338,7 +338,7 @@ public class OperatorTest {
         assertEquals(1, queuedMessages.size(), "Unexpected number of messages queued.");
         assertTrue(requireNonNull(queuedMessages.getFirst()).text().contains("favorite color"), "Expected text not found in first queued message.");
         // The current node should now be awaiting a response
-        assertEquals(NodeType.ProcessMulti, session.getCurrentNode().type(), "Session node state has unexpected type.");
+        assertEquals(NodeType.PROCESS_MULTI, session.getCurrentNode().type(), "Session node state has unexpected type.");
 
         // Now provide bad input to the question posed
         for (int i = 1; i <= 2; i++) { // TODO At some point we should add handling for repeated failures. Until then we continue to handle bad input the same way.
@@ -346,7 +346,7 @@ public class OperatorTest {
             final Message errorMessage = queuedMessages.get(i);
             assertTrue(errorMessage.text().contains(processAnswer.text()), "Expected error response not found.");
             // Since we don't advance when there's an error we should still be on the ProcessMulti
-            assertEquals(NodeType.ProcessMulti, session.getCurrentNode().type(), "Session node state has unexpected type.");
+            assertEquals(NodeType.PROCESS_MULTI, session.getCurrentNode().type(), "Session node state has unexpected type.");
         }
 
         // Now request a change of topic

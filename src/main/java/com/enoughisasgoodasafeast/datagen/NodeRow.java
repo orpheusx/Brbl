@@ -6,11 +6,11 @@ import java.util.StringJoiner;
 import java.util.UUID;
 
 import static com.enoughisasgoodasafeast.Functions.randomUUID;
-import static com.enoughisasgoodasafeast.operator.NodeType.PresentMulti;
+import static com.enoughisasgoodasafeast.operator.NodeType.PRESENT_MULTI;
 import static io.jenetics.util.NanoClock.utcInstant;
 import static java.lang.Math.min;
 
-public class NodeRow {
+public class NodeRow implements BrblRow {
 
     // id         | uuid
     // created_at | timestamp with time zone
@@ -41,12 +41,20 @@ public class NodeRow {
         this.id = randomUUID();
         this.createdAt = utcInstant();
         this.text = ctext;
-        this.type = PresentMulti.ordinal();
+        this.type = PRESENT_MULTI.ordinal();
         int start = min(7, ctext.length());
         //int len = Math.min(10, start + text.length());
         this.label = ctext.substring(start, min(text.length(), 32));
         if(label.endsWith("'")) label = label.substring(0, label.length() - 1);
         this.updatedAt = this.createdAt;
+    }
+
+    public String[] headers() {
+        return new String[]{"id", "created_at", "text", "type", "label", "updated_at"};
+    }
+
+    public String[] values() {
+        return new String[]{id.toString(), createdAt.toString(), text, String.valueOf(type), label, updatedAt.toString()};
     }
 
     String getValuesSql() {

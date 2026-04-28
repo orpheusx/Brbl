@@ -32,7 +32,7 @@ public class SessionTest {
             String TO = "12345";
             Session session = new Session(
                     randomUUID(),
-                    new Node("do nothing", EchoWithPrefix, null),
+                    new Node("do nothing", SEND_MESSAGE, null),
                     new User(platformIds, randomUUID(), platformNumbers, platformsCreated, countryCode, languages,
                             claimantId, null, userNickNames, null, platformStatuses),
                     new InMemoryQueueProducer(),
@@ -201,7 +201,7 @@ public class SessionTest {
     private Session newSession(UUID id) {
         return new Session(
                 id,
-                new Node("The quick brown fox jumps over the lazy dog.", NodeType.SendMessage, "A test Node"),
+                new Node("The quick brown fox jumps over the lazy dog.", NodeType.SEND_MESSAGE, "A test Node"),
                 new User(platformIds, randomUUID(), platformNumbers, platformsCreated, countryCode, languages,
                         claimantId, null, userNickNames, null, platformStatuses),
                 queueProducer,
@@ -290,12 +290,12 @@ public class SessionTest {
     public void verifyNoSequentiallyDuplicateNodesInEvalList() {
         var session = newSession();
 
-        var node1 = new Node("node 1 message text", NodeType.SendMessage, "node 1 label");
+        var node1 = new Node("node 1 message text", NodeType.SEND_MESSAGE, "node 1 label");
         for (int i = 0; i <= 2; i++) {
             session.registerEvaluated(node1);
         }
 
-        var node2 = new Node("node 2 message text", NodeType.SendMessage, "node 2 label");
+        var node2 = new Node("node 2 message text", NodeType.SEND_MESSAGE, "node 2 label");
         session.registerEvaluated(node2);
 
         var evaluatedNodes = session.getEvaluatedNodes();

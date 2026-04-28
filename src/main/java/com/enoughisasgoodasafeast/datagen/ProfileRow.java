@@ -8,7 +8,7 @@ import java.time.Instant;
 import java.util.StringJoiner;
 import java.util.UUID;
 
-public class ProfileRow {
+public class ProfileRow implements BrblRow {
     // id              | uuid
     // surname         | character varying(36)
     // given_name      | character varying(36)

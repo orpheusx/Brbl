@@ -49,6 +49,7 @@ class OperatorPersistenceIntegrationTest {
     @Test
     void getScript() {
         final UUID scriptId = UUID.fromString("23900613-af65-48de-b7f4-b310b738eb8e"); // 'What is the capital of Australia?'
+//        final UUID scriptId = UUID.fromString("0fc4ef6c-082f-4e90-b2f4-e14dbac78623"); // 'What kind of food? 1) vegetables 2) meat 3) fruit'
         final Node node = pm.getNodeGraph(scriptId);
         assertNotNull(node);
         assertEquals(node.id(), scriptId);

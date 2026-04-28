@@ -14,16 +14,16 @@ import static java.io.IO.println;
 /**
  * This is a fairly gross class, full of nasty string munging and hackery.
  */
-public class BrblLogicGenerator {
+public class BrblLogicSqlGenerator {
 
     public String INPUT_FILE  = "generated_conversations_en.tsv";
     public String TAB = "\t";
 
     private final Faker faker = new Faker(Locale.ENGLISH);
 
-    public BrblLogicGenerator() {}
+    public BrblLogicSqlGenerator() {}
 
-    public BrblLogicGenerator(String inputFile) {
+    public BrblLogicSqlGenerator(String inputFile) {
         this.INPUT_FILE = inputFile; // allow override of the default input
     }
 

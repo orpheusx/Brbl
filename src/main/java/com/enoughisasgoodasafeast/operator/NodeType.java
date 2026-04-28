@@ -4,22 +4,12 @@ package com.enoughisasgoodasafeast.operator;
  * An enumeration used to define the type of logic applied to the processing of a message.
  */
 public enum NodeType {
-    EchoWithPrefix  (false), // 0 // FIXME get rid of these
-    ReverseText     (false), // 1 // FIXME get rid of these
-    HelloGoodbye    (false), // 2// FIXME get rid of these
-
-    PresentMulti    (false), // 3
-    ProcessMulti    (true),  // 4
-    EndOfChat       (false), // 5
-    RequestInput    (false), // 6
-    ProcessInput    (true),  // 7
-    SendMessage     (false)  // 8
-
-    /*,
-    NullTerminator  (?, true)*/;//
-    ;
-    //    Pivot           (?, false),
-    //    TopicSelection  (?, false);
+    PRESENT_MULTI(false),
+    PROCESS_MULTI(true),
+    END_OF_CHAT(false),
+    REQUEST_INPUT(false),
+    PROCESS_INPUT(true),
+    SEND_MESSAGE(false);
 
     private final boolean awaitInput;
 

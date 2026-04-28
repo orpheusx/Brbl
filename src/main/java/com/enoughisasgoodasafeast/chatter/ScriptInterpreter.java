@@ -1,7 +1,6 @@
 package com.enoughisasgoodasafeast.chatter;
 
 import com.enoughisasgoodasafeast.ConfigLoader;
-import com.enoughisasgoodasafeast.MessageType;
 import com.enoughisasgoodasafeast.operator.*;
 import com.enoughisasgoodasafeast.operator.PersistenceManager.PersistenceManagerException;
 import org.jspecify.annotations.NonNull;
@@ -14,6 +13,7 @@ import java.util.*;
 import java.util.stream.Collectors;
 
 import static com.enoughisasgoodasafeast.MessageType.*;
+import static java.io.IO.println;
 
 public class ScriptInterpreter {
     private static final Logger LOG = LoggerFactory.getLogger(ScriptInterpreter.class);
@@ -77,10 +77,10 @@ public class ScriptInterpreter {
         for (int i = 0; i < nodePath.size(); i++) {
             Node node = nodePath.get(i);
             switch (node.type()) {
-                case PresentMulti, SendMessage, EndOfChat -> {
+                case PRESENT_MULTI, SEND_MESSAGE, END_OF_CHAT -> {
                     events.add(new Event(MT, node.text()));
                 }
-                case ProcessMulti -> {
+                case PROCESS_MULTI -> {
                     if (i + 1 >= nodePath.size()) break;
 
                     Node nextNode = nodePath.get(1+i); // this is the node the path specifies
@@ -283,15 +283,62 @@ public class ScriptInterpreter {
                 .collect(Collectors.joining(" -> "));
     }
 
+    public static void collectGraphIds(Node startNode, Node node, Set<String> nodeIds, Set<String> edgeIds) {
+
+        //printId(node);
+        nodeIds.add(node.id().toString());
+
+        for (Edge edge : node.edges()) {
+            //printId(edge);
+            edgeIds.add(edge.id().toString());
+
+            Node childNode = edge.targetNode();
+            if (childNode != null && startNode != childNode) {
+                collectGraphIds(startNode, childNode, nodeIds, edgeIds);
+            }
+        }
+    }
+
+    static void printId(Node node) {
+        println("Node:" + node.id());
+    }
+    static void printId(Edge edge) {
+        println("Edge:" + edge.id());
+    }
+
     static void main(String[] args) throws IOException, PersistenceManagerException {
-        var nodeId = UUID.fromString("89eddcb8-7fe5-4cd1-b18b-78858f0789fb");
+//        var nodeId = UUID.fromString("89eddcb8-7fe5-4cd1-b18b-78858f0789fb");
+        String[] nodeIds = new String[]{
+//                "89eddcb8-7fe5-4cd1-b18b-78858f0789fb", -- Fave color
+//                "b48d36ce-2512-4ee0-a9b9-b743d72e95e9",
+//                "385a1f99-d844-42e6-9fa3-a0e3a116757d",
+//                "0b2861b6-a16a-4197-910a-158610967dd9",
+//                "525028ae-0a33-4c80-a22f-868f77bb9531",
+//                "cf72ce06-50fc-4bf1-852b-dbdbd9f97f66"
+//                "525028ae-0a33-4c80-a22f-868f77bb9531" -- BadPeople
+                "0fc4ef6c-082f-4e90-b2f4-e14dbac78623"
+        };
         var properties = ConfigLoader.readConfig("chttr.properties"); // Assuming a config file
         var ppm = PostgresPersistenceManager.createPersistenceManager(properties);
-        var interpreter = new ScriptInterpreter(ppm);
-        var dbNode = ppm.getNodeGraph(nodeId);
+        for (var nodeId : nodeIds) {
+            UUID nodeUuid = UUID.fromString(nodeId);
+            Node dbNode = ppm.getNodeGraph(nodeUuid);
+            Set<String> nodeList = new LinkedHashSet<String>();
+            Set<String> edgeList = new LinkedHashSet<>();
+            nodeList.add(dbNode.id().toString());
+            collectGraphIds(dbNode, dbNode,  nodeList, edgeList);
+            nodeList.forEach( node -> {println(String.format("'%s'", node));});
+            println("\n");
+            edgeList.forEach( edge -> {println(String.format("'%s'", edge));});
+//            IO.println(nodeList);
+//            IO.println(edgeList);
+        }
+        //var interpreter = new ScriptInterpreter(ppm);
 
-        String fileName = "./data/simpleThreeNodeGraph.ser";
-        interpreter.writeNodeGraphToFile(dbNode, fileName);
-        var diskNode = interpreter.readNodeGraphFromFile(fileName);
+
+//        Node.printGraph(dbNode, dbNode, 2);
+//        String fileName = "./data/simpleThreeNodeGraph.ser";
+//        interpreter.writeNodeGraphToFile(dbNode, fileName);
+//        var diskNode = interpreter.readNodeGraphFromFile(fileName);
     }
 }

@@ -6,7 +6,7 @@ import java.time.Instant;
 import java.util.StringJoiner;
 import java.util.UUID;
 
-public class CustomerRow {
+public class CustomerRow implements BrblRow {
     // id                | uuid
     // created_at        | timestamp with time zone
     // updated_at        | timestamp with time zone

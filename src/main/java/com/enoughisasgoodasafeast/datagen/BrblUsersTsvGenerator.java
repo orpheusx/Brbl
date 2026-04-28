@@ -21,7 +21,6 @@ import static com.enoughisasgoodasafeast.operator.UserStatus.*;
 import static java.io.IO.println;
 import static java.lang.String.join;
 import static java.nio.file.Files.newBufferedWriter;
-import static java.nio.file.StandardOpenOption.*;
 import static java.util.Comparator.comparing;
 
 /**
@@ -29,9 +28,9 @@ import static java.util.Comparator.comparing;
  * tests along with some more random load
  * NB: We're not aiming to generate massive amounts of data here.
  */
-public class BrblGenerator {
+public class BrblUsersTsvGenerator {
 
-    public static Logger LOG = LoggerFactory.getLogger(BrblGenerator.class);
+    public static Logger LOG = LoggerFactory.getLogger(BrblUsersTsvGenerator.class);
 
     // Ordered from smallest to largest.
     public static final String[] standardCompanyNames = {
@@ -120,7 +119,7 @@ public class BrblGenerator {
     private final LocalDate newestDate = LocalDate.now();
     private final LocalDate oldestDate = newestDate.minusMonths(9);
 
-    public BrblGenerator() {
+    public BrblUsersTsvGenerator() {
         this.faker = new Faker(Locale.ENGLISH);
         this.easyRandom = new EasyRandom(new EasyRandomParameters()
                 .seed(System.currentTimeMillis())
@@ -296,8 +295,8 @@ public class BrblGenerator {
         return true;
     }
 
-    private BufferedWriter dmlWriter(String prefix, String fileName) throws IOException {
-        return newBufferedWriter(Path.of("dml", prefix + fileName), CREATE, WRITE, TRUNCATE_EXISTING);
+    BufferedWriter dmlWriter(String prefix, String fileName) throws IOException {
+        return newBufferedWriter(Path.of("dml", prefix + fileName));
     }
 
     CompanyRow newCompany(String name, CompanyStatus status, String... id) {
@@ -364,12 +363,16 @@ public class BrblGenerator {
         user.userStatus = (status == null) ? IN : status;
         if(countryCode != null) user.countryCode = countryCode;
 
+        // FIXME make sure the updated_at is greater than or equal to created_at
+        if (user.updatedAt.isBefore(user.createdAt)) {
+            user.updatedAt = user.createdAt;
+        }
 
         return user;
     }
 
-    public static void main(String[] args) throws Exception {
-        var generator = new BrblGenerator();
+    static void main() throws Exception {
+        var generator = new BrblUsersTsvGenerator();
         int minUsers = 10;
         int maxUsers = 40; // FIXME increase to 100
 

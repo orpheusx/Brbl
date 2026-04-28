@@ -7,7 +7,7 @@ import java.util.UUID;
 import static com.enoughisasgoodasafeast.Functions.randomUUID;
 import static io.jenetics.util.NanoClock.utcInstant;
 
-public class EdgeRow {
+public class EdgeRow implements BrblRow {
     //id            | uuid
     //created_at    | timestamp with time zone
     //match_text    | character varying(128)
@@ -20,6 +20,8 @@ public class EdgeRow {
                 (id, created_at, match_text, response_text, src, dst, updated_at)
                 VALUES
             """;
+
+    public static final String[] headers = {"id", "created_at", "match_text", "response_text", "src", "dst", "updated_at"};
 
     public static final String VALUES_SQL = """
             ('%s', '%s', '%s', '%s', '%s', %s, '%s'),
@@ -41,6 +43,18 @@ public class EdgeRow {
         this.responseText = responseText;
         this.updatedAt = this.createdAt;
     }
+
+    @Override
+    public String[] headers() {
+        return headers;
+    }
+
+    @Override
+    public String[] values() {
+        return new String[]{id.toString(), createdAt.toString(), matchText, responseText,
+                src.toString(), dst.toString(), updatedAt.toString()};
+    }
+
 
     String getValuesSql() {
         return String.format(VALUES_SQL,
