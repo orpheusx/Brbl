@@ -31,11 +31,7 @@ public class RouteRow implements BrblRow {
                 VALUES
             """;
 
-    public static final String[] headers = {"id", "platform", "channel", "default_node_id", "company_id", "status", "created_at", "updated_at"};
-
-    public String[] headers() {
-        return headers;
-    }
+    public static final String[] headers = {"id", "platform", "channel", "default_node_id", "status", "created_at", "updated_at", "company_id"};
 
     public static final String VALUES_SQL = """
             ('%s', '%s', '%s', '%s', '%s', '%s', '%s', '%s'),
@@ -77,9 +73,14 @@ public class RouteRow implements BrblRow {
                 id, platform.code(), channel, defaultNodeId, companyId, status, createdAt, updatedAt);
     }
 
+    public String[] headers() {
+        return headers;
+    }
+
     public String[] values() {
         return new String[]{id.toString(), platform.code(), channel, defaultNodeId.toString(),
-                companyId.toString(), status.name(), createdAt.toString(), updatedAt.toString()
+                status.name(), createdAt.toString(), updatedAt.toString(),
+                companyId.toString()
         };
     }
 

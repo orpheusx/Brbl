@@ -13,6 +13,7 @@ import java.util.List;
 import java.util.UUID;
 
 import static com.enoughisasgoodasafeast.Functions.randomUUID;
+import static com.enoughisasgoodasafeast.datagen.KnownData.knownCompanyId;
 import static java.io.IO.println;
 import static java.nio.file.Files.write;
 import static java.nio.file.Path.of;
@@ -253,7 +254,7 @@ public class ScriptBuilder {
             // Also write a single row to a file that creates an entry in Scripts table.
             var now = NanoClock.utcInstant();
             var referencingScript = new ScriptStruct(SCRIPT_ID, "Trés", "Three topics to talk about.", nodes.getFirst().id,
-                    ScriptStatus.PROD, LanguageCode.ENG, now, now, BrblUsersTsvGenerator.knownCompanyId);
+                    ScriptStatus.PROD, LanguageCode.ENG, now, now, knownCompanyId);
             sc.writeScriptToFile(referencingScript, of("scripts_batch_2.tsv"));
 
             println("Success: Data written to nodes_batch_2.tsv, edges_batch_2.tsv, and scripts_batch_2.tsv.");

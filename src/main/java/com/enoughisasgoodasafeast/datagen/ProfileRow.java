@@ -18,7 +18,7 @@ public class ProfileRow implements BrblRow {
     // roles           | character varying(64)
 
     // Leaving out roles (for now) since they are used/set only brbl_admin
-    public static final String[] headers = {"id", "surname", "given_name", "other_languages", "created_at", "updated_at"};
+    public static final String[] headers = {"id", "surname", "given_name", "other_languages", "created_at", "updated_at", "roles"};
 
     UUID id;
 
@@ -49,7 +49,7 @@ public class ProfileRow implements BrblRow {
     }
 
     public String[] values() {
-        return new String[]{id.toString(), surname, givenName, otherLanguages, createdAt.toString(), updatedAt.toString()};
+        return new String[]{id.toString(), surname, givenName, otherLanguages, createdAt.toString(), updatedAt.toString(), null};
     }
 
     @Override

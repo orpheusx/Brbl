@@ -38,18 +38,18 @@ public class ScriptRow implements BrblRow {
     UUID id;
     String name;
     String description;
-    UUID customerId;
+    UUID companyId;
     UUID nodeId;
     ScriptStatus status;
     LanguageCode language;
     Instant createdAt;
     Instant updatedAt;
 
-    public ScriptRow(UUID id, String name, String description, UUID customerId, UUID nodeId) {
+    public ScriptRow(UUID id, String name, String description, UUID companyId, UUID nodeId) {
         this.id = id;
         this.name = name;
         this.description = description;
-        this.customerId = customerId;
+        this.companyId = companyId;
         this.nodeId = nodeId;
         this.status = ScriptStatus.PROD;
         this.language = LanguageCode.ENG;
@@ -57,11 +57,11 @@ public class ScriptRow implements BrblRow {
         this.updatedAt = utcInstant();
     }
 
-    public ScriptRow(String name, String description, UUID customerId, UUID nodeId) {
+    public ScriptRow(String name, String description, UUID companyId, UUID nodeId) {
         this.id = randomUUID();
         this.name = name;
         this.description = description;
-        this.customerId = customerId;
+        this.companyId = companyId;
         this.nodeId = nodeId;
         this.status = ScriptStatus.PROD;
         this.language = LanguageCode.ENG;
@@ -71,18 +71,28 @@ public class ScriptRow implements BrblRow {
 
     String getValuesSql() {
         return String.format(VALUES_SQL,
-                id, name, description, customerId, nodeId, status, language, createdAt, updatedAt);
+                id, name, description, companyId, nodeId, status, language, createdAt, updatedAt);
     }
 
     public String[] headers() {
         return new String[] {
-                "id", "name", "description", "customer_id", "node_id", "status", "language", "created_at", "updated_at"
+                "id",
+                "name",
+                "description",
+                "node_id",
+                "status",
+                "language",
+                "created_at",
+                "updated_at",
+                "company_id"
         };
     }
 
     public String[] values() {
-        return new String[]{id.toString(), name, description, customerId.toString(), nodeId.toString(),
-                status.name(), language.name(), createdAt.toString(), updatedAt.toString()};
+        return new String[]{
+                id.toString(), name, description, nodeId.toString(),
+                status.name(), language.name(), createdAt.toString(), updatedAt.toString(),
+                companyId.toString()};
     }
 
     @Override
@@ -91,7 +101,7 @@ public class ScriptRow implements BrblRow {
                 .add("id=" + id)
                 .add("name='" + name + "'")
                 .add("description='" + description + "'")
-                .add("customerId=" + customerId)
+                .add("customerId=" + companyId)
                 .add("nodeId=" + nodeId)
                 .add("status=" + status)
                 .add("language=" + language)

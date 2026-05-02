@@ -10,6 +10,7 @@ import java.util.ArrayList;
 import java.util.List;
 import java.util.UUID;
 
+import static com.enoughisasgoodasafeast.datagen.KnownData.*;
 import static java.io.IO.println;
 import static java.lang.String.join;
 import static java.lang.System.out;
@@ -24,41 +25,6 @@ import static java.util.UUID.fromString;
 public class BrblLogicTsvGenerator extends BrblUsersTsvGenerator {
 
     public static Logger LOG = LoggerFactory.getLogger(BrblLogicTsvGenerator.class);
-
-    // FIXME These are defined only in a tsv file currently. Need to add them as a static constants here.
-    // TODO Switch from pointing at Nodes directly to pointing at Scripts.
-    public static String[] knownRootNodeIds = {
-            "89eddcb8-7fe5-4cd1-b18b-78858f0789fb", // What is your favorite color?
-            "525028ae-0a33-4c80-a22f-868f77bb9531", // True or false: people are the worst?
-            "89eddcb8-7fe5-4cd1-b18b-78858f0789fb", // What is your favorite color?
-    };
-
-    public static String[][] knownRouteIdsAndChannels = {
-            {"019dca4b-bb1e-756c-9050-7960e5828d68", "17814567890"},
-            {"019dca4b-bb23-7e0d-bfb6-9226d5c4166b", "18163456789"},
-            {"019dca4b-bb23-7091-a32b-66f2e18cd073", "12124468003"}
-    };
-
-    // Associate these with the favorite color script.
-    public static String[][] knownKeywordIdsAndPatterns1 = {
-            // id, pattern
-            {"3a99ca92-d24b-41f9-bca2-3c2375c88738", "(color|colour|colr).*(quiz|q|kwiz).*" },
-            {"571741cf-20f2-456d-92d6-f7f1c9d2b319", "bar" },
-            {"4cac70a8-2712-438b-8550-22aa9099ee3f", "baz" },
-            {"019c9123-744b-79f5-9a3b-b7e51d552fe3", "foo" }
-    };
-
-    // Associate with people are the worst script
-    public static String[][] getKnownKeywordIdsAndPatterns2 = {
-            {"53578bea-7f9e-49b3-8412-948f072f75b6", "meh" }
-    };
-
-    // (String name, String description, UUID customerId, UUID nodeId
-    public static String[][] knownScriptData = {
-            {"019dcf76-aa1e-7fb6-87d4-733deb0d4c95", "Fave color", "Starts conversation with chained multiple choice questions"},
-            {"019dcf76-aa24-738d-99c0-28fb89344f22", "The truth", "People bad: true or false"}
-    };
-
 
     private List<BrblRow> generateKnownKeywords(String[][] keywordIdsAndPatterns, String nodeId, String routeId) {
         var keywordRows = new ArrayList<BrblRow>();
@@ -108,8 +74,8 @@ public class BrblLogicTsvGenerator extends BrblUsersTsvGenerator {
         // routes for Yoyodyne
         var rowData = generator.generateKnownRoutes(
                 fromString(knownCompanyId),
-                BrblLogicTsvGenerator.knownRouteIdsAndChannels,
-                BrblLogicTsvGenerator.knownRootNodeIds);
+                knownRouteIdsAndChannels,
+                knownRootNodeIds);
         rowData.forEach(out::println);
 
         // keywords
@@ -124,8 +90,8 @@ public class BrblLogicTsvGenerator extends BrblUsersTsvGenerator {
         // scripts
         var scriptData = generator.generateKnownScripts(
                 fromString(knownCompanyId),
-                BrblLogicTsvGenerator.knownScriptData,
-                BrblLogicTsvGenerator.knownRootNodeIds);
+                knownScriptData,
+                knownRootNodeIds);
         scriptData.forEach(out::println);
 
         if (!generator.outputRowsAsTsv(rowData, "routes", "known_")) {

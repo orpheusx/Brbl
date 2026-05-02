@@ -1,0 +1,10 @@
+id	created_at	text	num_type	label	updated_at	type
+8da657ae-32d2-4fc1-8d27-2cfcd48858f6	2025-06-11 13:26:03.674015 +00:00	Talk to you tomorrow.	5	3:EndOfChat	2025-06-11 13:26:03.674015 +00:00	END_OF_CHAT
+ed0fbc0d-a3e3-40b4-91a4-9be24803e2db	2025-06-11 13:26:03.674126 +00:00	Sorry, that's not one of the food choices. Try again?	4	0:FoodQuizProcess	2025-06-11 13:26:03.674126 +00:00	PROCESS_MULTI
+0fc4ef6c-082f-4e90-b2f4-e14dbac78623	2025-06-11 13:26:03.674101 +00:00	What kind of food? 1) vegetables 2) meat 3) fruit	3	0:FoodQuiz	2025-06-11 13:26:03.674101 +00:00	PRESENT_MULTI
+35b8b472-fe8c-4201-895c-d2b128fdde32	2025-06-11 13:26:03.674185 +00:00	Sorry, that's not one of the veggie choices. Try again?	4	1:BestVegProcess	2025-06-11 13:26:03.674185 +00:00	PROCESS_MULTI
+ec4bb0f2-124f-4755-8331-40f64ce24940	2025-06-11 13:26:03.674160 +00:00	What's your fave vegetable? 1) carrots 2) broccoli, 3) peppers	3	1:BestVegPresent	2025-06-11 13:26:03.674160 +00:00	PRESENT_MULTI
+1b76e670-f683-4863-a30d-9262c3664a82	2025-06-11 13:26:03.674292 +00:00	Sorry, that's not one of the meat choices. Try again?	4	1:BestMeatProcess	2025-06-11 13:26:03.674292 +00:00	PROCESS_MULTI
+a77300e2-d7a7-40ea-bd0a-0d957a3ff5b5	2025-06-11 13:26:03.674259 +00:00	What's your fave meat? 1) beef 2) pork, 3) chicken	3	1:BestMeat	2025-06-11 13:26:03.674259 +00:00	PRESENT_MULTI
+eff5596e-c39a-432c-8dd5-7fd596d8182d	2025-06-11 13:26:03.674411 +00:00	Sorry, that's not one of the fruit choices. Try again?	4	1:BestFruitProcess	2025-06-11 13:26:03.674411 +00:00	PROCESS_MULTI
+369d49d1-6c17-4afe-a6c1-ba01026798f3	2025-06-11 13:26:03.674381 +00:00	What's your fave fruit? 1) apples 2) bananas, 3) grapes	3	1:BestFruit	2025-06-11 13:26:03.674381 +00:00	PRESENT_MULTI

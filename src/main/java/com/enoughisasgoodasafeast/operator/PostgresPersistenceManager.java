@@ -144,7 +144,7 @@ public class PostgresPersistenceManager implements PersistenceManager {
                 INNER JOIN brbl_logic.routes r
                     ON r.company_id = a.claimant_id
                 WHERE
-                    u.platform_code = ?::public.platform
+                    u.platform_code = ?::brbl_logic.platform
                     AND r.channel = ?
                     AND u.platform_id = ?
             )

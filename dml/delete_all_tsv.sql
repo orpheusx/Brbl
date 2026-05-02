@@ -1,0 +1,15 @@
+BEGIN TRANSACTION ;
+DELETE FROM brbl_logic.campaign_users WHERE delivered IN ('PENDING', 'SENT');
+DELETE FROM brbl_logic.push_campaigns WHERE created_at > '1980-01-01';
+DELETE FROM brbl_logic.scripts WHERE created_at > '1980-01-01';
+DELETE FROM brbl_logic.keywords WHERE created_at > '1980-01-01';
+DELETE FROM brbl_logic.routes WHERE created_at > '1980-01-01';
+DELETE FROM brbl_logic.sessions WHERE created_at > '1980-01-01';
+DELETE FROM brbl_logic.edges WHERE created_at     > '1980-01-01';
+DELETE FROM brbl_logic.nodes WHERE created_at     > '1980-01-01';
+DELETE FROM brbl_users.amalgams WHERE created_at  > '1980-01-01';
+DELETE FROM brbl_users.customers WHERE created_at > '1980-01-01';
+DELETE FROM brbl_users.profiles WHERE created_at   > '1980-01-01';
+DELETE FROM brbl_users.users WHERE created_at     > '1980-01-01';
+DELETE FROM brbl_users.companies WHERE created_at > '1980-01-01';
+COMMIT;

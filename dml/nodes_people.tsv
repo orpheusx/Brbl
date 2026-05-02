@@ -1,0 +1,5 @@
+id	created_at	text	num_type	label	updated_at	type
+aec8789f-546f-42c2-b1d5-c80bd10014f0	2025-05-30 14:18:37.249297 +00:00	Error message for AnotherEndOfConversation_Process	5	AnotherEndOfConversation_Process	2025-05-30 14:18:37.249297 +00:00	END_OF_CHAT
+525028ae-0a33-4c80-a22f-868f77bb9531	2025-05-25 15:07:24.344176 +00:00	True or false: people are the worst?	3	BadPeople	2025-05-25 15:07:24.344176 +00:00	PRESENT_MULTI
+cf72ce06-50fc-4bf1-852b-dbdbd9f97f66	2025-05-25 15:07:24.348591 +00:00	There is nothing left to say.	3	AnotherEndOfConversation	2025-05-25 15:07:24.348591 +00:00	PRESENT_MULTI
+ae28c0e3-9303-4807-979f-694bc9981dd7	2025-05-30 14:18:23.686057 +00:00	Error message for BadPeople_Process	4	BadPeople_Process	2025-05-30 14:18:23.686057 +00:00	PROCESS_MULTI

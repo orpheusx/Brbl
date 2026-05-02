@@ -17,7 +17,9 @@ public class CustomerRow implements BrblRow {
     // password          | character varying(72)
 
     // Leaving out confirmation_code and password (for now) since they are only used by brbl_admin
-    public static final String[] headers = {"id", "created_at", "updated_at", "email", "company_id", "status", "confirmation_code"};
+    public static final String[] headers = {
+            "id", "created_at", "updated_at", "email", "company_id", "status", "confirmation_code", "password"
+    };
 
     UUID id;
     Instant createdAt;
@@ -45,7 +47,10 @@ public class CustomerRow implements BrblRow {
         return headers;
     }
     public String[] values() {
-        return new String[]{id.toString(), createdAt.toString(), updatedAt.toString(), email, companyId.toString(), status.name(), confirmationCode};
+        if (confirmationCode.length() > 12) {
+            confirmationCode = confirmationCode.substring(0, 12);
+        }
+        return new String[]{id.toString(), createdAt.toString(), updatedAt.toString(), email, companyId.toString(), status.name(), confirmationCode, password};
     }
 
     @Override

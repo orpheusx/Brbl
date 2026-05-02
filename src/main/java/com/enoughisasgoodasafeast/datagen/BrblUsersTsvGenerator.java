@@ -14,6 +14,9 @@ import java.time.LocalDate;
 import java.util.*;
 
 import static com.enoughisasgoodasafeast.datagen.Functions.adjustPlatformId;
+import com.enoughisasgoodasafeast.datagen.KnownData.*;
+
+import static com.enoughisasgoodasafeast.datagen.KnownData.*;
 import static com.enoughisasgoodasafeast.operator.CompanyStatus.*;
 import static com.enoughisasgoodasafeast.operator.CountryCode.*;
 import static com.enoughisasgoodasafeast.operator.Platform.*;
@@ -31,87 +34,6 @@ import static java.util.Comparator.comparing;
 public class BrblUsersTsvGenerator {
 
     public static Logger LOG = LoggerFactory.getLogger(BrblUsersTsvGenerator.class);
-
-    // Ordered from smallest to largest.
-    public static final String[] standardCompanyNames = {
-            "MicroCorp", "MiniCorp", "MegaCorp", "MondoCorp", "GigaCorp", "NadaCorp"
-    };
-
-    public static final CompanyStatus[] standardCompanyStatuses = {
-            ACTIVE, ACTIVE, ACTIVE, SUSPENDED, ACTIVE, LAPSED
-    };
-
-    public static final String knownCompanyName = "Yoyodyne Systems"; // always ACTIVE
-
-    public static final String knownCompanyId = "019d2055-922c-75f7-a80e-091f01382fa3";
-
-    public static final String[] knownUserIds = {
-            "019d2055-9235-73cc-8c75-2cb97dbbc285",
-            "019d2055-9235-736d-908e-b1c0229b0392",
-            "019d2055-9235-713a-8fb8-ef96c0b7b6c0",
-            "019d2055-9235-72b6-a72a-bdbe4dfc6a07",
-            "019d2055-9235-7465-bd7a-8805df51b3ee",
-            "019d2055-9235-7849-a26d-199fb6738fbe",
-            "019d2055-9235-7290-8266-37ce60819893",
-            "019d2055-9235-789e-999b-3e47084d5081",
-            "019d2055-9235-7c22-ade9-f6b416f123a7",
-            "019d2055-9235-7c95-8610-1945de2d2910"
-    };
-
-    // The five ids here are correlated by index to the elements in knownUserIds
-    // which means that the second half of knownUserIds are unlinked.
-    public static final String[] knownLinkedUserIds = {
-            "019d2553-bdcc-7433-b100-b4fb88d92b0a",
-            "019d2553-bdcc-7abb-8a6e-f607f0045a15",
-            "019d2553-bdcc-7a2a-82d1-5becd6ff7f9d",
-            "019d2553-bdcc-72a1-a01f-596c19c9455c",
-            "019d2553-bdcc-7142-81f2-4539a656bbda"
-    };
-
-    // public static final Platform[] knownPlatformsForUser = {SMS, SMS, SMS, SMS, SMS, SMS, SMS, SMS, SMS, SMS};
-
-    public static final String[] knownNumbersForUsers = {
-            "14167209458",  // Toronto area code.
-            "526641112222", // A very fake number in Mexico City.
-            "17817209450", // The rest are for U.S.
-            "14157209451", // California
-            "17817209452", // Massachusetts
-            "17817209453",
-            "17817209454",
-            "19297209455", // NYC
-            "17817209456",
-            "19787209457",
-    };
-
-    public static final CountryCode[] knownCountryCodes = {US, US, US, US, US, US, US, US, CA, MX};
-
-    public static final String[] knownProfileIds = {
-            "019d2055-9235-7daf-98ce-695cea1f25bf",
-            "019d2055-9235-7fab-8150-86496418de20",
-            "019d2055-9235-75d0-83b4-173de282ff9e"
-    };
-
-    public static final String[] knownCustomerIds = {
-            "019d2055-9235-7c52-bfe1-0bdeb8fbe6ca",
-            "019d2055-9235-7354-aaae-067e97853f4a"
-    };
-
-    // The group_id values for each amalgam.
-    // NB: Expected to be equal to size of knownNumbersForUsers.
-    public static final String[] knownAmalgamIds = {
-            "019d2055-9235-7e29-b0de-8903d9f662db",
-            "019d2055-9235-7ce6-bfc6-4ccbb9c16a89",
-            "019d2055-9235-7073-a9ae-9dbaf02e817c",
-            "019d2055-9235-72f4-8f7e-3b23435a5717",
-            "019d2055-9235-74fc-bbf1-da2f32199ffc",
-            "019d2055-9235-7a1c-9d1d-268d9ec1b6ba",
-            "019d2055-9235-7bce-acf2-33353f7287df",
-            "019d2055-9236-7b00-a680-f7d417788432",
-            "019d2055-9236-7806-b193-24270d2698d0",
-            "019d2055-9236-7701-b644-114d0e32a565"
-    };
-
-    public static final String DLM = "\t";
 
     private final Faker faker;
     private final EasyRandom easyRandom;
@@ -151,9 +73,9 @@ public class BrblUsersTsvGenerator {
             CustomerRow customer = null;
 
             if (k < numProfiles) {
-                profile = newProfile();
+                profile = newProfile(knownProfileIds[k]);
                 if (m < numCustomers) {
-                    customer = newCustomer(profile, company.id, company.status);
+                    customer = newCustomer(profile, company.id, company.status, knownCustomerIds[m]);
                 }
             }
 
@@ -208,7 +130,7 @@ public class BrblUsersTsvGenerator {
                 if (k < numProfiles) {
                     profile = newProfile();
                     if (m < numCustomers) {
-                        customer = newCustomer(profile, company.id, company.status);
+                        customer = newCustomer(profile, company.id, company.status, knownCustomerIds[m]);
                     }
                 }
 
@@ -382,7 +304,7 @@ public class BrblUsersTsvGenerator {
 
 
         var knownDataList = generator.generateKnown();
-        var randomDataList = generator.generateRandom(minUsers, maxUsers);
+//        var randomDataList = generator.generateRandom(minUsers, maxUsers);
 
         // Debug output:
         // Source - https://stackoverflow.com/a/32528632
@@ -402,9 +324,9 @@ public class BrblUsersTsvGenerator {
             LOG.error("Failed writing known output files.");
         }
 
-        if (!generator.outputAsTsv(randomDataList, "random_")) {
-            LOG.error("Failed writing random output files.");
-        }
+//        if (!generator.outputAsTsv(randomDataList, "random_")) {
+//            LOG.error("Failed writing random output files.");
+//        }
 
     }
 

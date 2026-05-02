@@ -4657,7 +4657,72 @@ Reload ordering:
 Created BrblLogicTsvGenerator to generate routes, keywords, and scripts.
 Currently it's a subclass of BrblUsersTsvGenerator. Need to either merge them or extract the common functionality into a base (abstract) class. Also, need to extract all the static constants to a separate interface that our unit/integration tests can reference; this is the basis of the design: to generate a set of "well known" data that can be regenerated and loaded into containerized Postgres instance.
 
+Loaded these new tsv files using DataGrip's import feature. Ideally we would do this in a script using psql and the \copy command. e.g.
+
+    psql -U brbl_admin -d brbl_db_dev -c "\copy keywords FROM 'dml/known_keywords.tsv' WITH (FORMAT csv, HEADER true, DELIMITER E'\t')"
+
 Still need to create equivalent code that contains the node and edge data currently stored in nodes_*.tsv and edges_*.tsv.
 
 TODO: low priority but, for uniformity, we should change the Platform enum to use the name instead of the code; the enum type stores an integer either way so better to make it more readable/grokkable by new users.
+
+I had a lot of changes queued up and decided to get them committed and pushed despite a lot of (expected) failing tests:
+
+    [ERROR] Failures:
+    [ERROR]   BlasterIntegrationTest.getPushCampaignUsers:223 expected: <14> but was: <0>
+    [ERROR]   BlasterIntegrationTest.getPushCampaignUsers2:240 expected: <20> but was: <0>
+    [ERROR]   BlasterIntegrationTest.pushCampaignLifecycle:89 Unexpected exception thrown: org.opentest4j.AssertionFailedError: expected: not <null>
+    [ERROR]   BlasterIntegrationTest.testExec_ActiveSessionUsersSkipped:300 expected: not <null>
+    [ERROR]   BlasterIntegrationTest.testExec_CampaignUsersEmpty:347 expected: not <null>
+    [ERROR]   BlasterIntegrationTest.testExec_CompanyStatusNotActive:409 expected: not <null>
+    [ERROR]   BlasterIntegrationTest.testExec_RouteStatusNotActive:361 expected: not <null>
+    [ERROR]   OperatorPersistenceIntegrationTest.findAllKeywords:90 expected: <8> but was: <5>
+    [ERROR]   OperatorPersistenceIntegrationTest.findDefaultScriptByRoute:71 expected: not <null>
+    [ERROR]   OperatorPersistenceIntegrationTest.findOrCreateUser:81 expected: not <null>
+    [ERROR]   OperatorPersistenceIntegrationTest.findOwningCompanyIdByRouteChannel:64 expected: not <null>
+    [ERROR]   OperatorPersistenceIntegrationTest.findUserExisting:42 expected: not <null>
+    [ERROR]   OperatorPersistenceIntegrationTest.getScript:54 expected: not <null>
+
+
+❯ psql -U brbl_admin -d brbl_db_dev -c "\copy users FROM 'dml/known_users.tsv' WITH (FORMAT csv, HEADER true, DELIMITER E'\t', NULL 'null')"
+COPY 15
+❯ psql -U brbl_admin -d brbl_db_dev -c "\copy profiles FROM 'dml/known_profiles.tsv' WITH (FORMAT csv, HEADER true, DELIMITER E'\t', NULL 'null')"
+COPY 3
+❯ psql -U brbl_admin -d brbl_db_dev -c "\copy customers FROM 'dml/known_customers.tsv' WITH (FORMAT csv, HEADER true, DELIMITER E'\t', NULL 'null')"
+COPY 2
+❯ psql -U brbl_admin -d brbl_db_dev -c "\copy amalgams FROM 'dml/known_amalgams.tsv' WITH (FORMAT csv, HEADER true, DELIMITER E'\t', NULL 'null')"
+COPY 15
+
+Required some code changes to get these working but known data is now loaded. Woot!
+
+
+OperatorPersistenceIntegrationTest.findOrCreateUser: the channel's are getting an extra "1" prepended when the .tsv is generated. Functions.adjustPlatformId was not expecting the input to already include a country code.
+
+Fixed all the OperatorPersistenceIntegrationTest tests by updating data or logic to suit the new data set.
+Now just the BlasterIntegrationTests remain broken...
+
+RANDOM THOUGHT: Does it make sense to move all the datagen code into the test tree? I think we want all the constants separated into their own files that both the generation code and the tests can reference. The former can't reference constants in the test tree from the main tree. And we'd rather not include the datagen code in our runtime package.
+
+
+===== 2026-05-01 ====
+
+Hmm, while building some scripts to clear and reload data from the generated .tsv files I ran into an issue loading known_routes.tsv using the same \copy commands that work as expected with the other data files.
+IntelliJ isn't displaying this .tsv as expected in spreadsheet-like data mode. Unclear why.
+Loading the file using DataGrip works fine. Loading it via psql's \copy command does not.
+It seems that including "HEADER true" in the WITH section only tells psql that it should skip the first (header) row. The order of columns in that header is NOT used to guide the insert operation. The problem with known_routes.tsv is that the headers didn't match the declared order in the table schema.
+I updated the headers() and values() methods in RouteRow.java accordingly.
+ScriptRow appears to have the same problem...fixed.
+
+NOTE:
+TODO
+    X Finish fixing the tests (BlasterIntegrationTest etc.) Note: a lot of the tests are actually terrible and reflect incomplete design of Blaster.
+    DDL Updates to (attempt to) implement with the pgroll migration system.
+        _ brbl_logic.scripts: customer_id --> company_id.
+        _ brbl_logic.routes: rename default_node_id --> default_script_id, fk ref to scripts table instead of nodes.
+        _ brbl_logic.keywords: fk ref to scripts table
+    _ Implement additional script behaviors including END_OF_CONVERSATION (resetting session state)
+
+===== 2026-05-02 ====
+
+Moved all the "known" constants used in the datagen processes into a separate class: KnownData.
+All the unit tests that need to specify identifiers should use this instead.
 

@@ -39,8 +39,8 @@ public class AmalgamRow {
 
     public String[] values() {
         return new String[]{groupId.toString(), userId.toString(),
-                (null == profileId)  ? "" : profileId.toString(),
-                (null == customerId) ? "" : customerId.toString(),
+                (null == profileId)  ? "null" : profileId.toString(),
+                (null == customerId) ? "null" : customerId.toString(),
                 createdAt.toString(), updatedAt.toString(), claimantId.toString()};
     }
 

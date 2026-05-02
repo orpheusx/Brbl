@@ -1,0 +1,16 @@
+BEGIN TRANSACTION ;
+\copy brbl_users.companies FROM 'known_companies.tsv'   WITH (FORMAT csv, HEADER true, DELIMITER E'\t', NULL 'null');
+\copy brbl_users.users     FROM 'known_users.tsv'       WITH (FORMAT csv, HEADER true, DELIMITER E'\t', NULL 'null');
+\copy brbl_users.profiles  FROM 'known_profiles.tsv'    WITH (FORMAT csv, HEADER true, DELIMITER E'\t', NULL 'null');
+\copy brbl_users.customers FROM 'known_customers.tsv'   WITH (FORMAT csv, HEADER true, DELIMITER E'\t', NULL 'null');
+\copy brbl_users.amalgams  FROM 'known_amalgams.tsv'    WITH (FORMAT csv, HEADER true, DELIMITER E'\t', NULL 'null');
+\copy brbl_logic.nodes     FROM 'nodes_colorquiz.tsv'   WITH (FORMAT csv, HEADER true, DELIMITER E'\t', NULL 'null');
+\copy brbl_logic.nodes     FROM 'nodes_foodquiz.tsv'    WITH (FORMAT csv, HEADER true, DELIMITER E'\t', NULL 'null');
+\copy brbl_logic.nodes     FROM 'nodes_people.tsv'      WITH (FORMAT csv, HEADER true, DELIMITER E'\t', NULL 'null');
+\copy brbl_logic.edges     FROM 'edges_colorquiz.tsv'   WITH (FORMAT csv, HEADER true, DELIMITER E'\t', NULL 'null');
+\copy brbl_logic.edges     FROM 'edges_foodquiz.tsv'    WITH (FORMAT csv, HEADER true, DELIMITER E'\t', NULL 'null');
+\copy brbl_logic.edges     FROM 'edges_people.tsv'      WITH (FORMAT csv, HEADER true, DELIMITER E'\t', NULL 'null');
+\copy brbl_logic.routes    FROM 'known_routes.tsv'      WITH (FORMAT csv, HEADER true, DELIMITER E'\t', NULL 'null');
+\copy brbl_logic.keywords  FROM 'known_keywords.tsv'    WITH (FORMAT csv, HEADER true, DELIMITER E'\t', NULL 'null');
+\copy brbl_logic.scripts   FROM 'known_scripts.tsv'     WITH (FORMAT csv, HEADER true, DELIMITER E'\t', NULL 'null');
+COMMIT;
