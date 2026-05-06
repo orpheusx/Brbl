@@ -1,0 +1,16 @@
+operations:
+  - add_column:
+      table: routes
+      up: SELECT s.id FROM scripts s WHERE s.node_id = default_node_id LIMIT 1
+      column:
+        name: default_script_id
+        type: uuid
+        comment: Used when no other logic provides the script.
+        nullable: false
+        unique: false
+        pk: false
+        references:
+          name: fk_routes_default_script_id_scripts
+          table: scripts
+          column: id
+          on_delete: RESTRICT

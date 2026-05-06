@@ -6,7 +6,7 @@ package com.enoughisasgoodasafeast.datagen;
 // id          | uuid                     |           | not null |
 // name        | character varying(64)    |           | not null |
 // description | character varying(128)   |           |          |
-// customer_id | uuid                     |           |          |
+// company_id | uuid                     |           |          |
 // node_id     | uuid                     |           |          |
 // status      | script_status            |           |          |
 // language    | public.language_code     |           |          |
@@ -27,7 +27,7 @@ public class ScriptRow implements BrblRow {
 
     public static final String INSERT_SQL = """
             INSERT INTO brbl_logic.scripts
-                (id, name, description, customer_id, node_id, status, language, created_at, updated_at)
+                (id, name, description, company_id, node_id, status, language, created_at, updated_at)
                 VALUES
             """;
 
@@ -101,7 +101,7 @@ public class ScriptRow implements BrblRow {
                 .add("id=" + id)
                 .add("name='" + name + "'")
                 .add("description='" + description + "'")
-                .add("customerId=" + companyId)
+                .add("companyId=" + companyId)
                 .add("nodeId=" + nodeId)
                 .add("status=" + status)
                 .add("language=" + language)

@@ -4715,8 +4715,7 @@ ScriptRow appears to have the same problem...fixed.
 NOTE:
 TODO
     X Finish fixing the tests (BlasterIntegrationTest etc.) Note: a lot of the tests are actually terrible and reflect incomplete design of Blaster.
-    DDL Updates to (attempt to) implement with the pgroll migration system.
-        _ brbl_logic.scripts: customer_id --> company_id.
+    _ DDL Updates to (attempt to) implement with the pgroll migration system.
         _ brbl_logic.routes: rename default_node_id --> default_script_id, fk ref to scripts table instead of nodes.
         _ brbl_logic.keywords: fk ref to scripts table
     _ Implement additional script behaviors including END_OF_CONVERSATION (resetting session state)
@@ -4725,4 +4724,184 @@ TODO
 
 Moved all the "known" constants used in the datagen processes into a separate class: KnownData.
 All the unit tests that need to specify identifiers should use this instead.
+An incremental update was made to pgroll.
+
+    brew upgrade pgroll
+
+DROP SCHEMA pgroll CASCADE; -- uninstalls the schema management
+
+Worked fine, deleting tables, functions, and triggers.
+
+Google says env var, PGROLL_PG_URL, can be used to provide the --postgres-url param.
+
+export PGROLL_PG_URL="postgres://mark:postgres@localhost:5432/brbl_db_dev?sslmode=disable"
+
+pgroll init
+SUCCESS
+❯ pgroll baseline 0001_initial_schema ./migrations
+Creating a baseline migration will restart the migration history.
+Please confirm [y/N]: Yes
+SUCCESS
+
+NOTE: running the baseline command again
+  ERROR   Failed to create baseline: failed to insert baseline migration: pq: duplicate key value violates unique constraint "migrations_pkey"
+  Error: failed to insert baseline migration: pq: duplicate key value violates unique constraint "migrations_pkey"
+
+Before proceeding, made some backups...
+    Full cluster:
+        pg_dumpall > backups/full_cluster_backup_20260503_01.sql
+    Schema and data, without users/role:
+        pg_dump -d brbl_db_dev -Fc -Z6 > backups/db_only_backup_compressed_20260503_01.sql
+        and
+        pg_dump -Fc brbl_db_dev > backups/brbl_db_dev_20260503_01.dump
+        can be restored via:
+            createdb -T template0 brbl_db_stage
+            pg_restore -d brbl_db_stage backups/brbl_db_dev_20260503_01.dump
+            dropdb brbl_db_stage
+    Just data:
+        pg_dumpall --data-only > data_backup_20260503_01.sql
+
+
+See https://www.postgresql.org/docs/18/app-pgrestore.html
+NB: We need to start practicing creating and restoring databases from backup soon.
+I tried this using createdb, pg_restore, and dropdb commands above and it worked a treat.
+
+Back to pgroll...
+
+We may need to provide the --schema command line argument. The default is 'public.'
+
+One new column with fk constraint to add:
+        _ brbl_logic.routes.default_script_id with fk to brbl_logic.scripts
+                Also set the value to the first script that points to the current node.
+One column to drop:
+        _ brbl_logic.routes.default_node_id (once previous migration completes.)
+One foreign keys to add:
+        _ brbl_logic.keywords: fk ref to scripts table
+
+Start with the simplest. Wrote migrations/0002_rename_scripts_customer_to_company.yaml:
+    operations:
+      - rename_column:
+          table: brbl_logic.scripts
+          from: customer_id
+          to: company_id
+
+❯ pgroll start migrations/0002_rename_scripts_customer_to_company.yaml
+  ERROR   Failed to start migration: migration '0002_rename_scripts_customer_to_company' is invalid: table "brbl_logic.scripts" does not exist
+Error: migration '0002_rename_scripts_customer_to_company' is invalid: table "brbl_logic.scripts" does not exist
+
+This looks like the error we were getting the first time we tried using pgroll...
+
+Okay, the AI bot the Xata people are now using responded to the bug report I filed (paraphrasing the message I'd left on their Github discussion board.)
+
+    "The issue is that pgroll defaults to the public schema when no schema is specified. During validation, it loads only tables from the target schema into memory and checks your table name against that set [1]. So if your scripts table lives in a non-public schema, pgroll simply won't find it.
+
+     The fix is to use the --schema flag to tell pgroll which schema your table is in:
+
+     pgroll start --schema <your_schema> migrations/0002_rename_scripts_customer_to_company.yaml
+     You can also set this via the PGROLL_SCHEMA environment variable [2]."
+
+Yep, this was the issue. I will have to run the baseline command with the --schema arg for each of our schemas:
+    ❯ pgroll baseline 0001_initial_brbl_logic ./migrations --schema brbl_logic
+    ❯ pgroll baseline 0001_initial_brbl_logs ./migrations --schema brbl_logs
+    ❯ pgroll baseline 0001_initial_brbl_users ./migrations --schema brbl_users
+    ❯ pgroll baseline 0001_initial_brbl_biz ./ddl/migrations --schema brbl_biz
+
+The pgroll program also checks the PGROLL_SCHEMA environment variable, too.
+
+This specific case now sees the schema, however, the scripts column was already changed from customer_id to company_id so let's proceed to the next one...
+
+REMINDER: the reason we don't have a foreign key between sessions and amalgams is that group_id isn't a primary key; it's intentionally not unique.
+
+
+===== 2026-05-04 ====
+
+RANDOM NOTES FOR THE DAY:
+    - Google's LiteRT (an "on-device" framework for ML, GenAI) is the preferred runtime for running Gemma 4 fast and with MTP (multi token prediction aka "time-traveling") enabled. The LlamaCpp platform doesn't support it yet for complicated reasons. Theoretically, this could pretty useful for our purposes. It allows it revisit, modify, and branch off from previous states, conversations, or data checkpoints.
+    - AnythingLLM might be worth checking out. Their focus is on local models.
+
+Step 1
+        _ Add brbl_logic.routes.default_script_id with fk to scripts table.
+          Also set the value to the first script that points to the current node.
+Step 2
+        _ Drop brbl_logic.routes.default_node_id
+Complete.
+
+        _Add column keywords.temp_script_id column with fk pointing at scripts.id
+        ...
+
+For the up param I think we need a SQL statement that will update the default_script_id column with the id of a row in Scripts that references the same row in Nodes:
+
+    UPDATE routes
+    SET default_script_id = (
+        SELECT s.id
+        FROM scripts s
+        WHERE s.node_id = routes.default_node_id
+        LIMIT 1
+    );
+
+
+❯ pgroll start --schema brbl_logic ddl/migrations/0003_brbl_logic_routes_add_default_script_id.yaml
+ SUCCESS  New version of the schema available under the postgres "brbl_logic_0003_brbl_logic_routes_add_default_script_id" schema
+❯ pgroll complete --schema brbl_logic
+ SUCCESS  Migration successful!
+
+But no changes occurred. The routes schema is unchanged.
+
+The Xata people have setup an LLM agent to monitor the bug tracker page:
+See https://github.com/xataio/pgroll/issues/1030.
+
+Impressive help provided by "Dosu"
+
+❯ pgroll start --schema brbl_logic ddl/migrations/brbl_logic/0004_brbl_logic_routes_add_default_script_id.yaml --verbose
+
+2026-05-04 13:58:44 INFO  starting migration
+                      ├ name: 0004_brbl_logic_routes_add_default_script_id
+                      └ operation_count: 1
+2026-05-04 13:58:44 INFO  starting operation
+                      ├ operation: add_column
+                      ├ name: default_script_id
+                      ├ type: uuid
+                      ├ table: routes
+                      ├ nullable: false
+                      └ unique: false
+2026-05-04 13:58:44 INFO  created versioned schema for migration
+                      ├ migration: 0004_brbl_logic_routes_add_default_script_id
+                      └ schema_name: brbl_logic_0004_brbl_logic_routes_add_default_script_id
+2026-05-04 13:58:44 INFO  backfilling started table: routes
+2026-05-04 13:58:44 INFO  backfilling completed table: routes
+ SUCCESS  New version of the schema available under the postgres "brbl_logic_0004_brbl_logic_routes_add_default_script_id" schema
+
+❯ pgroll migrate ddl/migrations/brbl_logic --schema brbl_logic --complete --verbose
+migration "0004_brbl_logic_routes_add_default_script_id" is active
+
+At this point, everything looked the way I expected. The new column was present and the correct foreign key constraint was defined. So I told pgroll to complete the migration.
+
+❯ pgroll complete --schema brbl_logic
+ SUCCESS  Migration successful!
+
+❯ pgroll status --schema brbl_logic --verbose
+{
+  "schema": "brbl_logic",
+  "version": "0004_brbl_logic_routes_add_default_script_id",
+  "status": "Complete"
+}
+
+There remains a schema called brbl_logic_0004_brbl_logic_routes_add_default_script_id (owned my our postgres superuser rather than brbl_admin)
+
+It's only at this point that the light goes off in my brain. The application code appears to need to reference tablesn through the latest schema rather than the original. The pgroll docs recommend setting the search_path used by the application's postgres connection to control which schema is used.
+
+From some basic reading, it seems the performance of reading and writing through "simple" views (ones that only include single tables) is no different than going directly to the table.
+We will need to be careful if we to use composite views for other purposes, of course. The schema changes pgroll makes are to the original table. Might need to recreate such views in the new pgroll-managed schema after the migration completes.
+
+This means we need to review our SQL (PostgresPersistenceManager) and figure out the best way to work with it.
+
+NOTE: We should always add a "name" property at the top of the yaml file. This will be used by pgroll to name the new schema (instead of the base name of the migration file.)
+
+Next Up:
+1) Update the application code (node_id --> script_id.)
+2) Update the datagen for routes to use (only) script_id.
+3) Create a migration to drop the node_id column.
+
+
+===== 2026-05-06 ====
 
