@@ -315,15 +315,17 @@ public class PostgresPersistenceManager implements PersistenceManager {
                         r.id,
                         r.platform,
                         r.channel,
-                        r.default_node_id,
+                        s.node_id,
                         r.company_id,
                         r.status,
                         r.created_at,
                         r.updated_at
                     FROM
-                        brbl_logic.routes r
+                        routes r
+                    INNER JOIN
+                        scripts s ON s.id = r.default_script_id
                     WHERE
-                        r.status = ?::brbl_logic.route_status
+                        r.status = ?::route_status
                     """;
 
     public static final String SELECT_PUSH_CAMPAIGN_USERS_BY_DELIVERY_STATUS =

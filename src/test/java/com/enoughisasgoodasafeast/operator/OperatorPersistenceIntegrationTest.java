@@ -69,6 +69,14 @@ class OperatorPersistenceIntegrationTest {
     }
 
     @Test
+    void getActiveRoutes() {
+        final Route[] activeRoutes = pm.getActiveRoutes();
+        assertNotNull(activeRoutes);
+        assertEquals(knownRouteIdsAndChannels.length, activeRoutes.length);
+        // LOG.info("Found expected {} active routes", activeRoutes.length);
+    }
+
+    @Test
     void findDefaultScriptByRoute() {
         final Node node = op.findDefaultScriptByRoute(sk);
         assertNotNull(node);
