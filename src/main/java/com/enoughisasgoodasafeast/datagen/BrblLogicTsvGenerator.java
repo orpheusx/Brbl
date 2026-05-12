@@ -55,14 +55,14 @@ public class BrblLogicTsvGenerator extends BrblUsersTsvGenerator {
         return scriptRows;
     }
 
-    public List<BrblRow> generateKnownRoutes(UUID companyId, String[][] routeIdsAndChannels, String[] rootNodeIds) {
-        if (routeIdsAndChannels.length != rootNodeIds.length)
+    public List<BrblRow> generateKnownRoutes(UUID companyId, String[][] routeIdsAndChannels, String[][] scriptData) {
+        if (routeIdsAndChannels.length != scriptData.length)
             throw new IllegalStateException("Expected equal sized arrays.");
 
         var routeRows = new ArrayList<BrblRow>();
         for (int i = 0; i < routeIdsAndChannels.length; i++) {
             var route = new RouteRow(fromString(routeIdsAndChannels[i][0]), routeIdsAndChannels[i][1],
-                    fromString(rootNodeIds[i]), Platform.SMS, companyId); // all SMS, all ACTIVE for now
+                    fromString(scriptData[i][0]), Platform.SMS, companyId); // all SMS, all ACTIVE for now
             routeRows.add(route);
         }
 
@@ -75,7 +75,7 @@ public class BrblLogicTsvGenerator extends BrblUsersTsvGenerator {
         var rowData = generator.generateKnownRoutes(
                 fromString(knownCompanyId),
                 knownRouteIdsAndChannels,
-                knownRootNodeIds);
+                knownScriptData);
         rowData.forEach(out::println);
 
         // keywords

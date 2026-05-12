@@ -4816,12 +4816,12 @@ REMINDER: the reason we don't have a foreign key between sessions and amalgams i
 ===== 2026-05-04 ====
 
 RANDOM NOTES FOR THE DAY:
-    - Google's LiteRT (an "on-device" framework for ML, GenAI) is the preferred runtime for running Gemma 4 fast and with MTP (multi token prediction aka "time-traveling") enabled. The LlamaCpp platform doesn't support it yet for complicated reasons. Theoretically, this could pretty useful for our purposes. It allows it revisit, modify, and branch off from previous states, conversations, or data checkpoints.
+    - Google's LiteRT (an "on-device" framework for ML, GenAI) is the preferred runtime for running Gemma 4 fast and with MTP (multi token prediction aka "time-traveling") enabled. The LlamaCpp platform doesn't currently support it yet for complicated reasons. Theoretically, this could pretty useful for our purposes. It allows it revisit, modify, and branch off from previous states, conversations, or data checkpoints.
     - AnythingLLM might be worth checking out. Their focus is on local models.
 
 Step 1
         _ Add brbl_logic.routes.default_script_id with fk to scripts table.
-          Also set the value to the first script that points to the current node.
+          (Also set the value to the first script that points to the current node.)
 Step 2
         _ Drop brbl_logic.routes.default_node_id
 Complete.
@@ -4898,10 +4898,82 @@ This means we need to review our SQL (PostgresPersistenceManager) and figure out
 NOTE: We should always add a "name" property at the top of the yaml file. This will be used by pgroll to name the new schema (instead of the base name of the migration file.)
 
 Next Up:
-1) Update the application code (node_id --> script_id.)
-2) Update the datagen for routes to use (only) script_id.
-3) Create a migration to drop the node_id column.
+X Update the application code (node_id --> script_id.)
+X Update the datagen for routes to use (only) script_id.
+_ Create a migration to drop the node_id column.
 
 
-===== 2026-05-06 ====
+===== 2026-05-08 ====
+
+❯ pgroll start ddl/migrations/brbl_logic/0005_brbl_logic_routes_drop_default_node_id.yaml  --schema brbl_logic --verbose
+2026-05-08 09:55:30 INFO  starting migration
+                      ├ name: 0005_brbl_logic_routes_drop_default_node_id
+                      └ operation_count: 1
+2026-05-08 09:55:30 INFO  starting operation
+                      ├ operation: drop_column
+                      ├ column: default_node_id
+                      └ table: routes
+2026-05-08 09:55:30 INFO  created versioned schema for migration
+                      ├ migration: 5
+                      └ schema_name: brbl_logic_5
+ SUCCESS  New version of the schema available under the postgres "brbl_logic_5" schema
+
+I had the format of the commands wrong initially. Once again, pgroll didn't complain and simply did nothing, leaving the old and new schemas identical (the default_node_id column was not dropped.)
+
+Once I got "0005_brbl_loigic_routes_drop_default_node_id.yaml" formatted correctly, the system worked and dropped (left out) the dropped column.
+
+Always include the version_schema. It's good to have a descriptive file name but pgroll defaults to using it as the base for the new schema which makes it too random and long.
+Still need to devise a strategy for our application to get the correct/latest schema assigned to it's search_path at runtime. The Xata people must assume that permissions at the application level are pretty broad. For us, setting the search_path is no where sufficient for our application user to see the new schema and views, let alone use them.
+
+So what do we need to do?
+Connected as super-user...
+    GRANT USAGE ON SCHEMA brbl_logic_5 TO brbl_admin;
+    GRANT SELECT, INSERT, UPDATE, DELETE ON ALL TABLES IN SCHEMA brbl_logic_5 TO brbl_admin;
+
+Does the trick for brbl_admin. How about the rest of our application users/roles.
+
+For each set of privs (SELECT, UPDATE, etc) granted on the actual tables, grant the same privs on the single-table views in the new versioned schema for each role (brbl_logic_read_role, brbl_users_rw_role, etc.) See ddl/roles.txt.
+
+    SELECT grantee,
+           table_schema as schema,
+           table_name as table,
+           privilege_type
+    FROM information_schema.table_privileges
+    WHERE table_schema = 'brbl_logic'
+    ORDER BY grantee, table_name, privilege_type;
+
+yields output like so:
+
+brbl_logic_read_role	brbl_logic	edges	    SELECT
+brbl_logic_read_role	brbl_logic	keywords	SELECT
+brbl_logic_read_role	brbl_logic	nodes	    SELECT
+brbl_logic_read_role	brbl_logic	routes	    SELECT
+brbl_logic_read_role	brbl_logic	scripts	    SELECT
+brbl_logic_read_role	brbl_logic	sessions	SELECT
+brbl_logic_write_role	brbl_logic	sessions	INSERT
+brbl_logic_write_role	brbl_logic	sessions	UPDATE
+
+For each table the brbl_admin user/role also has REFERENCES, TRIGGER, and TRUNCATE privs.
+This is, I think, because brbl_admin is the owner of the tables and the containing schema.
+
+Also note, currently the push_campaigns, campaign_users, and schedule tables have no access granted to any role.
+The integration tests work because they're run as brbl_admin which implicitly has access because it is the creator/owner.
+
+So the work flow for applying migrations could be managed by a wrapper script that
+1) calls pgroll with the needed params (excluding "--complete")
+2) if 0 is returned, runs a program that reads the results of the query above and generates the grants.
+
+Confirmed that pgroll really does have a gap where roles are concerned: https://github.com/xataio/pgroll/issues/1032
+
+Added the names of the root schemas, tables, and roles used by Rcvr, Sndr, Operator, etc to the KnownData class.
+
+NB: We should also always use "--role brbl_admin" when executing future migrations. If not, set it uses our superuser role.
+Might be easiest to just set PGROLL_ROLE in our environment.
+
+See https://pgroll.com/docs/v0.8.0/cli for the other supported env settings.
+
+
+===== 2026-05-12 ====
+
+Continuous interruptions from life...
 

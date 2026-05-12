@@ -31,7 +31,7 @@ public class RouteRow implements BrblRow {
                 VALUES
             """;
 
-    public static final String[] headers = {"id", "platform", "channel", "default_node_id", "status", "created_at", "updated_at", "company_id"};
+    public static final String[] headers = {"id", "platform", "channel", "status", "created_at", "updated_at", "company_id", "default_script_id"};
 
     public static final String VALUES_SQL = """
             ('%s', '%s', '%s', '%s', '%s', '%s', '%s', '%s'),
@@ -40,28 +40,28 @@ public class RouteRow implements BrblRow {
     UUID id;
     Platform platform;
     String channel;
-    UUID defaultNodeId;
+    UUID defaultScriptId;
     UUID companyId;
     RouteStatus status;
     Instant createdAt;
     Instant updatedAt;
 
-    public RouteRow(String channel, UUID defaultNodeId, UUID companyId) {
+    public RouteRow(String channel, UUID defaultScriptId, UUID companyId) {
         this.id = randomUUID();
         this.platform = Platform.SMS;
         this.channel = Functions.adjustPlatformId(CountryCode.US, channel);
-        this.defaultNodeId = defaultNodeId;
+        this.defaultScriptId = defaultScriptId;
         this.companyId = companyId;
         this.status = RouteStatus.ACTIVE;
         this.createdAt = utcInstant();
         this.updatedAt = utcInstant();
     }
 
-    public RouteRow(UUID id, String channel, UUID defaultNodeId, Platform platform, UUID companyId) {
+    public RouteRow(UUID id, String channel, UUID defaultScriptId, Platform platform, UUID companyId) {
         this.id = id;
         this.platform = platform;
         this.channel = Functions.adjustPlatformId(CountryCode.US, channel);
-        this.defaultNodeId = defaultNodeId;
+        this.defaultScriptId = defaultScriptId;
         this.companyId = companyId;
         this.status = RouteStatus.ACTIVE;
         this.createdAt = utcInstant();
@@ -70,7 +70,7 @@ public class RouteRow implements BrblRow {
 
     String getValuesSql() {
         return String.format(VALUES_SQL,
-                id, platform.code(), channel, defaultNodeId, companyId, status, createdAt, updatedAt);
+                id, platform.code(), channel, defaultScriptId, companyId, status, createdAt, updatedAt);
     }
 
     public String[] headers() {
@@ -78,9 +78,9 @@ public class RouteRow implements BrblRow {
     }
 
     public String[] values() {
-        return new String[]{id.toString(), platform.code(), channel, defaultNodeId.toString(),
+        return new String[]{id.toString(), platform.code(), channel,
                 status.name(), createdAt.toString(), updatedAt.toString(),
-                companyId.toString()
+                companyId.toString(), defaultScriptId.toString()
         };
     }
 
@@ -90,7 +90,7 @@ public class RouteRow implements BrblRow {
                 .add("id=" + id)
                 .add("platform=" + platform)
                 .add("channel='" + channel + "'")
-                .add("defaultNodeId=" + defaultNodeId)
+                .add("defaultScriptId=" + defaultScriptId)
                 .add("companyId=" + companyId)
                 .add("status=" + status)
                 .add("createdAt=" + createdAt)

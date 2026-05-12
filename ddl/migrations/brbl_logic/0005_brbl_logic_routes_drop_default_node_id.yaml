@@ -1,0 +1,6 @@
+version_schema: 0005
+operations:
+  - drop_column:
+      table: routes
+      column: default_node_id
+      down: "89eddcb8-7fe5-4cd1-b18b-78858f0789fb"

@@ -10,7 +10,7 @@ BEGIN TRANSACTION ;
 \copy brbl_logic.edges     FROM 'edges_colorquiz.tsv'   WITH (FORMAT csv, HEADER true, DELIMITER E'\t', NULL 'null');
 \copy brbl_logic.edges     FROM 'edges_foodquiz.tsv'    WITH (FORMAT csv, HEADER true, DELIMITER E'\t', NULL 'null');
 \copy brbl_logic.edges     FROM 'edges_people.tsv'      WITH (FORMAT csv, HEADER true, DELIMITER E'\t', NULL 'null');
+\copy brbl_logic.scripts   FROM 'known_scripts.tsv'     WITH (FORMAT csv, HEADER true, DELIMITER E'\t', NULL 'null');
 \copy brbl_logic.routes    FROM 'known_routes.tsv'      WITH (FORMAT csv, HEADER true, DELIMITER E'\t', NULL 'null');
 \copy brbl_logic.keywords  FROM 'known_keywords.tsv'    WITH (FORMAT csv, HEADER true, DELIMITER E'\t', NULL 'null');
-\copy brbl_logic.scripts   FROM 'known_scripts.tsv'     WITH (FORMAT csv, HEADER true, DELIMITER E'\t', NULL 'null');
 COMMIT;

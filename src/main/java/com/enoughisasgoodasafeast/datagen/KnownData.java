@@ -118,10 +118,28 @@ public class KnownData {
             {"53578bea-7f9e-49b3-8412-948f072f75b6", "meh" }
     };
 
-    // (String name, String description, UUID customerId, UUID nodeId
+    // id, name, description
     public static String[][] knownScriptData = {
             {"019dcf76-aa1e-7fb6-87d4-733deb0d4c95", "Fave color", "Starts conversation with chained multiple choice questions"},
-            {"019dcf76-aa24-738d-99c0-28fb89344f22", "The truth", "People bad: true or false"}
+            {"019dcf76-aa24-738d-99c0-28fb89344f22", "The truth", "People bad: true or false"},
+            {"019e19af-5995-7d53-bb50-86f5b0a035f1", "Example questionnaire", "Same as Fave color script. Shows the separation of nodes and scripts."}
+    };
+
+    public static String[] APPLICATION_SCHEMAS = {
+            "brbl_biz",
+            "brbl_logic",
+            "brbl_logs",
+            "brbl_users"
+    };
+
+    public static String[] APPLICATION_ROLES = {
+            "brbl_admin",
+            "brbl_biz_read_role",
+            "brbl_biz_write_role",
+            "brbl_logic_read_role",
+            "brbl_logic_write_role",
+            "brbl_logs_write_role",
+            "brbl_users_rw_role"
     };
 
 }
