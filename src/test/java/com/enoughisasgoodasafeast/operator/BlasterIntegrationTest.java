@@ -29,6 +29,7 @@ public class BlasterIntegrationTest {
     private static final Logger LOG = LoggerFactory.getLogger(BlasterIntegrationTest.class);
 
     PersistenceManager persistenceManager;
+    PersistenceManager adminPersistenceManager;
     private InMemoryQueueProducer queueProducer;
     Blaster blaster;
 
@@ -57,8 +58,12 @@ public class BlasterIntegrationTest {
 
     @BeforeEach
     void setUp() throws IOException, PersistenceManager.PersistenceManagerException, TimeoutException {
-        final var props = ConfigLoader.readConfig("persistence_manager_test.properties");
+        final var props = ConfigLoader.readConfig("blaster_integration_test.properties");
         persistenceManager = PostgresPersistenceManager.createPersistenceManager(props);
+
+        // For changing states, etc that brbl_pushr doesn't have privileges to do.
+        adminPersistenceManager = PostgresPersistenceManager.createPersistenceManager(ConfigLoader.readConfig("migrations.properties"));
+
         queueProducer = new InMemoryQueueProducer();
         blaster = new Blaster(persistenceManager, queueProducer);
         blaster.init(props);
@@ -156,7 +161,7 @@ public class BlasterIntegrationTest {
     private List<Message> getMessages(List<UUID> messageIds) throws SQLException {
         try (var connection = persistenceManager.fetchConnection();
              var ps = connection.prepareStatement(
-                     "SELECT id, sent_at, _from, _to, _text, session_id, script_id FROM brbl_logs.messages_mt WHERE id = ANY (?)"
+                     "SELECT id, sent_at, _from, _to, _text, session_id, script_id FROM messages_mt WHERE id = ANY (?)"
              )) {
             ps.setArray(1, connection.createArrayOf("uuid", messageIds.toArray()));
 
@@ -356,8 +361,9 @@ public class BlasterIntegrationTest {
     }
 
     private void updateRouteStatus(UUID routeId, RouteStatus status) throws SQLException {
-        try (var connection = persistenceManager.fetchConnection();
-             var ps = connection.prepareStatement("UPDATE brbl_logic.routes SET status = ?::brbl_logic.route_status WHERE id = ?")) {
+        // FIXME brbl_logic_write_role doesn't have update access on routes table.
+        try (var connection = adminPersistenceManager.fetchConnection();
+             var ps = connection.prepareStatement("UPDATE routes SET status = ?::brbl_logic.route_status WHERE id = ?")) {
             ps.setString(1, status.name());
             ps.setObject(2, routeId);
             ps.executeUpdate();
@@ -365,8 +371,8 @@ public class BlasterIntegrationTest {
     }
 
     private void updateScriptStatus(UUID scriptId, ScriptStatus status) throws SQLException {
-        try (var connection = persistenceManager.fetchConnection();
-             var ps = connection.prepareStatement("UPDATE brbl_logic.scripts SET status = ?::script_status WHERE id = ?")) {
+        try (var connection = adminPersistenceManager.fetchConnection();
+             var ps = connection.prepareStatement("UPDATE scripts SET status = ?::script_status WHERE id = ?")) {
             ps.setString(1, status.name());
             ps.setObject(2, scriptId);
             ps.executeUpdate();
@@ -374,8 +380,8 @@ public class BlasterIntegrationTest {
     }
 
     private void updateCompanyStatus(UUID customerId, CompanyStatus status) throws SQLException {
-        try (var connection = persistenceManager.fetchConnection();
-             var ps = connection.prepareStatement("UPDATE brbl_users.companies SET status = ?::brbl_logic.company_status WHERE id = ?")) {
+        try (var connection = adminPersistenceManager.fetchConnection();
+             var ps = connection.prepareStatement("UPDATE companies SET status = ?::brbl_logic.company_status WHERE id = ?")) {
             ps.setString(1, status.name());
             ps.setObject(2, customerId);
             ps.executeUpdate();

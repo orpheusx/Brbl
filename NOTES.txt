@@ -4961,7 +4961,7 @@ The integration tests work because they're run as brbl_admin which implicitly ha
 
 So the work flow for applying migrations could be managed by a wrapper script that
 1) calls pgroll with the needed params (excluding "--complete")
-2) if 0 is returned, runs a program that reads the results of the query above and generates the grants.
+2) if 0 is returned, runs a program that reads the results of the query above and generates/execs the grants.
 
 Confirmed that pgroll really does have a gap where roles are concerned: https://github.com/xataio/pgroll/issues/1032
 
@@ -4970,10 +4970,230 @@ Added the names of the root schemas, tables, and roles used by Rcvr, Sndr, Opera
 NB: We should also always use "--role brbl_admin" when executing future migrations. If not, set it uses our superuser role.
 Might be easiest to just set PGROLL_ROLE in our environment.
 
+The current migration schema brbl_logic_5 was created using the superuser and therefore brbl_admin cannot grant any permissions on it.
+So ran:
+    ALTER SCHEMA brbl_logic_5               OWNER TO brbl_admin;
+
+    ALTER VIEW brbl_logic_5.keywords        OWNER TO brbl_admin;
+    ALTER VIEW brbl_logic_5.campaign_users  OWNER TO brbl_admin;
+    ALTER VIEW brbl_logic_5.edges           OWNER TO brbl_admin;
+    ALTER VIEW brbl_logic_5.nodes           OWNER TO brbl_admin;
+    ALTER VIEW brbl_logic_5.push_campaigns  OWNER TO brbl_admin;
+    ALTER VIEW brbl_logic_5.routes          OWNER TO brbl_admin;
+    ALTER VIEW brbl_logic_5.schedules       OWNER TO brbl_admin;
+    ALTER VIEW brbl_logic_5.scripts         OWNER TO brbl_admin;
+    ALTER VIEW brbl_logic_5.sessions        OWNER TO brbl_admin;
+
 See https://pgroll.com/docs/v0.8.0/cli for the other supported env settings.
 
 
 ===== 2026-05-12 ====
 
-Continuous interruptions from life...
+Continuous interruptions from real life...
 
+===== 2026-05-13 ====
+
+TODO
+    _ devise a strategy for updating the application search_path
+    X implement grant generator program for use with pgroll
+    X define migration: keywords.script_id (nodes) keywords.script_id (scripts)
+    X execute migration, testing grant generator.
+    X create a wrapper script for combining pgroll and our grant generator.
+
+The grant generator was relatively quick to write.
+Would it be useful to have it write out a file of the grants generated into the same directory and the same numeric prefix as the migration yaml file?
+
+NB: Postgres documentation doesn't define the term formally but I see others referencing the subset of commands as Data Control Language (DCL). This seems a useful definition alongside DML and DDL.
+
+Looks like pgroll installs triggered functions that track schema/ownership operations of tables. There are entries in its migrations table for the ALTER VIEW ... OWNER TO brbl_admin statements I ran to give brbl_admin ownership of the brbl_logic_5 views.
+These were done from psql directly (not via pgroll.)
+
+===== 2026-05-14 ====
+
+Working on the keywords script_id migration.
+Can I start the migration and expect the tests to continue working?
+Then complete the migration and expect the tests to fail?
+The SELECT_ALL_KEYWORDS query uses a fully qualified reference so...yes?
+
+Running validate on my 0006 migration was failing because pgroll seemed to not recognize the effect of the drop column operation when checking the column renames. Or possibly the implementation of what I'd written would simply not work when maintaining the old and new versions of the schema.
+
+❯ ./migrations/run_migration.py migrations/brbl_logic/0006_brbl_logic_keywords_add_script_id.yaml
+
+Ah, the backfill happens after all the operations have occurred. Thus the up expression on the first operation needed to reference the renamed column, "old_script_id." Not super intuitive but workable.
+
+The new view, brbl_logic_6.keywords, now has a script_id that points to brbl_logic._pgroll_new_new_script_id and the underlying table has a trigger that fires on inserts and updates based on the results of our up expression.
+
+And when I complete the migration...
+❯ pgroll complete --schema brbl_logic --verbose
+2026-05-14 12:59:03 INFO  completing migration
+                      ├ name: 0006_brbl_logic_keywords_add_script_id
+                      └ operation_count: 3
+2026-05-14 12:59:03 INFO  completing operation
+                      ├ operation: add_column
+                      ├ name: new_script_id
+                      ├ type: uuid
+                      ├ table: keywords
+                      ├ nullable: false
+                      └ unique: false
+2026-05-14 12:59:03 INFO  completing operation
+                      ├ operation: rename_column
+                      ├ from: script_id
+                      ├ to: old_script_id
+                      └ table: keywords
+2026-05-14 12:59:03 INFO  completing operation
+                      ├ operation: rename_column
+                      ├ from: new_script_id
+                      ├ to: script_id
+                      └ table: keywords
+2026-05-14 12:59:03 INFO  completing migration
+                      ├ name: 0006_brbl_logic_keywords_add_script_id
+                      └ operation_count: 3
+ SUCCESS  Migration successful!
+
+The underlying table still has the old_script_id column (and it's fk on nodes) but the script_id colum now correctly points at the scripts table. The triggers are gone and the brbl_logic_5 is also gone.
+
+Did our Java program do the right thing? (Forgot to check it before completing the migration...)
+
+The grants ran but logging in as a role that was granted the
+
+Was brbl_operator not granted the brbl_logic_read_role role? Ran this as brbl_admin...
+
+    brbl_db_dev=> GRANT brbl_logic_read_role TO brbl_operator;
+    ERROR:  permission denied to grant role "brbl_logic_read_role"
+    DETAIL:  Only roles with the ADMIN option on role "brbl_logic_read_role" may grant this role.
+
+If we run the RoleMigrator as brbl_admin then it needs to have ADMIN rights on all our roles.
+
+    GRANT brbl_logic_read_role  TO brbl_admin WITH ADMIN OPTION, INHERIT TRUE;
+    GRANT brbl_biz_app_role     TO brbl_admin WITH ADMIN OPTION, INHERIT TRUE;
+    GRANT brbl_biz_read_role    TO brbl_admin WITH ADMIN OPTION, INHERIT TRUE;
+    GRANT brbl_biz_write_role   TO brbl_admin WITH ADMIN OPTION, INHERIT TRUE;
+    GRANT brbl_logic_read_role  TO brbl_admin WITH ADMIN OPTION, INHERIT TRUE;
+    GRANT brbl_logic_write_role TO brbl_admin WITH ADMIN OPTION, INHERIT TRUE;
+    GRANT brbl_logs_write_role  TO brbl_admin WITH ADMIN OPTION, INHERIT TRUE;
+    GRANT brbl_users_rw_role    TO brbl_admin WITH ADMIN OPTION, INHERIT TRUE;
+    GRANT brbl_logs_write_role  TO brbl_admin WITH ADMIN OPTION, INHERIT TRUE;
+    GRANT brbl_logs_write_role  TO brbl_admin WITH ADMIN OPTION, INHERIT TRUE;
+
+In psql the \drg command will list the login roles granted membership in other roles
+brbl_db_dev=# \drg
+                                List of role grants
+         Role name     |       Member of       |       Options       | Grantor
+    -------------------+-----------------------+---------------------+---------
+     brbl_admin        | brbl_biz_app_role     | ADMIN, INHERIT, SET | mark
+     brbl_admin        | brbl_biz_read_role    | ADMIN, INHERIT, SET | mark
+     brbl_admin        | brbl_biz_write_role   | ADMIN, INHERIT, SET | mark
+     brbl_admin        | brbl_logic_read_role  | ADMIN, INHERIT, SET | mark
+     brbl_admin        | brbl_logic_write_role | ADMIN, INHERIT, SET | mark
+     brbl_admin        | brbl_logs_write_role  | ADMIN, INHERIT, SET | mark
+     brbl_admin        | brbl_users_rw_role    | ADMIN, INHERIT, SET | mark
+     brbl_biz_app      | brbl_biz_app_role     | INHERIT, SET        | mark
+     brbl_biz_app_role | brbl_biz_read_role    | INHERIT, SET        | mark
+     brbl_biz_app_role | brbl_biz_write_role   | INHERIT, SET        | mark
+     brbl_operator     | brbl_logic_read_role  | INHERIT, SET        | mark
+     brbl_operator     | brbl_logic_write_role | INHERIT, SET        | mark
+     brbl_operator     | brbl_logs_write_role  | INHERIT, SET        | mark
+     brbl_operator     | brbl_users_rw_role    | INHERIT, SET        | mark
+     brbl_rcvr         | brbl_logs_write_role  | INHERIT, SET        | mark
+     brbl_sndr         | brbl_logs_write_role  | INHERIT, SET        | mark
+
+Also, RoleMigrator will need to GRANT USAGE ON SCHEMA for the migration schema.
+
+SET search_path TO brbl_logic_6, brbl_logic;
+
+
+===== 2026-05-15 ====
+
+Okay, think we have the grants issues sorted. Updated RoleMigrator to add GRANT USAGE for each role.
+
+Let's use it for our next migration...
+
+Since I changed some of the SQL in PostgresPersistenceManager to remove the schema prefix the tests in OperatorPersistenceIntegrationTest will fail:
+
+    ERROR:  relation "keywords" does not exist
+
+This even though the user has access granted directly and through the view.
+
+Exploring solutions for the search_path:
+
+Option 1:
+    Append "?currentSchema=brbl_biz,brbl_logic_6,brbl_logs,brbl_users,brbl_logic" to the jdbcUrl property in the application's config file.
+
+    Requires rebuilding the main jar file (and depending how our deployment works the container image.)
+    Then again, if there are new tables, columns, etc we'd need to make code updates so a new build seems reasonable.
+    Our enum types remain in their original schema which is why we have to include it in the currentSchema list. This should be fine though it does leave open the possibility of errors if the migration schema permissions get out of sync.
+
+Option 2:
+    Write the new path to a file. Docker supposedly load environment varaibles from a file called .env (the --env-file switch allows the name to be specified on the command line. The init method of each application would then need to read the variable and append it to the jdbcUrl.
+
+TODO
+    X Devise a strategy for updating the application search_path
+        Conclusion: Until we've decided on a deployment strategy (Docker Swarm, Kubernetes, etc) we should keep it as simple as possible and simply update the config properties files.
+    _ Fix BlasterIntegrationTest failing because we haven't setup the user/roles for it. Temp fix: assign brbl_admin in properties file.
+
+BlasterIntegrationTest
+
+Added privileges on push_campaigns and campaign_users tables to brbl_logic_*_role.
+
+    GRANT SELECT ON TABLE brbl_logic.push_campaigns TO brbl_logic_read_role;
+    GRANT SELECT ON TABLE brbl_logic.campaign_users TO brbl_logic_read_role;
+
+    GRANT INSERT,UPDATE ON TABLE brbl_logic.push_campaigns TO brbl_logic_write_role;
+    GRANT INSERT,UPDATE ON TABLE brbl_logic.campaign_users TO brbl_logic_write_role;
+
+ERROR: permission denied for view routes
+
+Needed to add a login user for the Blaster that has the appropriate privileges:
+    CREATE ROLE brbl_pushr WITH LOGIN;
+    GRANT USAGE ON SCHEMA brbl_logic_6 TO brbl_pushr;
+    GRANT brbl_logic_read_role  TO brbl_pushr   WITH INHERIT TRUE GRANTED BY mark;
+    GRANT brbl_logic_write_ROLE TO brbl_pushr   WITH INHERIT TRUE GRANTED BY mark;
+    GRANT brbl_users_read_role  TO brbl_pushr   WITH INHERIT TRUE GRANTED BY mark;
+
+Then do what the RoleMigrator would do if we reran it:
+    GRANT INSERT, UPDATE ON brbl_logic_6.push_campaigns TO brbl_logic_write_role;
+    GRANT SELECT ON brbl_logic_6.push_campaigns TO brbl_logic_read_role;
+    GRANT INSERT, UPDATE ON brbl_logic_6.campaign_users TO brbl_logic_write_role;
+    GRANT SELECT ON brbl_logic_6.campaign_users TO brbl_logic_read_role;
+
+State of the BlasterIntegrationTests is pretty bad...
+
+Creating a new campaign users segment requires read access to some of the tables in brbl_users.
+Currently we only have a read+write role (brbl_user_rw_role) so let's break out the functionality:
+    CREATE ROLE brbl_user_read_role;
+    GRANT USAGE ON SCHEMA brbl_users            TO brbl_user_read_role;
+    GRANT SELECT ON TABLE brbl_users.profiles   TO brbl_user_read_role;
+    GRANT SELECT ON TABLE brbl_users.users      TO brbl_user_read_role;
+    GRANT SELECT ON TABLE brbl_users.amalgams   TO brbl_user_read_role;
+    GRANT SELECT ON TABLE brbl_users.companies  TO brbl_user_read_role;
+    GRANT SELECT ON TABLE brbl_users.customers  TO brbl_user_read_role;
+
+and, while we're at it, also:
+
+    CREATE ROLE brbl_user_write_role;
+    GRANT USAGE ON SCHEMA brbl_users            TO brbl_user_write_role;
+    GRANT INSERT ON TABLE brbl_users.profiles   TO brbl_user_write_role;
+    GRANT INSERT ON TABLE brbl_users.users      TO brbl_user_write_role;
+    GRANT INSERT ON TABLE brbl_users.amalgams   TO brbl_user_write_role;
+    GRANT INSERT ON TABLE brbl_users.companies  TO brbl_user_write_role;
+    GRANT INSERT ON TABLE brbl_users.customers  TO brbl_user_write_role;
+
+Then allow brbl_admin to grant both of the new roles:
+    GRANT brbl_user_read_role  TO brbl_admin WITH ADMIN OPTION, INHERIT TRUE;
+    GRANT brbl_user_write_role TO brbl_admin WITH ADMIN OPTION, INHERIT TRUE;
+
+And, finally, give read-only access to our Blaster user:
+    GRANT brbl_user_read_role TO brbl_pushr;
+
+Argh, the BlasterIntegrationTest also wants to access the logs schema so follow through and
+    CREATE ROLE brbl_logs_read_role;
+    GRANT USAGE ON SCHEMA brbl_logs TO brbl_logs_read_role;
+    GRANT SELECT ON TABLE brbl_logs.messages_mo         TO brbl_logs_read_role;
+    GRANT SELECT ON TABLE brbl_logs.messages_mo_prcd    TO brbl_logs_read_role;
+    GRANT SELECT ON TABLE brbl_logs.messages_mt         TO brbl_logs_read_role;
+    GRANT SELECT ON TABLE brbl_logs.messages_mt_dlvr    TO brbl_logs_read_role;
+    GRANT brbl_logs_read_role TO brbl_admin WITH ADMIN OPTION, INHERIT TRUE;
+
+    GRANT brbl_logs_read_role TO brbl_pushr;
+
+We're definitely going to want to circle back once all our various applications are ready to setup some more restrictive combinations. The read vs write split is good but occasionally more permissive than necessary.

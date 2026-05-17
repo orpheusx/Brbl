@@ -57,7 +57,7 @@ public class PostgresPersistenceManager implements PersistenceManager {
 
     public static final String MO_MESSAGE_INSERT =
             """
-                    INSERT INTO brbl_logs.messages_mo
+                    INSERT INTO messages_mo
                         (id, rcvd_at, _from, _to, _text)
                     VALUES
                         (?, ?, ?, ?, ?);
@@ -65,7 +65,7 @@ public class PostgresPersistenceManager implements PersistenceManager {
 
     public static final String MO_MESSAGE_PRCD =
             """
-                    INSERT INTO brbl_logs.messages_mo_prcd
+                    INSERT INTO messages_mo_prcd
                         (id, prcd_at, session_id, script_id)
                     VALUES
                         (?, ?, ?, ?);
@@ -73,7 +73,7 @@ public class PostgresPersistenceManager implements PersistenceManager {
 
     public static final String MT_MESSAGE_INSERT =
             """
-                    INSERT INTO brbl_logs.messages_mt
+                    INSERT INTO messages_mt
                         (id, sent_at, _from, _to, _text, session_id, script_id)
                     VALUES
                         (?, ?, ?, ?, ?, ?, ?);
@@ -81,7 +81,7 @@ public class PostgresPersistenceManager implements PersistenceManager {
 
     public static final String MT_MESSAGE_DLVR =
             """
-                    INSERT INTO brbl_logs.messages_mt_dlvr
+                    INSERT INTO messages_mt_dlvr
                         (id, dlvr_at)
                     VALUES
                         (?, ?);
@@ -94,15 +94,15 @@ public class PostgresPersistenceManager implements PersistenceManager {
 //                    	u.country, u.language, u.nickname, u.created_at,
 //                    	p.surname, p.given_name, p.other_languages
 //                    FROM
-//                        brbl_users.users u
+//                        users u
 //                    LEFT JOIN
-//                        brbl_users.profiles p
+//                        profiles p
 //                    ON
 //                        u.group_id = p.group_id
 //                    WHERE
 //                    	u.group_id = (
 //                    		SELECT group_id
-//                    		FROM brbl_users.users
+//                    		FROM users
 //                    		WHERE platform_id = ?
 //                    	)
 //                    """; // FIXME figure out if a LATERAL JOIN might replace the sub-select part of this query
@@ -127,10 +127,10 @@ public class PostgresPersistenceManager implements PersistenceManager {
                 a.claimant_id,
                 u.status
             FROM
-                brbl_users.amalgams a
-            INNER JOIN brbl_users.users u
+                amalgams a
+            INNER JOIN users u
                 ON a.user_id = u.id
-            LEFT JOIN brbl_users.profiles p
+            LEFT JOIN profiles p
                 ON p.id = a.profile_id
             WHERE
                a.group_id =
@@ -138,10 +138,10 @@ public class PostgresPersistenceManager implements PersistenceManager {
                 SELECT
                     a.group_id as gid
                 FROM
-                    brbl_users.amalgams a
-                INNER JOIN brbl_users.users u
+                    amalgams a
+                INNER JOIN users u
                     ON a.user_id = u.id
-                INNER JOIN brbl_logic.routes r
+                INNER JOIN routes r
                     ON r.company_id = a.claimant_id
                 WHERE
                     u.platform_code = ?::brbl_logic.platform
@@ -152,7 +152,7 @@ public class PostgresPersistenceManager implements PersistenceManager {
 
 //    public static final String USER_INSERT =
 //            """
-//                    INSERT INTO brbl_users.users
+//                    INSERT INTO users
 //                        (id, group_id, platform_id, platform_code, country, language, nickname, created_at, customer_id)
 //                    VALUES
 //                        (?, ?, ?, ?, ?, ?, ?, ?, ?)
@@ -161,7 +161,7 @@ public class PostgresPersistenceManager implements PersistenceManager {
     public static final String USER_AMALGAM_INSERT =
             """
                     WITH new_user_cte AS (
-                            INSERT INTO brbl_users.users
+                            INSERT INTO users
                                 (id, status, platform_id, platform_code,
                                  country, language, nickname, created_at, updated_at)
                             VALUES
@@ -169,7 +169,7 @@ public class PostgresPersistenceManager implements PersistenceManager {
                             RETURNING
                                 id AS nuc_id, created_at AS nuc_created_at
                     )
-                    INSERT INTO brbl_users.amalgams
+                    INSERT INTO amalgams
                         (group_id, user_id, profile_id, claimant_id, created_at, updated_at)
                     SELECT
                         ?::UUID, nuc_id, ?::UUID, ?::UUID, nuc_created_at, nuc_created_at
@@ -179,7 +179,7 @@ public class PostgresPersistenceManager implements PersistenceManager {
 
 //    public static final String PROFILE_INSERT =
 //            """
-//                    INSERT INTO brbl_users.profiles
+//                    INSERT INTO profiles
 //                        (group_id, surname, given_name, other_languages, created_at)
 //                    VALUES
 //                        (?, ?, ?, ?, ?)
@@ -187,7 +187,7 @@ public class PostgresPersistenceManager implements PersistenceManager {
 
     public static final String SESSION_UPSERT =
             """
-                    INSERT INTO brbl_logic.sessions
+                    INSERT INTO sessions
                         (group_id, data, created_at, updated_at)
                     VALUES
                         (?, ?, ?, ?)
@@ -202,7 +202,7 @@ public class PostgresPersistenceManager implements PersistenceManager {
                     SELECT
                         s.group_id, s.data, s.created_at, s.updated_at
                     FROM
-                        brbl_logic.sessions s
+                        sessions s
                     WHERE
                         s.group_id = ?;
                     """;
@@ -213,9 +213,9 @@ public class PostgresPersistenceManager implements PersistenceManager {
 //                        s.id, s.label, s.text,
 //                        e.match_text, e.response_text, e.dst
 //                    FROM
-//                        brbl_logic.nodes s
+//                        nodes s
 //                    INNER JOIN
-//                        brbl_logic.edges e ON s.id = e.src
+//                        edges e ON s.id = e.src
 //                    WHERE
 //                        s.id = ?;
 //                    """;
@@ -226,16 +226,16 @@ public class PostgresPersistenceManager implements PersistenceManager {
 //                            SELECT ? AS script_id
 //                            UNION ALL
 //                            SELECT e.dst
-//                            FROM brbl_logic.edges AS e
+//                            FROM edges AS e
 //                                JOIN cte ON (cte.script_id = e.src)
 //                    ) CYCLE script_id SET is_cycle USING path
 //                    SELECT
 //                        s.id, s.created_at, s.text, s.type, s.label,
 //                        e.id, e.created_at, e.match_text, e.response_text, e.src, e.dst
 //                    FROM
-//                        brbl_logic.nodes s
+//                        nodes s
 //                    INNER JOIN
-//                        brbl_logic.edges e ON s.id = e.src
+//                        edges e ON s.id = e.src
 //                        WHERE
 //                        s.id IN (SELECT DISTINCT(cte.script_id) FROM cte);
 //                    """;
@@ -248,7 +248,7 @@ public class PostgresPersistenceManager implements PersistenceManager {
                             SELECT
                                 e.dst
                             FROM
-                                brbl_logic.edges AS e
+                                edges AS e
                             JOIN
                                 rgraph ON rgraph.node_id = e.src
                     
@@ -257,9 +257,9 @@ public class PostgresPersistenceManager implements PersistenceManager {
                         s.id, s.created_at, s.text, s.type, s.label,
                         e.id, e.created_at, e.match_text, e.response_text, e.src, e.dst
                     FROM
-                        brbl_logic.nodes s
+                        nodes s
                     INNER JOIN
-                        brbl_logic.edges e ON s.id = e.src
+                        edges e ON s.id = e.src
                     INNER JOIN
                         rgraph ON s.id = rgraph.node_id
                     WHERE
@@ -272,10 +272,10 @@ public class PostgresPersistenceManager implements PersistenceManager {
 //     public static final String SELECT_SCRIPT_GRAPH_RECURSIVE_FOR_KEYWORD =
 //             """
 //                     WITH RECURSIVE rgraph AS (
-//                             SELECT script_id FROM brbl_logic.keywords WHERE platform= ?::platform AND pattern = ?
+//                             SELECT script_id FROM keywords WHERE platform= ?::platform AND pattern = ?
 //                         UNION ALL
 //                         SELECT e.dst
-//                         FROM brbl_logic.edges AS e
+//                         FROM edges AS e
 //                         JOIN rgraph ON
 //                             rgraph.script_id = e.src
 //                     ) CYCLE script_id SET is_cycle USING path
@@ -283,9 +283,9 @@ public class PostgresPersistenceManager implements PersistenceManager {
 //                         s.id, s.created_at, s.text, s.type, s.label,
 //                         e.id, e.created_at, e.match_text, e.response_text, e.src, e.dst
 //                     FROM
-//                         brbl_logic.nodes s
+//                         nodes s
 //                     INNER JOIN
-//                         brbl_logic.edges e ON s.id = e.src
+//                         edges e ON s.id = e.src
 //                     INNER JOIN
 //                         rgraph ON s.id = rgraph.script_id
 //                     WHERE
@@ -300,9 +300,9 @@ public class PostgresPersistenceManager implements PersistenceManager {
                     SELECT
                         k.id, k.pattern, r.platform, k.script_id, r.channel
                     FROM
-                        brbl_logic.keywords k
+                        keywords k
                     INNER JOIN
-                        brbl_logic.routes r
+                        routes r
                             ON r.id = k.route_id
                     WHERE
                         r.status = 'ACTIVE'::brbl_logic.route_status
@@ -325,7 +325,7 @@ public class PostgresPersistenceManager implements PersistenceManager {
                     INNER JOIN
                         scripts s ON s.id = r.default_script_id
                     WHERE
-                        r.status = ?::route_status
+                        r.status = ?::brbl_logic.route_status
                     """;
 
     public static final String SELECT_PUSH_CAMPAIGN_USERS_BY_DELIVERY_STATUS =
@@ -334,12 +334,12 @@ public class PostgresPersistenceManager implements PersistenceManager {
                         SELECT
                             DISTINCT a.group_id
                         FROM
-                            brbl_users.amalgams a
+                            amalgams a
                         INNER JOIN
-                            brbl_logic.campaign_users cu
+                            campaign_users cu
                                 ON cu.user_id = a.user_id
                         INNER JOIN
-                            brbl_logic.push_campaigns pc
+                            push_campaigns pc
                                 ON pc.id = cu.campaign_id
                         WHERE
                             pc.id = ?::UUID
@@ -367,24 +367,24 @@ public class PostgresPersistenceManager implements PersistenceManager {
                         s.updated_at AS session_updated_at,
                         cu_outer.delivered
                     FROM
-                        brbl_users.amalgams a
+                        amalgams a
                     INNER JOIN
-                        brbl_users.users u
+                        users u
                             ON u.id = a.user_id
                     INNER JOIN
                         campaign_group_ids cgi
                             ON a.group_id = cgi.group_id
                     LEFT JOIN
-                        brbl_users.profiles p
+                        profiles p
                             ON p.id = a.profile_id
                     LEFT JOIN
-                        brbl_logic.sessions s
+                        sessions s
                             ON s.group_id = a.group_id
                     LEFT JOIN
-                        brbl_logic.campaign_users cu_outer
+                        campaign_users cu_outer
                             ON cu_outer.user_id = u.id
                     LEFT JOIN
-                        brbl_logic.push_campaigns pc_outer
+                        push_campaigns pc_outer
                             ON pc_outer.id = cu_outer.campaign_id
                     WHERE
                         pc_outer.id = ?
@@ -403,21 +403,21 @@ public class PostgresPersistenceManager implements PersistenceManager {
                         s.updated_at AS session_updated_at,
                         cu.delivered
                     FROM
-                        brbl_users.amalgams a
+                        amalgams a
                     INNER JOIN
-                        brbl_users.users u
+                        users u
                             ON u.id = a.user_id
                     LEFT JOIN
-                        brbl_users.profiles p
+                        profiles p
                             ON p.id = a.profile_id
                     LEFT JOIN
-                        brbl_logic.sessions s
+                        sessions s
                             ON s.group_id = a.group_id
                     LEFT JOIN
-                        brbl_logic.campaign_users cu
+                        campaign_users cu
                             ON cu.user_id = u.id
                     INNER JOIN
-                        brbl_logic.push_campaigns pc
+                        push_campaigns pc
                             ON pc.id = cu.campaign_id
                     WHERE
                         pc.id = ?::UUID
@@ -443,37 +443,37 @@ public class PostgresPersistenceManager implements PersistenceManager {
                         r.platform,
                         r.status
                     FROM
-                        brbl_logic.push_campaigns pc
+                        push_campaigns pc
                     INNER JOIN
-                        brbl_users.companies c ON c.id = pc.company_id
+                        companies c ON c.id = pc.company_id
                     INNER JOIN
-                        brbl_logic.scripts s ON s.id = pc.script_id
+                        scripts s ON s.id = pc.script_id
                     INNER JOIN
-                        brbl_logic.nodes n ON n.id = s.node_id
+                        nodes n ON n.id = s.node_id
                     INNER JOIN
-                        brbl_logic.routes r ON r.id = pc.route_id
+                        routes r ON r.id = pc.route_id
                     WHERE
                         pc.id = ?::UUID
                     """;
 
     public static final String PUSH_CAMPAIGN_INSERT =
             """
-                    INSERT INTO brbl_logic.push_campaigns (
+                    INSERT INTO push_campaigns (
                         id,
                         company_id,
-                        description, 
-                        script_id, 
-                        created_at, updated_at, completed_at, 
+                        description,
+                        script_id,
+                        created_at, updated_at, completed_at,
                         route_id)
                     VALUES
-                        (?::UUID, ?::UUID, ?, ?::UUID, 
+                        (?::UUID, ?::UUID, ?, ?::UUID,
                          ?::TIMESTAMP, ?::TIMESTAMP, ?::TIMESTAMP,
-                         ?::UUID)                
+                         ?::UUID)
                     """;
 
     public static final String CAMPAIGN_USER_INSERT =
             """
-                    INSERT INTO brbl_logic.campaign_users
+                    INSERT INTO campaign_users
                         (campaign_id, user_id, delivered)
                     VALUES
                         (?::UUID, ?::UUID, ?::delivery_status);
@@ -1539,7 +1539,7 @@ public class PostgresPersistenceManager implements PersistenceManager {
 
     public static final String UPDATE_PUSH_CAMPAIGN_USER_STATUS = """           
            UPDATE
-             brbl_logic.campaign_users
+             campaign_users
            SET
              delivered = ?
            WHERE
@@ -1573,7 +1573,7 @@ public class PostgresPersistenceManager implements PersistenceManager {
 
     public static final String MARK_PUSH_CAMPAIGN_COMPLETE = """
             UPDATE
-                brbl_logic.push_campaigns
+                push_campaigns
             SET
                 completed_at = ?
             WHERE

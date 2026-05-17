@@ -1,0 +1,28 @@
+version_schema: 0006
+operations:
+  - add_column:
+      table: keywords
+      up: SELECT s.id FROM scripts s WHERE s.node_id = old_script_id LIMIT 1
+      column:
+        name: new_script_id
+        type: uuid
+        comment: The script used when the keyword is received.
+        nullable: false
+        unique: false
+        references:
+          name: fk_keywords_script_id_scripts
+          table: scripts
+          column: id
+          on_delete: RESTRICT
+  - rename_column:
+      table: keywords
+      from: script_id
+      to: old_script_id
+  - rename_column:
+      table: keywords
+      from: new_script_id
+      to: script_id
+#  - drop_column:
+#      table: keywords
+#      column: old_script_id
+#      down: '89eddcb8-7fe5-4cd1-b18b-78858f0789fb'
