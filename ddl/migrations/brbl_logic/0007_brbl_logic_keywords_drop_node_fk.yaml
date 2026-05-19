@@ -1,0 +1,7 @@
+version_schema: 0007
+operations:
+  # The fk will be dropped along with the column.
+  - drop_column:
+      table: keywords
+      column: old_script_id
+      down: null

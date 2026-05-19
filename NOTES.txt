@@ -5120,7 +5120,7 @@ Option 1:
     Append "?currentSchema=brbl_biz,brbl_logic_6,brbl_logs,brbl_users,brbl_logic" to the jdbcUrl property in the application's config file.
 
     Requires rebuilding the main jar file (and depending how our deployment works the container image.)
-    Then again, if there are new tables, columns, etc we'd need to make code updates so a new build seems reasonable.
+    Then again, if there are new tables, columns, etc we'd need to make code updates anyway so a new build seems reasonable.
     Our enum types remain in their original schema which is why we have to include it in the currentSchema list. This should be fine though it does leave open the possibility of errors if the migration schema permissions get out of sync.
 
 Option 2:
@@ -5129,7 +5129,7 @@ Option 2:
 TODO
     X Devise a strategy for updating the application search_path
         Conclusion: Until we've decided on a deployment strategy (Docker Swarm, Kubernetes, etc) we should keep it as simple as possible and simply update the config properties files.
-    _ Fix BlasterIntegrationTest failing because we haven't setup the user/roles for it. Temp fix: assign brbl_admin in properties file.
+    X Fix BlasterIntegrationTest failing because we haven't setup the user/roles for it.
 
 BlasterIntegrationTest
 
@@ -5196,4 +5196,21 @@ Argh, the BlasterIntegrationTest also wants to access the logs schema so follow 
 
     GRANT brbl_logs_read_role TO brbl_pushr;
 
-We're definitely going to want to circle back once all our various applications are ready to setup some more restrictive combinations. The read vs write split is good but occasionally more permissive than necessary.
+We're definitely going to want to circle back once all our various applications are ready to setup some more restrictive combinations. The read-write-per-schema split is a good start but occasionally more permissive than necessary.
+
+
+===== 2026-05-18 ====
+
+TODO
+    _ devise a strategy for updating the application search_path
+    X complete migration of keywords (dropping the old fk on nodes)
+
+Solution for search_path:
+    Append "?currentSchema=<list-of-migration-schemas>" to the jdbcUrl property in the application's config file. Useful automations for this? Just a sed/awk replace script called by run_migration.py?
+
+Gah, more gotchas with roles and the BlasterIntegrationTest:
+The test needs to be able to verify that the messages went through (by checking messages_mt) but that can be run by our admin persistence manager.
+The Blaster.exec() call runs as brbl_pushr. Via PostgresPersistenceManager, this requires that it have write access to messages_mt. brbl_pushr doesn't need read privileges. So...
+
+    REVOKE brbl_logs_read_role TO brbl_pushr;
+    GRANT brbl_logs_write_role TO brbl_pushr;

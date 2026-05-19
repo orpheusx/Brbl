@@ -25,7 +25,7 @@ public class PostgresPersistenceManager implements PersistenceManager {
 
     private static final Logger LOG = LoggerFactory.getLogger(PostgresPersistenceManager.class);
 
-    private static ComboPooledDataSource pds;
+    private final ComboPooledDataSource pds;
 
     public static PersistenceManager createPersistenceManager(Properties properties) throws PersistenceManagerException {
         // if, at some point, we need to enforce a single instance we'll do it here.
@@ -476,7 +476,7 @@ public class PostgresPersistenceManager implements PersistenceManager {
                     INSERT INTO campaign_users
                         (campaign_id, user_id, delivered)
                     VALUES
-                        (?::UUID, ?::UUID, ?::delivery_status);
+                        (?::UUID, ?::UUID, ?::brbl_logic.delivery_status);
                     """;
 
     public @NonNull Connection fetchConnection() throws SQLException {

@@ -1,6 +1,7 @@
 package com.enoughisasgoodasafeast.migration;
 
 import com.enoughisasgoodasafeast.ConfigLoader;
+import com.enoughisasgoodasafeast.datagen.KnownData;
 import com.mchange.v2.c3p0.ComboPooledDataSource;
 
 import java.beans.PropertyVetoException;
@@ -10,6 +11,7 @@ import java.sql.ResultSet;
 import java.sql.SQLException;
 import java.util.*;
 
+import static com.enoughisasgoodasafeast.datagen.KnownData.APPLICATION_SCHEMAS;
 import static java.io.IO.println;
 
 /**
@@ -34,10 +36,10 @@ public class RoleMigrator {
             ORDER BY grantee, table_name, privilege_type;
             """;
 
-    private static final String USAGE_GRANT = "\n\tGRANT USAGE ON SCHEMA %s TO %s";
+    private static final String USAGE_GRANT = "\n\tGRANT USAGE ON SCHEMA %s TO %s ;";
 
     // GRANT <privilege_type> ON <new_schema>.<table_name> TO <grantee>;
-    private static final String GRANT = "\n\tGRANT %s ON %s.%s TO %s;";
+    private static final String GRANT = "\n\tGRANT %s ON %s.%s TO %s ;";
 
 
     public RoleMigrator(Properties props) {
@@ -85,7 +87,6 @@ public class RoleMigrator {
             LOG.error("Error fetching privileges for schema {}: {}", schemaName, e.getMessage());
             throw e;
         }*/
-
     }
 
     Set<String> distinctRoles(List<String[]> grantsData) {
@@ -129,8 +130,8 @@ public class RoleMigrator {
     }
 
     static void main(String[] args) throws IOException, SQLException {
-        if(args.length != 2) {
-            println("Usage: <originalSchema> <migrationSchema>");
+        if(args.length < 2) {
+            println("Usage: <originalSchema> <migrationSchema> [--dry-run]");
             System.exit(1);
         }
         String originalSchema = args[0].trim();
@@ -144,19 +145,31 @@ public class RoleMigrator {
         RoleMigrator rm = new RoleMigrator(ConfigLoader.readConfig("migrations.properties"));
 
         println("Gathering current grants on tables in schema, " + originalSchema);
-        var pngList = rm.getPrivilegeTableNameGrantee(originalSchema);
+        var ptngList = rm.getPrivilegeTableNameGrantee(originalSchema);
 
         println("Granting equivalent privileges on migration schema, " + migrationSchema);
-        String grants = rm.generateGrants(migrationSchema, pngList);
+        String grants = rm.generateGrants(migrationSchema, ptngList);
         println(grants);
 
-//        if (grants.isEmpty()) {
-//            IO.print("ERROR: No grants to execute.");
-//            System.exit(1);
-//        } else {
-//            boolean ok = rm.executeGrants(grants);
-//            println("Grants executed: " + (ok ? "OK" : "FAIL"));
-//            System.exit(ok ? 0 : 1);
-//        }
+        if (grants.isEmpty()) {
+            IO.print("ERROR: No grants to execute.");
+            System.exit(1);
+        } /*else {
+            boolean ok = rm.executeGrants(grants);
+            println("Grants executed: " + (ok ? "OK" : "FAIL"));
+            System.exit(ok ? 0 : 1);
+        }*/
+
+        // Return the new list of application schemas (including the one that was newly migrated.)
+        List<String> currentSchemas = new ArrayList<>(APPLICATION_SCHEMAS.length);
+        Collections.addAll(currentSchemas, APPLICATION_SCHEMAS);
+        for (int i = 0; i < currentSchemas.size(); i++) {
+            if(currentSchemas.get(i).equals(originalSchema)) {
+                currentSchemas.set(i, migrationSchema);
+                break;
+            }
+        }
+
+        System.out.println("\n" + String.join(",", currentSchemas));
     }
 }

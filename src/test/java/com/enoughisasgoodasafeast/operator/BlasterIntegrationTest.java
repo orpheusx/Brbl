@@ -159,7 +159,7 @@ public class BlasterIntegrationTest {
     }
 
     private List<Message> getMessages(List<UUID> messageIds) throws SQLException {
-        try (var connection = persistenceManager.fetchConnection();
+        try (var connection = adminPersistenceManager.fetchConnection();
              var ps = connection.prepareStatement(
                      "SELECT id, sent_at, _from, _to, _text, session_id, script_id FROM messages_mt WHERE id = ANY (?)"
              )) {
