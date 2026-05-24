@@ -198,6 +198,12 @@ public class Operator implements MessageProcessor {
             scope.join().throwIfFailed(); // TODO consider using joinUntil() to enforce a collective timeout.
 
             var script = (keywordScript.get() != null) ? keywordScript.get() : defaultScript.get();
+
+            // FIXME change these to debug or comment out.
+            LOG.debug("keyword node: {}", keywordScript.get());
+            LOG.debug("default node: {}", defaultScript.get());
+            LOG.debug("using node: {}", defaultScript.get());
+
             if (script == null) { // For now let's fail hard on configuration errors even if the user has an existing session that could be used instead.
                 LOG.error("No script available by keyword match or route default. Configuration error in route table for {}:{} ",
                         sessionKey.platform(), sessionKey.to());
@@ -326,8 +332,8 @@ public class Operator implements MessageProcessor {
             LOG.info("Evaluating pattern {} for {}", pattern, keyword);
             if (keywordCacheKey.platform() == keyword.platform() && keyword.channel().equals(keywordCacheKey.channel())) {
                 if (pattern.matcher(keywordCacheKey.keyword()).matches()) {
-                    LOG.info("Match found for {}", keywordCacheKey);
-                    return keyword.scriptId();
+                    LOG.info("Match found for {}: {}", keywordCacheKey, keyword.nodeId());
+                    return keyword.nodeId();
                 } else {
                     LOG.info("Not a match: {} !~ {}", keywordCacheKey.keyword(), pattern);
                 }

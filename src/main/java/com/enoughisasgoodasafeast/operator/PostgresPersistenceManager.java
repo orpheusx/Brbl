@@ -298,12 +298,15 @@ public class PostgresPersistenceManager implements PersistenceManager {
     public static final String SELECT_ALL_KEYWORDS =
             """
                     SELECT
-                        k.id, k.pattern, r.platform, k.script_id, r.channel
+                        k.id, k.pattern, r.platform, s.node_id, r.channel
                     FROM
                         keywords k
                     INNER JOIN
                         routes r
                             ON r.id = k.route_id
+                    INNER JOIN
+                        scripts s
+                            ON s.id = k.script_id
                     WHERE
                         r.status = 'ACTIVE'::brbl_logic.route_status
                     ;
@@ -745,12 +748,12 @@ public class PostgresPersistenceManager implements PersistenceManager {
                 String pattern = rs.getString(2);
                 // k.platform
                 Platform platform = Platform.byCode(rs.getString(3));
-                // k.script_id
-                UUID scriptId = (UUID) rs.getObject(4);
+                // k.nodeId
+                UUID nodeId = (UUID) rs.getObject(4);
                 // k.channel
                 String channel = rs.getString(5);
 
-                Keyword keyword = new Keyword(id, pattern.trim(), platform, scriptId, channel);
+                Keyword keyword = new Keyword(id, pattern.trim(), platform, nodeId, channel);
 
                 Pattern compiledPattern = Pattern.compile(pattern);
 

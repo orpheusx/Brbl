@@ -5202,8 +5202,9 @@ We're definitely going to want to circle back once all our various applications 
 ===== 2026-05-18 ====
 
 TODO
-    _ devise a strategy for updating the application search_path
-    X complete migration of keywords (dropping the old fk on nodes)
+    X Create a migration to drop the node_id column.
+    _ Devise a strategy for updating the application search_path
+    X Complete migration of keywords (dropping the old fk on nodes)
 
 Solution for search_path:
     Append "?currentSchema=<list-of-migration-schemas>" to the jdbcUrl property in the application's config file. Useful automations for this? Just a sed/awk replace script called by run_migration.py?
@@ -5214,3 +5215,79 @@ The Blaster.exec() call runs as brbl_pushr. Via PostgresPersistenceManager, this
 
     REVOKE brbl_logs_read_role TO brbl_pushr;
     GRANT brbl_logs_write_role TO brbl_pushr;
+
+
+===== 2026-05-18 ====
+
+TODO
+    X Devise a strategy for updating the application search_path
+
+So, the method we're going to use is to
+1) Author the migration yaml in our dev env.
+2) Make the needed code changes to use the new structure/stop using the old structure on a branch.
+3) Run the migration in dev via run_migration.py. (No --complete)
+4) Double check the updates to the .properties file.
+5) Build jar/image then run integration tests on dev env.
+6) Deploy and start new instances on stage.
+7) Validate operation in stage. (The validations may be integration tests that can be run on a non-dev env.)
+8) Confirm migration complete.
+9) If all's well, swap new instances into load balancer and old instances out (ideally) in one shot.
+
+For prod,
+Run steps 6-9.
+
+
+===== 2026-05-20 ====
+
+Spent some time yesterday attempting to get native compilation working for Confab.
+Compiles okay but blows up at runtime. Can't find any documentation about the additional config might be needed to make the Helidon WebClient work. Posted a question on their Slack channel:
+    https://helidon.slack.com/archives/CCS216A5A/p1779296034678039
+
+Hoping for some response. Really annoyed at the lack of documentation about it.
+
+===== 2026-05-21 ====
+
+Not suprised native compilation isn't more popular. Figuring out how to get it working with the TamboUI and Helidon libraries was pretty frustrating. Working now after lots of Slack discussion with the nice guy on the Helidon team.
+
+===== 2026-05-22 ====
+
+NOTE: Looked a little more deeply at what ProxMox does. It's more in-depth that I had expected. It can manage a cluster of machines including networking, placement of containers wrt core allocation, CephFS (aka Ceph Tentacle), ZFS, and lots of other stuff. Also the containers management (can) use LXC. Runs on Debian 13 with the currently new 7.0 version of the Linux kernel.
+
+TODO
+    _ Get script execution working (again.) We forgot to manually test the datagen produced scripts.
+    _ Implement additional script behaviors including END_OF_CONVERSATION (resetting session state)
+    _ BlasterIntegrationTest.pushCampaignLifecycle doesn't update the campaign_users.delivered column; it remains PENDING.
+        (Probably need to revisit the enum values in light of the somewhat complicated send process. e.g. not sure INFLIGHT makes practical sense. When is a push message considered SENT given that Blaster only goes as far as queueing it.)
+    _ Migration: drop the num_type column from the nodes table.
+
+After clearing out the old sessions, I got the expected responses for the multi-node conversation that starts with "What is your favorite color?"
+
+Q: For the pair of identity and channel what are the keywords registered to for the channel (route) and what scripts do they trigger.
+    (With the known data set, all users are claimed by Yoyodyne and all routes are registered to them as well. Thus all scripts are also owned by the same company. So any identity-channel pair will be recognized.)
+The route, 12124468003, has a keyword ('meh') registered that will execute the other conversation. The default script for this route, however, points to the same favorite color conversation above. If we get that response from Confab it means the keyword isn't being recognized.
+
+Encountered the warning that EXPECTED_INPUT_COUNT had been exceeded for the session. Later in the stack trace the Operator queue reader is dying so subsequent messages are enqueued by the Rcvr but nothing else happens.
+This could happen if previous inputs were not being flushed; we should see a "Errors flushing session" error in the log if this is the case.
+
+
+===== 2026-05-23 ====
+Ok, gotta get into this.
+Fired up Confab...
+identity: 17817209452
+route: 12124468003
+ME: meh
+THEM: What is your favorite color? 1) red 2) blue 3) flort
+
+Added debug code that shows that scriptByKeywordCache.get() is returning null so, yes, we're using the route's default node.
+Even then we're responding with the wrong text.
+
+FIXME realized/remembered that some of our tests are creating rows in sessions table without cleaning up. Should fix this...
+
+Ok, this is not suprising. We're returning the id of the Script row and looking for it in the cache of Node rows.
+We didn't update the code after changing the schema.
+Time to update the naming of variables, too. We used to call a node object a script.
+
+The simplest solution here is to change the Keyword model to replace the scriptId with the nodeId (pulling the latter by adding Scripts to the join.)
+Appears to work.
+
+Next issue is what to do when the graph ends and Session.currentNode becomes null. Was thinking 

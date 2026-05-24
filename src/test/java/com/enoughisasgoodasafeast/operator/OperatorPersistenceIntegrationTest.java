@@ -51,13 +51,15 @@ class OperatorPersistenceIntegrationTest {
     }
 
     @Test
-    void getScript() {
-        final UUID scriptId = UUID.fromString(knownRootNodeIds[0]);
-        final Node node = pm.getNodeGraph(scriptId);
+    void getNodeGraph() {
+        final UUID nodeId = UUID.fromString(knownRootNodeIds[0]);
+        final Node node = pm.getNodeGraph(nodeId);
         assertNotNull(node);
-        assertEquals(node.id(), scriptId);
-        // Node.printGraph(node, node, 1);
+        assertEquals(node.id(), nodeId);
+        //Node.printGraph(node, node, 1);
         assertEquals(1, node.edges().size()); // just a single connecting edge expected for PRESENT_MULTI nodes.
+        // Dive into the graph and check we can find an Edge we recognize. Relies on KnownData.
+        assertEquals("Blue is my fave, as well.", node.edges().getFirst().targetNode().edges().getFirst().responseText());
     }
 
     @Test
@@ -108,7 +110,7 @@ class OperatorPersistenceIntegrationTest {
         assertFalse(keywordsByPattern.isEmpty());
         assertEquals(5, keywordsByPattern.size()); // keywords w/out route_id value are excluded
         assertTrue(keywordsByPattern.entrySet().stream().anyMatch(entry -> {
-            return entry.getValue().wordPattern().equals("foo");
+            return entry.getValue().wordPattern().equals("foo"); // at least one of the keywords should be "foo"
         }));
     }
 

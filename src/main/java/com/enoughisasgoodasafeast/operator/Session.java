@@ -156,7 +156,7 @@ public class Session implements ScriptContext, Serializable {
         int numInBuffer = outputBuffer.size();
         LOG.info("flush: outputBuffer size = {}", numInBuffer);
         Message mtMessage;
-        while((mtMessage = outputBuffer.poll()) !=null) {
+        while ((mtMessage = outputBuffer.poll()) != null) {
             if (!producer.enqueue(mtMessage)) {
                 LOG.error("flush: failed to enqueue: {}", mtMessage);
                 return false;
