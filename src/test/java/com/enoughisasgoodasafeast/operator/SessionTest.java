@@ -42,7 +42,7 @@ public class SessionTest {
                 Message mo = Message.newMO(FROM, TO, String.valueOf(i));
                 session.registerInput(mo);
             }
-            session.flush(); // adds all the inputs to the inputHistory
+            session.flush(false); // adds all the inputs to the inputHistory
 
             assertEquals(MAX_INPUT_HISTORY, session.getInputHistory().size());
             assertEquals("1", session.getInputHistory().getFirst().text());
@@ -280,6 +280,11 @@ public class SessionTest {
 
             clone.postDeserialize(queueProducer, persistenceManager);
             assertEquals(session, clone);
+
+            ppm.clearSession(session);
+
+            final Session clone2 = ppm.loadSession(session.getUser().groupId());
+            assertNull(clone2);
 
             LOG.info("Cool.");
 

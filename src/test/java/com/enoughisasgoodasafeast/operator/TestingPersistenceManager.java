@@ -109,6 +109,11 @@ public class TestingPersistenceManager implements PersistenceManager {
     }
 
     @Override
+    public void clearSession(@NonNull Session session) throws PersistenceManagerException {
+        savedSessions.remove(session.getId());
+    }
+
+    @Override
     public PushCampaign getPushCampaign(@NonNull UUID campaignId) {
         return null; // FIXME implement!
     }

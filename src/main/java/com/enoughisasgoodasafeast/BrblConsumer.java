@@ -2,9 +2,7 @@ package com.enoughisasgoodasafeast;
 
 import com.enoughisasgoodasafeast.operator.MessageProcessor;
 import com.enoughisasgoodasafeast.operator.PersistenceManager;
-import com.rabbitmq.client.Channel;
-import com.rabbitmq.client.DefaultConsumer;
-import com.rabbitmq.client.ShutdownSignalException;
+import com.rabbitmq.client.*;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 

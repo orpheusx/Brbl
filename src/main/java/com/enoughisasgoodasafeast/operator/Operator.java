@@ -100,69 +100,25 @@ public class Operator implements MessageProcessor {
     @Override
     public boolean process(Message message) {
         LOG.info("Process message: {}", message);
-        final SessionKey sessionKey = SessionKey.newSessionKey(message);
+        final SessionKey sessionKey = SessionKey.newSessionKey(message); //
         Session session = sessionCache.get(sessionKey);
         if (null == session) {
-            LOG.error("Cache fetch failed for {}", sessionKey);
+            LOG.error("Failed to find or create session for {}", sessionKey);
             return false;
         }
+
         // FIXME the gap between the creation/retrieval of the Session and it being locked for
         //  processing is worrisome but possibly unavoidable...
-        return process(session, message);
+        boolean ok = ScriptEngine.process(session, message);
+
+        // I'm not a functional purist but this the worst kind of side effect; the same condition dealt with in two different places.
+        if (session.currentNode == null) {
+            LOG.debug("Clearing completed session from cache: {}", session);
+            sessionCache.invalidate(sessionKey);
+        }
+
+        return ok;
     }
-
-    private boolean process(Session session, Message message) {
-        return ScriptEngine.process(session, message);
-    }
-
-//    /**
-//     * Execute the node in the context of the given session and message.
-//     * Most simply this can result in the creation of one more MTMessages.
-//     * There are a variety of possible side effects including:
-//     * - inserts/updates to the database
-//     * - schedule new messages
-//     * - invoke an ML operation
-//     *
-//     * @param node      the node being evaluated
-//     * @param session   the user context
-//     * @param moMessage the MO message being processed
-//     * @return the next Node in the conversation (or null if the conversation is complete?)
-//     * FIXME Maybe instead of null we return a symbolic Node that indicates the end of Node?
-//     */
-//    private Node evaluate(Node node, ScriptContext session, Message moMessage) throws IOException {
-//        Node nextNode = switch (node.type()) {
-//            case EchoWithPrefix -> SimpleTestScript.SimpleEchoResponseScript.evaluate(session, moMessage);
-//
-//            case ReverseText -> SimpleTestScript.ReverseTextResponseScript.evaluate(session, moMessage);
-//
-//            case HelloGoodbye -> SimpleTestScript.HelloGoodbyeResponseScript.evaluate(session, moMessage);
-//
-//            // NOTE: practically speaking there's no reason to have any of the above. Most Scripts should
-//            // be of the following types or more specific versions thereof. Simple chaining conversations can
-//            // simply have a single logic list.
-//            case PresentMulti ->
-//                    Multi.Present.evaluate(session, moMessage); // Could re-use SendMessage logic while keeping the type difference
-//
-//            case ProcessMulti -> Multi.Process.evaluate(session, moMessage);
-//
-//            // TODO Behaves like a SendMessage albeit with the expectation that there's no "next" node so we could replace impl
-//            case EndOfChat ->
-//                    SendMessage.evaluate(session, moMessage); //EndOfSession? 'request' that the session be cleared?
-//
-//            // TODO Even easier to replace with SendMessage.evaluate(). The Editor will always pair it with an Input.Process
-//            case RequestInput -> Input.Request.evaluate(session, moMessage);
-//
-//            case ProcessInput -> Input.Process.evaluate(session, moMessage);
-//
-//            case SendMessage -> SendMessage.evaluate(session, moMessage);
-//
-//        };
-//
-//        session.registerEvaluated(node);
-//        return nextNode;
-//
-//    }
-
 
     @Override
     public boolean log(Message message) {
@@ -192,17 +148,15 @@ public class Operator implements MessageProcessor {
         try (var scope = new StructuredTaskScope.ShutdownOnFailure()) {
             Supplier<User> suppliedUser = scope.fork(()  -> userCache.get(sessionKey));
             Supplier<Node> keywordScript = scope.fork(() -> scriptByKeywordCache.get(KeywordCacheKey.newKey(sessionKey)));
-            Supplier<Node> defaultScript = scope.fork(() ->
-                    findDefaultScriptByRoute(sessionKey));
+            Supplier<Node> defaultScript = scope.fork(() -> findDefaultScriptByRoute(sessionKey));
 
             scope.join().throwIfFailed(); // TODO consider using joinUntil() to enforce a collective timeout.
 
             var script = (keywordScript.get() != null) ? keywordScript.get() : defaultScript.get();
 
             // FIXME change these to debug or comment out.
-            LOG.debug("keyword node: {}", keywordScript.get());
-            LOG.debug("default node: {}", defaultScript.get());
-            LOG.debug("using node: {}", defaultScript.get());
+            LOG.debug("findOrCreateSession: keyword node: {}", keywordScript.get());
+            LOG.debug("findOrCreateSession: route default node: {}", defaultScript.get());
 
             if (script == null) { // For now let's fail hard on configuration errors even if the user has an existing session that could be used instead.
                 LOG.error("No script available by keyword match or route default. Configuration error in route table for {}:{} ",

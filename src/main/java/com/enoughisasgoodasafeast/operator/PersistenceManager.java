@@ -48,6 +48,8 @@ public interface PersistenceManager {
 
     Session loadSession(UUID id) throws PersistenceManagerException;
 
+    void clearSession(@NonNull Session session) throws PersistenceManagerException;
+
     @Nullable PushCampaign getPushCampaign(@NonNull UUID campaignId);
 
     Collection<CampaignUser> getPushCampaignUsers(@NonNull UUID campaignId, DeliveryStatus byStatus) throws SQLException;

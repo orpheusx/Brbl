@@ -1,6 +1,7 @@
 package com.enoughisasgoodasafeast.operator;
 
 import com.enoughisasgoodasafeast.Message;
+import org.jspecify.annotations.NonNull;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -53,6 +54,8 @@ public class ScriptEngine {
                     }
                 }
 
+                assert session.currentNode != null;
+
                 // FIXME Session.evaluate handles appending the evaluated node to the evaluatedScript list
                 // NB Script processing functions are limited to getting the currentNode, never setting it.
                 // Setting it is only done here based on the function's return value but can be
@@ -68,7 +71,9 @@ public class ScriptEngine {
                     session.currentNode = next;
                 }
 
-                boolean flushOk = session.flush(); // FIXME ideally should be in a finally block but writing to db can throw. Hmm...
+                // FIXME For now, if we've advanced to the end of the graph then clear the session.
+                // FIXME ideally should be in a finally block but writing to db can throw. Hmm...
+                boolean flushOk = session.flush(next==null);
                 if(!flushOk) {
                     LOG.error("Errors flushing session: {}", session);
                 }
@@ -95,7 +100,7 @@ public class ScriptEngine {
      * @return the next Node in the conversation (or null if the conversation is complete?)
      * FIXME Maybe instead of null we return a symbolic Node that indicates the end of Node?
      */
-    private static Node evaluate(Node node, ScriptContext session, Message moMessage) throws IOException {
+    private static Node evaluate(@NonNull Node node, @NonNull ScriptContext session, @NonNull Message moMessage) throws IOException {
         Node nextNode = switch (node.type()) {
 
             case PRESENT_MULTI ->

@@ -5138,8 +5138,8 @@ Added privileges on push_campaigns and campaign_users tables to brbl_logic_*_rol
     GRANT SELECT ON TABLE brbl_logic.push_campaigns TO brbl_logic_read_role;
     GRANT SELECT ON TABLE brbl_logic.campaign_users TO brbl_logic_read_role;
 
-    GRANT INSERT,UPDATE ON TABLE brbl_logic.push_campaigns TO brbl_logic_write_role;
-    GRANT INSERT,UPDATE ON TABLE brbl_logic.campaign_users TO brbl_logic_write_role;
+    GRANT INSERT, UPDATE ON TABLE brbl_logic.push_campaigns TO brbl_logic_write_role;
+    GRANT INSERT, UPDATE ON TABLE brbl_logic.campaign_users TO brbl_logic_write_role;
 
 ERROR: permission denied for view routes
 
@@ -5254,7 +5254,7 @@ Not suprised native compilation isn't more popular. Figuring out how to get it w
 NOTE: Looked a little more deeply at what ProxMox does. It's more in-depth that I had expected. It can manage a cluster of machines including networking, placement of containers wrt core allocation, CephFS (aka Ceph Tentacle), ZFS, and lots of other stuff. Also the containers management (can) use LXC. Runs on Debian 13 with the currently new 7.0 version of the Linux kernel.
 
 TODO
-    _ Get script execution working (again.) We forgot to manually test the datagen produced scripts.
+    X Get script execution working (again.) We forgot to manually test the datagen produced scripts.
     _ Implement additional script behaviors including END_OF_CONVERSATION (resetting session state)
     _ BlasterIntegrationTest.pushCampaignLifecycle doesn't update the campaign_users.delivered column; it remains PENDING.
         (Probably need to revisit the enum values in light of the somewhat complicated send process. e.g. not sure INFLIGHT makes practical sense. When is a push message considered SENT given that Blaster only goes as far as queueing it.)
@@ -5271,6 +5271,7 @@ This could happen if previous inputs were not being flushed; we should see a "Er
 
 
 ===== 2026-05-23 ====
+
 Ok, gotta get into this.
 Fired up Confab...
 identity: 17817209452
@@ -5290,4 +5291,45 @@ Time to update the naming of variables, too. We used to call a node object a scr
 The simplest solution here is to change the Keyword model to replace the scriptId with the nodeId (pulling the latter by adding Scripts to the join.)
 Appears to work.
 
-Next issue is what to do when the graph ends and Session.currentNode becomes null. Was thinking 
+Next issue is what to do when the graph ends and Session.currentNode becomes null.
+Currently the resulting exception will kill the c.e.BrblConsumer and we stop processing any incoming messages.
+
+What consequences if we treat sessions as a cache and delete the session when a conversation completes.
+Reporting? We can use our messages_mo/messages_mt joined with amalgams to see which users have visited recently. Right?
+
+    Did some SQL hacking and its pretty easy to connect the incoming messages (messages_mo and messages_mo_prcd) and outgoing messages.
+    To connect the two sides, however, is not so easy. Is this why we included a session_id column to messages_mo_prcd and messages_mt?
+    It doesn't work for that purpose, alas.
+
+    I have a memory of considering a req/res token (assigned upon receipt of MO and then passed on.)
+
+    Considering it's current design we could just add a token to messages_mo_prcd and messages_mt to bridge the two together.
+
+TODO
+    _ rename the script_id columns on messages_mo and messages_mt.
+
+Added clearSession() method to the PersistenceManager interface and implementations. Requires additional privilege to be granted to brbl_operator:
+    GRANT DELETE ON TABLE brbl_logic.sessions TO brbl_logic_write_role; -- so RoleMigrator will apply it for future migrations.
+    GRANT DELETE ON TABLE brbl_logic_7.sessions TO brbl_logic_write_role;
+
+
+===== 2026-05-23 ====
+
+Needed to also invalidate the session from the sessionCache. Not happy with the code for this is organized but it appears to work.
+
+After the final message of the script there should be no session in db/cache, right?
+We see the log message from Operator.findOrCreateSession "Creating new Session for user..." but the Session.flush() doesn't get called so it isn't written to db.
+Is there a log method firing on the enqueue that is reading from the sessionCache and this calling findOrCreateSession?
+
+OperatorConsumer uses the MessageProcessor interface (implemented by Operator) to manage the queue interaction.
+Create a SessionAwareMessageProcessor interface and have it take another param (the Session) and return a tuple type that combines the boolean and the additional data needed to allow the log() method to write the messages_mo_prcd record. Golang does this with multiple return values.
+Then modify OperatorConsumer to use SessionAwareMessageProcessor. Per the name no other classes should be using OperatorConsumer.
+
+RabbitQueueConsumer (implements QueueConsumer which barely does anything) and simply sets up a OperatorConsumer (which has the actual logic)
+ OperatorConsumer extends BrblConsumer (which overrides a few of the do-nothing callbacks defined by it's superclass, DefaultConsumer.
+It's RabbitQueueConsumer that How to separate some of this stuff.
+
+TODO
+    _ rename the script_id columns on messages_mo and messages_mt.
+    _ fix the saveSession functionality; Session.lastUpdatedNanos field isn't getting updated.
+

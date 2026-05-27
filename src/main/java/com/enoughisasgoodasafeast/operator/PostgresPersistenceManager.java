@@ -185,6 +185,9 @@ public class PostgresPersistenceManager implements PersistenceManager {
 //                        (?, ?, ?, ?, ?)
 //                    """;
 
+    public static final String SESSION_DELETE =
+                    "DELETE FROM sessions WHERE group_id = ?::UUID";
+
     public static final String SESSION_UPSERT =
             """
                     INSERT INTO sessions
@@ -676,7 +679,30 @@ public class PostgresPersistenceManager implements PersistenceManager {
         return true;
     }
 
-    public void saveSession(Session session) throws PersistenceManagerException {
+    public void clearSession(@NonNull Session session) throws PersistenceManagerException {
+        try (Connection connection = fetchConnection()) {
+            clearSession(connection, session);
+        } catch (SQLException e) {
+            LOG.error("clearSession: fetchConnection failed", e);
+            throw new PersistenceManagerException(e);
+        }
+    }
+
+    private void clearSession(@NonNull Connection connection, @NonNull Session session) throws PersistenceManagerException {
+        try (PreparedStatement ps = connection.prepareStatement(SESSION_DELETE)) {
+            ps.setObject(1, session.getUser().groupId());
+            ps.execute();
+
+            if (ps.getUpdateCount() != 1) {
+                throw new PersistenceManagerException("Session already deleted: " + session.getUser().groupId());
+            }
+        } catch (SQLException e) {
+            LOG.error(e.getMessage(), e);
+            throw new PersistenceManagerException(e);
+        }
+    }
+
+    public void saveSession(@NonNull Session session) throws PersistenceManagerException {
         try (Connection connection = fetchConnection()) {
             saveSession(connection, session);
         } catch (SQLException e) {
@@ -685,7 +711,7 @@ public class PostgresPersistenceManager implements PersistenceManager {
         }
     }
 
-    private void saveSession(Connection connection, Session session) throws PersistenceManagerException {
+    private void saveSession(@NonNull Connection connection, @NonNull Session session) throws PersistenceManagerException {
         try (PreparedStatement ps = connection.prepareStatement(SESSION_UPSERT)) {
             ps.setObject(1, session.getUser().groupId()); // primary key
             ps.setBytes(2, sessionToBytes(session));

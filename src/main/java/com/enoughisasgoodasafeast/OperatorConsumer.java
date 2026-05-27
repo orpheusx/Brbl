@@ -25,7 +25,7 @@ public class OperatorConsumer extends BrblConsumer {
      * @param envelope packaging data for the message
      * @param properties content header data for the message
      * @param body the message body (opaque, client-specific byte array)
-     * @throws IOException
+     * @throws IOException if unable to deserialize a message.
      */
     @Override
     public void handleDelivery(String consumerTag,
@@ -52,7 +52,7 @@ public class OperatorConsumer extends BrblConsumer {
             }
 
         } catch (ClassNotFoundException e) {
-            throw new RuntimeException("", e);
+            throw new IOException("Deserialization error: " + e.getMessage(), e);
         }
     }
 
