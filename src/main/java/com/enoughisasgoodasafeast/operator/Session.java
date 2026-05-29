@@ -2,6 +2,7 @@ package com.enoughisasgoodasafeast.operator;
 
 import com.enoughisasgoodasafeast.Message;
 import com.enoughisasgoodasafeast.QueueProducer;
+import org.jspecify.annotations.NonNull;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -61,9 +62,10 @@ public class Session implements ScriptContext, Serializable {
      * @param producer           the sink for messages created on behalf of this Session
      * @param persistenceManager the object that writes artifacts created for this Session
      */
-    public Session(UUID id, Node currentNode, User user, QueueProducer producer, PersistenceManager persistenceManager) {
+    public Session(@NonNull UUID id, Node currentNode, User user, QueueProducer producer, PersistenceManager persistenceManager) {
         this.startTimeNanos = utcInstant();
         this.lastUpdatedNanos = startTimeNanos;
+
         this.id = Objects.requireNonNull(id);
         this.currentNode = Objects.requireNonNull(currentNode);
         this.user = Objects.requireNonNull(user);

@@ -1,22 +1,21 @@
 package com.enoughisasgoodasafeast;
 
 import com.enoughisasgoodasafeast.operator.MessageProcessor;
-import com.rabbitmq.client.*;
+import com.enoughisasgoodasafeast.operator.SndrMessageProcessor;
+import com.rabbitmq.client.AMQP;
+import com.rabbitmq.client.Channel;
+import com.rabbitmq.client.Envelope;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import java.io.IOException;
 
-/**
- * An implementation of the Rabbit Consumer interface that handles Messages.
- */
-public class OperatorConsumer extends BrblConsumer {
+public class SndrConsumer extends BrblConsumer {
+    private static final Logger LOG = LoggerFactory.getLogger(SndrConsumer.class);
 
-    private static final Logger LOG = LoggerFactory.getLogger(OperatorConsumer.class);
+    SndrMessageProcessor processor;
 
-    SessionAwareMessageProcessor processor;
-
-    public OperatorConsumer(SessionAwareMessageProcessor processor, Channel channel) {
+    public SndrConsumer(SndrMessageProcessor processor, Channel channel) {
         super(channel);
         this.processor = processor;
     }
@@ -33,18 +32,17 @@ public class OperatorConsumer extends BrblConsumer {
     public void handleDelivery(String consumerTag,
                                Envelope envelope,
                                AMQP.BasicProperties properties,
-                               byte[] body)
-            throws IOException {
+                               byte[] body) throws IOException {
 
         // Should be able to deserialize directly assuming Rcvr enqueued a Message
         try {
             long deliveryTag = envelope.getDeliveryTag();
             final Message message = Message.fromBytes(body);
-            BooleanSession ack = processor.process(message);
+            boolean ack = processor.process(message);
             LOG.info("Processed message: {}", message);
-            if(ack.ok()) {
+            if(ack) {
                 getChannel().basicAck(deliveryTag, false);
-                if (!processor.log(ack.session(), message)) {
+                if (!processor.log(message)) {
                     LOG.error("Failed to log {}", message);
                 }
 
@@ -57,5 +55,5 @@ public class OperatorConsumer extends BrblConsumer {
             throw new IOException("Deserialization error: " + e.getMessage(), e);
         }
     }
-}
 
+}

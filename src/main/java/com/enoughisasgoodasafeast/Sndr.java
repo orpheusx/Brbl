@@ -4,6 +4,7 @@ import com.enoughisasgoodasafeast.operator.PersistenceManager;
 import com.enoughisasgoodasafeast.operator.MessageProcessor;
 import com.enoughisasgoodasafeast.operator.PostgresPersistenceManager;
 import com.enoughisasgoodasafeast.operator.PersistenceManager.PersistenceManagerException;
+import com.enoughisasgoodasafeast.operator.SndrMessageProcessor;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -11,7 +12,7 @@ import java.io.IOException;
 import java.util.Properties;
 import java.util.concurrent.TimeoutException;
 
-public class Sndr implements MessageProcessor {
+public class Sndr implements SndrMessageProcessor {
 
     private static final Logger LOG = LoggerFactory.getLogger(Sndr.class);
 

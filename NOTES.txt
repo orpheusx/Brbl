@@ -5313,7 +5313,7 @@ Added clearSession() method to the PersistenceManager interface and implementati
     GRANT DELETE ON TABLE brbl_logic_7.sessions TO brbl_logic_write_role;
 
 
-===== 2026-05-23 ====
+===== 2026-05-25 ====
 
 Needed to also invalidate the session from the sessionCache. Not happy with the code for this is organized but it appears to work.
 
@@ -5327,9 +5327,15 @@ Then modify OperatorConsumer to use SessionAwareMessageProcessor. Per the name n
 
 RabbitQueueConsumer (implements QueueConsumer which barely does anything) and simply sets up a OperatorConsumer (which has the actual logic)
  OperatorConsumer extends BrblConsumer (which overrides a few of the do-nothing callbacks defined by it's superclass, DefaultConsumer.
-It's RabbitQueueConsumer that How to separate some of this stuff.
+It's RabbitQueueConsumer that does all the queue setup and and the required interface based callbacks.
+
+Really more complicated than we'd like. How can we simplify?
+    Make MessageProcessor just a marker interface and fully separate the two pairs of queue consumer/message processor impls.
+
+
+===== 2026-05-28 ====
 
 TODO
-    _ rename the script_id columns on messages_mo and messages_mt.
-    _ fix the saveSession functionality; Session.lastUpdatedNanos field isn't getting updated.
-
+    _ Migration: rename the script_id columns on messages_mo and messages_mt.
+    _ Fix the saveSession functionality; Session.lastUpdatedNanos field isn't getting updated.
+    _ Provide an actual error message for ColorQuizProcess e.g. "Sorry, that's not one of the choices. Try again."

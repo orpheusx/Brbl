@@ -1,7 +1,9 @@
 package com.enoughisasgoodasafeast;
 
 import com.enoughisasgoodasafeast.operator.MessageProcessor;
+import com.enoughisasgoodasafeast.operator.SndrMessageProcessor;
 import com.rabbitmq.client.*;
+import org.jspecify.annotations.NonNull;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -22,21 +24,22 @@ public class RabbitQueueConsumer implements QueueConsumer {
     public Connection connection;
     public Channel channel;
 
-    public static QueueConsumer createQueueConsumer(String configFileName, MessageProcessor processor/*Consumer consumer*//*MTHandler consumingHandler*/) throws IOException, TimeoutException {
+    public static QueueConsumer createQueueConsumer(String configFileName, MessageProcessor processor) throws IOException, TimeoutException {
         Properties props = ConfigLoader.readConfig(configFileName);
         return createQueueConsumer(props, processor);
     }
 
-    public static QueueConsumer createQueueConsumer(Properties props, MessageProcessor processor/*MTHandler consumingHandler*/) throws IOException, TimeoutException {
+    public static QueueConsumer createQueueConsumer(Properties props, MessageProcessor processor) throws IOException, TimeoutException {
         String queueHost = props.getProperty("consumer.queue.host");
         int queuePort = Integer.parseInt(props.getProperty("consumer.queue.port"));
         String queueName = props.getProperty("consumer.queue.name");
         String queueRoutingKey = props.getProperty("consumer.queue.routingKey");
         boolean isQueueDurable = Boolean.parseBoolean(props.getProperty("consumer.queue.durable"));
+        String consumerClassImpl = props.getProperty("consumerClass");
         int heartbeatTimeoutSeconds = SharedConstants.STANDARD_HEARTBEAT_TIMEOUT_SECONDS;
 
         return new RabbitQueueConsumer(queueHost, queuePort, queueName, queueRoutingKey, isQueueDurable,
-                processor, heartbeatTimeoutSeconds);
+                processor, consumerClassImpl, heartbeatTimeoutSeconds);
     }
 
     private RabbitQueueConsumer(String queueHost,
@@ -45,13 +48,14 @@ public class RabbitQueueConsumer implements QueueConsumer {
                                 String routingKey,
                                 boolean durable,
                                 MessageProcessor processor,
+                                String consumerClassImpl,
                                 int requestedHeartbeatTimeout)
             throws IOException, TimeoutException {
 
         LOG.info("Creating RabbitQueueConsumer: queueHost: '{}', queueName: '{}', routingKey: '{}'",
                 queueHost, queueName, routingKey);
 
-        if (queueHost == null || queueName == null || routingKey == null || processor == null) {
+        if (queueHost == null || queueName == null || routingKey == null || processor == null || consumerClassImpl == null) {
             throw new IllegalArgumentException("RabbitQueueConsumer missing required configuration.");
         }
 
@@ -87,12 +91,21 @@ public class RabbitQueueConsumer implements QueueConsumer {
         channel.basicQos(3); // An important number where retrying/re-queueing is concerned.
         // My guess is that this influences the number of threads in the driver
 
-        // FIXME Is there a need for an Operator specific consumer here?
-        final BrblConsumer operatorConsumer = new OperatorConsumer(processor, channel);
-        final String consumerTag = channel.basicConsume(queueName, QUEUE_CONSUME_AUTO_ACK, operatorConsumer);
+        final BrblConsumer brblConsumer = getBrblConsumer(processor, consumerClassImpl);
+
+        final String consumerTag = channel.basicConsume(queueName, QUEUE_CONSUME_AUTO_ACK, brblConsumer);
 
         LOG.info("Negotiated heartbeat: {} seconds", connection.getHeartbeat());
         LOG.info("ConsumerTag returned from basicConsume: {}", consumerTag);
+    }
+
+    private @NonNull BrblConsumer getBrblConsumer(MessageProcessor processor, String consumerClassImpl) {
+        return switch (consumerClassImpl) {
+            case "com.enoughisasgoodasafeast.SndrConsumer" -> new SndrConsumer((SndrMessageProcessor) processor, channel);
+            case "com.enoughisasgoodasafeast.OperatorConsumer" -> new OperatorConsumer((SessionAwareMessageProcessor) processor, channel);
+            default -> throw new IllegalArgumentException(
+                    "RabbitQueueConsumer cannot use unsupported consumerClass: " + consumerClassImpl);
+        };
     }
 
     @Override

@@ -12,16 +12,14 @@ public abstract class BrblConsumer extends DefaultConsumer {
 
     private static final Logger LOG = LoggerFactory.getLogger(BrblConsumer.class);
 
-    MessageProcessor processor;
-    PersistenceManager persistenceManager;
+//    PersistenceManager persistenceManager; // FIXME delete this
     /**
      * Constructs a new instance and records its association to the passed-in channel.
      *
      * @param channel the channel to which this consumer is attached
      */
-    public BrblConsumer(MessageProcessor processor, Channel channel) {
+    public BrblConsumer(Channel channel) {
         super(channel);
-        this.processor = processor;
     }
 
     // For now, we just log loudly for all the other callback methods of Consumer.

@@ -21,7 +21,7 @@ import static com.enoughisasgoodasafeast.Functions.randomUUID;
 import static com.enoughisasgoodasafeast.operator.Telecom.deriveCountryCodeFromId;
 import static io.jenetics.util.NanoClock.utcInstant;
 
-public class Operator implements MessageProcessor {
+public class Operator implements SessionAwareMessageProcessor {
 
     private static final Logger LOG = LoggerFactory.getLogger(Operator.class);
 
@@ -97,35 +97,30 @@ public class Operator implements MessageProcessor {
      * @param message the message being processed.
      * @return true if processing was complete, false if incomplete.
      */
-    @Override
-    public boolean process(Message message) {
+    public BooleanSession process(Message message) {
         LOG.info("Process message: {}", message);
         final SessionKey sessionKey = SessionKey.newSessionKey(message); //
         Session session = sessionCache.get(sessionKey);
         if (null == session) {
             LOG.error("Failed to find or create session for {}", sessionKey);
-            return false;
+            return new BooleanSession(false, null);
         }
 
         // FIXME the gap between the creation/retrieval of the Session and it being locked for
         //  processing is worrisome but possibly unavoidable...
         boolean ok = ScriptEngine.process(session, message);
 
-        // I'm not a functional purist but this the worst kind of side effect; the same condition dealt with in two different places.
         if (session.currentNode == null) {
             LOG.debug("Clearing completed session from cache: {}", session);
             sessionCache.invalidate(sessionKey);
         }
 
-        return ok;
+        return new BooleanSession(ok, session);
     }
 
     @Override
-    public boolean log(Message message) {
-        return persistenceManager.insertProcessedMO(
-                message,
-                this.sessionCache.get(SessionKey.newSessionKey(message)));
-        // More logging here if insert fails?
+    public boolean log(Session session, Message message) {
+        return persistenceManager.insertProcessedMO(message, session);
     }
 
     /*
