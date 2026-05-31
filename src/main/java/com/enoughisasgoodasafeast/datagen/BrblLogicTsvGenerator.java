@@ -26,12 +26,12 @@ public class BrblLogicTsvGenerator extends BrblUsersTsvGenerator {
 
     public static Logger LOG = LoggerFactory.getLogger(BrblLogicTsvGenerator.class);
 
-    private List<BrblRow> generateKnownKeywords(String[][] keywordIdsAndPatterns, String nodeId, String routeId) {
+    private List<BrblRow> generateKnownKeywords(String[][] keywordIdsAndPatterns, String scriptId, String routeId) {
         var keywordRows = new ArrayList<BrblRow>();
         for (int i = 0; i < keywordIdsAndPatterns.length; i++) {
             var now = NanoClock.utcInstant();
             var keyword = new KeywordRow(fromString(keywordIdsAndPatterns[i][0]), keywordIdsAndPatterns[i][1],
-                    fromString(nodeId), now, now, fromString(routeId));
+                    fromString(scriptId), now, now, fromString(routeId));
             keywordRows.add(keyword);
         }
         return keywordRows;
@@ -80,10 +80,11 @@ public class BrblLogicTsvGenerator extends BrblUsersTsvGenerator {
 
         // keywords
         var keywordData = generator.generateKnownKeywords(
-                knownKeywordIdsAndPatterns1, knownRootNodeIds[0], knownRouteIdsAndChannels[0][0]);
+                knownKeywordIdsAndPatterns1, knownScriptData[0][0], knownRouteIdsAndChannels[0][0]);
         keywordData.addAll(generator.generateKnownKeywords(
-                getKnownKeywordIdsAndPatterns2, knownRootNodeIds[1], knownRouteIdsAndChannels[2][0]
+                getKnownKeywordIdsAndPatterns2, knownScriptData[1][0], knownRouteIdsAndChannels[2][0]
         ));
+        // FIXME add a third row?
 
         keywordData.forEach(out::println);
 

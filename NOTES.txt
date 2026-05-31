@@ -5333,9 +5333,75 @@ Really more complicated than we'd like. How can we simplify?
     Make MessageProcessor just a marker interface and fully separate the two pairs of queue consumer/message processor impls.
 
 
-===== 2026-05-28 ====
+===== 2026-05-29 ====
+
+17817209452 -> 12124468003
+17817209452 -> 17814567890
+17817209452 -> 18163456789
+
+Some confusion over the fact that a given user's session is being used across different routes.
+The routes created for the KnownData set are owned by the same company (Yoyodyne) that claims the user.
+The design (and resulting behavior) is to maintain conversational state when a user migrates from one platform to another.
+In the case we're testing, however, the platform is the same (SMS) so it seems weird.
+
+Q: For what purpose would a company (our customer) want to have multiple channels on the same platform and target the same segment of users?
+A: Unclear. For now, we'll leave the design as is.
+
+select
+    a.group_id, u.platform_code, u.platform_id, a.claimant_id  from amalgams a
+inner join users u on u.id=a.user_id
+where
+    u.platform_id in ('17817209452', '15167209453', '17817209454')
+    and
+    platform_code = 'S';
+
+yields:
+               group_id               | platform_code | platform_id |             claimant_id
+--------------------------------------+---------------+-------------+--------------------------------------
+ 019d2055-9235-7073-a9ae-9dbaf02e817c | S             | 17817209452 | 019d2055-922c-75f7-a80e-091f01382fa3
+ 019d2055-9235-72f4-8f7e-3b23435a5717 | S             | 15167209453 | 019d2055-922c-75f7-a80e-091f01382fa3
+ 019d2055-9235-74fc-bbf1-da2f32199ffc | S             | 17817209454 | 019d2055-922c-75f7-a80e-091f01382fa3
+
+So the three test users are separate.
+Using the same route (17814567890) and the same keyword.
+Confirmed behavior is correct.
 
 TODO
     _ Migration: rename the script_id columns on messages_mo and messages_mt.
-    _ Fix the saveSession functionality; Session.lastUpdatedNanos field isn't getting updated.
-    _ Provide an actual error message for ColorQuizProcess e.g. "Sorry, that's not one of the choices. Try again."
+    X Fix the saveSession functionality; Session.lastUpdatedNanos field isn't getting updated.
+    _ Provide an actual error message for ColorQuizProcess et al e.g. "Sorry, that's not one of the choices. Try again."
+    _ Enhance the script type logic to handle bad input by repeating the question.
+    _ Add the "What kind of food? 1) vegetables 2) meat 3) fruit" top level node to known data.
+
+
+===== 2026-05-30 ====
+
+Having a think about our conversational graph switching mechanism.
+
+I'd assumed a list of topics graph would be available though that requires additional attention from our customer (to decide which graphs are openly listable for their customers.) Not a terrible approach but I want to review the options.
+
+Also looking at things like Gemma 3 270M, a "compact, 270-million parameter model designed from the ground up for task-specific fine-tuning with strong instruction-following and text structuring capabilities already trained in." (https://developers.googleblog.com/en/introducing-gemma-3-270m/)
+On disk it's only 550MB and an instance requires ~0.5GB RAM. There are some similarly small Qwen models, as well. Note: Gemma 4 E4B weighs in at ~3GB on disk.
+
+Looks like huggingface.co hosts this and other little models.
+
+I like the "strong instruction-following" part. The IFEval benchmark tests a model's ability to follow verifiable instructions.
+Likewise the claims of being easily fine-tuned.
+There's a larger--1B params--variant of the model called VaultGemma which avoids memorizing data.
+
+What would we want/expect from an LLM integration?
+    Taking free input from the user and trying to suggest relevant topics?
+
+LLM tech is moving so fast but in the meantime we should have a baseline set of functionality.
+So...
+For script processing functions we should support a means of
+    1) recognizing the user's intent to discontinue or change conversations
+    2) getting confirmation of this intent.
+    3) switching to a different graph and continuing the process.
+
+1) See Multi.evaluate. When none of response edges for the current node match we assess the input for an intent to change topic.
+2) When the possible intent is processed respond with a new generated graph that replies with "Oh, did you want to talk about something else? 1) yes 2) no, let's continue." The edge for option 1 would point to a special "topic" graph.
+Optionally we could also include "3) no, I'm all set for now" which would then give our customer a chance to wrap up, summarize, etc. before completing the conversation (and allowing the session to be cleared.)
+
+It would problematic for reporting to log a generated nodes. So maybe create regular scripts for most of it but dynamically replace the "place we left off" node with the one pointed at by the second option.
+

@@ -77,7 +77,7 @@ public class Multi {
             }
 
             // Handle the "I want to talk about something else" case here...Should it happen before the Edge loop?
-            if (userText.contains("change topic")) {
+            if (userRequestingChangeOfTopic(userText)) { // some kind of ML-based assessment of the input might be genuinely useful here...
                 // Create a new Node graph
                 // TODO this should all be handled in the called methods.
                 Message changeTopicNotification = newMTfromMO(moMessage, CHANGE_TOPIC_RESPONSE);
@@ -98,6 +98,11 @@ public class Multi {
             // actual options are since it's only a few lines above in the chat history, right?
             context.registerOutput(newMTfromMO(moMessage, noMatchText==null ? UNEXPECTED_INPUT_MESSAGE : noMatchText));
             return current; // we won't advance in this case.
+        }
+
+        // TODO implement a more flexible assessment of intent.
+        private static boolean userRequestingChangeOfTopic(String message) {
+            return message.contains("change topic");
         }
     }
 

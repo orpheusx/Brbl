@@ -27,7 +27,7 @@ public class KeywordRow implements BrblRow {
     }
 
     public String[] values() {
-        return new String[]{id.toString(), pattern, scriptId.toString(), createdAt.toString(), updatedAt.toString(), routeId.toString()};
+        return new String[]{id.toString(), pattern, createdAt.toString(), updatedAt.toString(), routeId.toString(), scriptId.toString()};
     }
 
     @Override
