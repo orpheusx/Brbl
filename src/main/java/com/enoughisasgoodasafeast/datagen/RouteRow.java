@@ -31,10 +31,12 @@ public class RouteRow implements BrblRow {
                 VALUES
             """;
 
-    public static final String[] headers = {"id", "platform", "channel", "status", "created_at", "updated_at", "company_id", "default_script_id"};
+    public static final String[] headers = {
+            "id", "platform", "channel", "status", "created_at", "updated_at",
+            "company_id", "default_script_id", "interrupt_script_id"};
 
     public static final String VALUES_SQL = """
-            ('%s', '%s', '%s', '%s', '%s', '%s', '%s', '%s'),
+            ('%s', '%s', '%s', '%s', '%s', '%s', '%s', '%s', '%s'),
             """;
 
     UUID id;
@@ -43,26 +45,29 @@ public class RouteRow implements BrblRow {
     UUID defaultScriptId;
     UUID companyId;
     RouteStatus status;
+    UUID interruptScriptId;
     Instant createdAt;
     Instant updatedAt;
 
-    public RouteRow(String channel, UUID defaultScriptId, UUID companyId) {
+    public RouteRow(String channel, UUID defaultScriptId, UUID companyId, UUID interruptScriptId) {
         this.id = randomUUID();
         this.platform = Platform.SMS;
         this.channel = Functions.adjustPlatformId(CountryCode.US, channel);
         this.defaultScriptId = defaultScriptId;
         this.companyId = companyId;
+        this.interruptScriptId = interruptScriptId;
         this.status = RouteStatus.ACTIVE;
         this.createdAt = utcInstant();
         this.updatedAt = utcInstant();
     }
 
-    public RouteRow(UUID id, String channel, UUID defaultScriptId, Platform platform, UUID companyId) {
+    public RouteRow(UUID id, String channel, UUID defaultScriptId, Platform platform, UUID companyId, UUID interruptScriptId) {
         this.id = id;
         this.platform = platform;
         this.channel = Functions.adjustPlatformId(CountryCode.US, channel);
         this.defaultScriptId = defaultScriptId;
         this.companyId = companyId;
+        this.interruptScriptId = interruptScriptId;
         this.status = RouteStatus.ACTIVE;
         this.createdAt = utcInstant();
         this.updatedAt = utcInstant();
@@ -70,7 +75,7 @@ public class RouteRow implements BrblRow {
 
     String getValuesSql() {
         return String.format(VALUES_SQL,
-                id, platform.code(), channel, defaultScriptId, companyId, status, createdAt, updatedAt);
+                id, platform.code(), channel, defaultScriptId, companyId, status, interruptScriptId, createdAt, updatedAt);
     }
 
     public String[] headers() {
@@ -80,7 +85,7 @@ public class RouteRow implements BrblRow {
     public String[] values() {
         return new String[]{id.toString(), platform.code(), channel,
                 status.name(), createdAt.toString(), updatedAt.toString(),
-                companyId.toString(), defaultScriptId.toString()
+                companyId.toString(), defaultScriptId.toString(), interruptScriptId.toString()
         };
     }
 

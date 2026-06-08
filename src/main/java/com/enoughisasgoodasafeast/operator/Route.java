@@ -13,10 +13,11 @@ public record Route(UUID id,
                     UUID defaultNodeId,
                     UUID companyId,
                     RouteStatus status,
+                    UUID interruptNodeId,
                     Instant createdAt,
                     Instant updatedAt) {
 
-    public Route(Platform platform, String channel, UUID defaultNodeId, UUID companyId) {
-        this(randomUUID(), platform, channel, defaultNodeId, companyId, RouteStatus.REQUESTED, utcInstant(), utcInstant());
+    public Route(Platform platform, String channel, UUID defaultNodeId, UUID companyId, UUID interruptNodeId) {
+        this(randomUUID(), platform, channel, defaultNodeId, companyId, RouteStatus.REQUESTED, interruptNodeId, utcInstant(), utcInstant());
     }
 }

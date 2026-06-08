@@ -36,7 +36,7 @@ public class Session implements ScriptContext, Serializable {
     private transient QueueProducer producer;
     private transient PersistenceManager persistenceManager;
 
-    Node currentNode;
+    private Node currentNode;
 
     private final Queue<Message> outputBuffer = new LinkedList<>();
     private final SequencedSet<Message> inputs = new LinkedHashSet<>();

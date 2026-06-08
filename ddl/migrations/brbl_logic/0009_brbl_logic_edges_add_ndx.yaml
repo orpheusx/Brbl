@@ -1,0 +1,15 @@
+version_schema: 0009
+operations:
+  - add_column:
+      table: edges
+      up: SELECT CASE WHEN match_text like '1%' THEN 1 WHEN match_text like '2%' THEN 2 WHEN match_text like '3%' THEN 3 ELSE 0 END
+      column:
+          name: ndx
+          type: smallint
+          comment: Defines the order of the Edges for a given Node.
+          nullable: false
+          unique: false
+          default: "0"
+          check:
+            name: check_ndx
+            constraint: ndx >=0

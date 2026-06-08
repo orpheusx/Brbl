@@ -1,6 +1,7 @@
 package com.enoughisasgoodasafeast.operator;
 
 import com.enoughisasgoodasafeast.*;
+import io.jenetics.util.NanoClock;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.slf4j.Logger;
@@ -9,6 +10,7 @@ import org.slf4j.LoggerFactory;
 import java.time.Instant;
 import java.util.List;
 import java.util.Map;
+import java.util.UUID;
 import java.util.regex.Pattern;
 
 import static com.enoughisasgoodasafeast.Functions.randomUUID;
@@ -28,10 +30,10 @@ public class OperatorTest {
     public static final String SHORT_CODE_1 = "1234";
     public static final String SHORT_CODE_2 = "2345";
     public static final String SHORT_CODE_3 = "3456";
-    public static final String SHORT_CODE_4 = "45678";
+    public static final String SHORT_CODE_4 = "12124468003";
     public static final String MO_TEXT_1 = "Hello Brbl";
     public static final String MO_TEXT_2 = "Howdy Brbl";
-    public static final String SCRIPT_RESPONSE = "script response";
+    public static final String SCRIPT_RESPONSE = "script node response";
 
     public static final String COLOR_QUIZ_KEYWORD = "Color quiz";
     public static final String COLOR_QUIZ_START_TEXT = "What is your favorite color? 1) red 2) blue 3) flort";
@@ -79,6 +81,7 @@ public class OperatorTest {
         PersistenceManager persistenceManager = new TestingPersistenceManager();
         operator = new Operator(fakeQueueConsumer, queueProducer, persistenceManager);
 
+
         // Construct a script for testing purposes
         Node presentQuestion = new Node(COLOR_QUIZ_START_TEXT, NodeType.PRESENT_MULTI, "ColorQuizStart");
         processAnswer = new Node(COLOR_QUIZ_UNEXPECTED_INPUT, NodeType.PROCESS_MULTI, "ColorQuizProcessResponse");
@@ -98,20 +101,67 @@ public class OperatorTest {
         ((TestingPersistenceManager) persistenceManager).addScript(
                 TestingPersistenceManager.SCRIPT_ID, presentQuestion);
 
-        // Define a default script for the platform-channel, adding it with the default route.
-        Node defaultScript = new Node("Welcome! You can talk to us about the following topics...", NodeType.END_OF_CHAT, "CustomerTopicStarter");
-        Route route = new Route(Platform.SMS, mo1.to(), defaultScript.id(), randomUUID());
-        operator.activeRoutesCache.put(
-                Operator.ALL,
-                List.of(route).toArray(new Route[0]));
+        Node confirmChangeTopic = new Node(
+                "Oh, you want to talk about something else? 1) yes 2) no, let's continue with the current conversation.",
+                NodeType.PRESENT_MULTI,
+                "ConfirmChangeTopic");
+        Node processChangeResponse = new Node("yes or no, please", NodeType.PROCESS_MULTI, "ProcessChangeResponse");
+        Edge linkPresentToProcess = new Edge(processChangeResponse);
+        confirmChangeTopic.edges().add(linkPresentToProcess);
+
+        Node presentTopics = new Node(
+                "Here are the list of topics: 1,2,3...", NodeType.PRESENT_MULTI, "PresentTopics");
+        Edge edgeToNowhere = new Edge(null);
+        presentTopics.edges().add(edgeToNowhere);
+
+        Edge confirmChange = new Edge(List.of("yes"), "Ok, cool.", presentTopics);
+
+        // Include a placeholder that the Operator will replace when setting up the 'change topic' conversation.
+        Node continueCurrentPlaceholder = new Node("N/A",	NodeType.END_OF_CHAT, "ContinueCurrentPlaceholder");
+        Edge stayOnCurrent = new Edge(List.of("no"), "Ok, I'll repeat the last question.", continueCurrentPlaceholder);
+
+        processChangeResponse.edges().addAll(List.of(confirmChange, stayOnCurrent));
+
+        LOG.info("Setup: Interrupt node: {}", confirmChangeTopic);
+        LOG.info("Setup: Interrupt node target: {}", confirmChangeTopic.edges().getFirst().targetNode());
+        confirmChangeTopic.edges().getFirst().targetNode().edges().forEach(edge -> {
+            LOG.info("edge: {}:{} -> node label:{} type:{}",
+                    edge.matchText(), edge.responseText(), edge.targetNode().label(), edge.targetNode().type());
+        });
+
+        // Define a default conversation graph for the platform-channel, adding it with the default route.
+        Node defaultNode = new Node("Welcome! You can talk to us about the following topics...", NodeType.END_OF_CHAT, "CustomerTopicStarter");
+        Route route = new Route(Platform.SMS, mo1.to(), defaultNode.id(), randomUUID(), confirmChangeTopic.id());
+
         // Remember the default routes only holds the script id. We still need to add the script itself to the main cache.
-        ((TestingPersistenceManager) persistenceManager).addScript(defaultScript.id(), defaultScript);
+        ((TestingPersistenceManager) persistenceManager).addScript(defaultNode.id(), defaultNode);
+
+        ((TestingPersistenceManager) persistenceManager).addScript(
+                confirmChangeTopic.id(), confirmChangeTopic);
+
+        var onlyCompanyId = UUID.fromString("019d2055-922c-75f7-a80e-091f01382fa3");
+        var allRoutes = new Route[]{
+                route,
+                new Route(
+                    randomUUID(),
+                    Platform.SMS,
+                    "12124468003",
+                    presentQuestion.id(), // defaultNodeId
+                    onlyCompanyId,
+                    RouteStatus.ACTIVE,
+                    confirmChangeTopic.id(), // interruptNodeId
+                    NanoClock.utcInstant(),
+                    NanoClock.utcInstant()
+                )
+        };
+
+        ((TestingPersistenceManager) persistenceManager).setActiveRoutes(allRoutes);
     }
 
     @Test
     void processAndCheckResponse() {
 
-        Node node1 = new Node(SCRIPT_RESPONSE, NodeType.SEND_MESSAGE);
+        Node node1 = new Node(SCRIPT_RESPONSE, NodeType.SEND_MESSAGE, "labelForProcessAndCheckResponse");
         Edge edge1 = new Edge(List.of("1", "2", "3"), null);
         node1.edges().add(edge1);
 
@@ -189,7 +239,7 @@ public class OperatorTest {
         assertNotNull(all);
         assertFalse(all.isEmpty());
 
-        // NB: MTs don't make sense in this situation. Only MOs and, possibly, push messages.
+        // NB: Regular MTs don't make sense in this situation. Only MOs and, possibly, push messages.
         assertNotSame(MessageType.MT, mo4.type());
 
         // The platform, channel and patter will match this message.
@@ -221,14 +271,20 @@ public class OperatorTest {
 
         var session = operator.sessionCache.get(SessionKey.newSessionKey(mo4));
         assertNotNull(session);
+        LOG.info("Session Cache size = {}", operator.sessionCache.estimatedSize());
+
         final String userPhoneNumber = session.getUser().platformNumbers().get(Platform.SMS);
         LOG.info("Session User platform ID = {}", userPhoneNumber);
         assertEquals(MOBILE_MX, userPhoneNumber);
+
+        assertNotNull(session.getCurrentNode());
+        Node.printGraph(session.getCurrentNode(), session.getCurrentNode(), 2);
 
         final List<Message> queuedMessages = queueProducer.enqueued();
 
         assertEquals(1, queuedMessages.size(), "Unexpected number of messages queued.");
         assertTrue(requireNonNull(queuedMessages.getFirst()).text().contains("favorite color"), "Expected text not found in first queued message.");
+
         assertEquals(NodeType.PROCESS_MULTI, session.getCurrentNode().type(), "Session node state has unexpected type."); // The current node should be awaiting a response
 
         // Send a valid response
@@ -241,9 +297,6 @@ public class OperatorTest {
         assertEquals(answerFlort.responseText(), queuedMessages.get(1).text(), "Expected text not found in 2nd queued message.");
         assertEquals(endConversation.text(), queuedMessages.get(2).text());
 
-        // The conversation is now effectively complete.
-        // assertNull(session.getCurrentNode());
-
         // Check the evaluatedNodes.
         final List<Node> evaluatedNodes = session.getEvaluatedNodes();
         assertEquals(COLOR_QUIZ_UNEXPECTED_INPUT, evaluatedNodes.get(1).text());
@@ -251,9 +304,9 @@ public class OperatorTest {
         assertEquals(COLOR_QUIZ_START_TEXT, evaluatedNodes.get(0).text());
 
         // Check that the Session's currentNode is now the last node in the conversation
-        assertNull(session.currentNode, "Session's currentNode is unexpected.");
+        assertNull(session.getCurrentNode(), "Session's currentNode is unexpectedly not null.");
 
-        // Instead of null make the last Node to a constant symbolic?
+        assertEquals(0, operator.sessionCache.estimatedSize(), "Session wasn't cleared at end of conversation.");
     }
 
 
@@ -314,16 +367,15 @@ public class OperatorTest {
         assertEquals(COLOR_QUIZ_UNEXPECTED_INPUT, evaluatedNodes.get(1).text());
         assertEquals(COLOR_QUIZ_END_CONVERSATION, evaluatedNodes.get(2).text());
 
-        assertNull(session.currentNode, "Session's currentNode is unexpected.");
+        assertNull(session.getCurrentNode(), "Session's currentNode is unexpected.");
 //        });
     }
+
 
     @Test
     void stepThroughWithUnexpectedInputAndChangeTopic() {
         // Preflight check: cache is empty.
         assertEquals(0, operator.scriptByKeywordCache.estimatedSize());
-//        ((TestingPersistenceManager) persistenceManager).addScript(
-//                TestingPersistenceManager.SCRIPT_ID, presentQuestion);
 
         // Initiate the conversation
         assertDoesNotThrow(() -> {
@@ -331,7 +383,10 @@ public class OperatorTest {
         });
 
         var session = operator.sessionCache.get(SessionKey.newSessionKey(mo4));
-        assertNotNull(session);
+        // Note: this doesn't prove the session was created by the .process() call above.
+        assertNotNull(session); // We just need a ref for later checks.
+        assertEquals(1, session.getInputHistory().size(), "Wrong number of user inputs.");
+        LOG.info("Initial blocking node: {}", session.getCurrentNode());
 
         // Make sure we get the expected initial response.
         final List<Message> queuedMessages = queueProducer.enqueued();
@@ -349,21 +404,29 @@ public class OperatorTest {
             assertEquals(NodeType.PROCESS_MULTI, session.getCurrentNode().type(), "Session node state has unexpected type.");
         }
 
+        // Current node before interrupt request:
+        LOG.info("Session label prior to interrupt: {}", session.getCurrentNode().label());
+
         // Now request a change of topic
         assertDoesNotThrow(() -> { operator.process(changeTopic); });
-        queueProducer.enqueued().forEach(message -> LOG.info(message.text()));
+        queueProducer.enqueued().forEach(message -> LOG.info("Enqueued: {}", message.text()));
 
         assertEquals(4, queuedMessages.size(), "Unexpected number of messages queued.");
         assertEquals(processAnswer.text(), queuedMessages.get(1).text(), "Expected text not found in 2nd queued message.");
         assertEquals(processAnswer.text(), queuedMessages.get(2).text(), "Expected text not found in 3rd queued message.");
-        assertEquals(Multi.CHANGE_TOPIC_RESPONSE, queuedMessages.get(3).text(), "Expected topic change acknowledgement not found in 4th queued message.");
+        assertEquals(Multi.CHANGE_TOPIC_RESPONSE, queuedMessages.get(3).text(),
+                "Expected topic change acknowledgement not found in 4th queued message.");
 
-        // At this point we would send a message with a list of available topics...
-        // but we haven't yet implemented this functionality.
-        // Current thinking is to return a special constant/symbolic Node type that Operator handles by finding the customer's registered topic script
+        assertEquals(NodeType.PROCESS_MULTI, session.getCurrentNode().type());
+        assertEquals(2, session.getCurrentNode().edges().size());
 
-        // The conversation is effectively complete because we've moved to the end of the graph.
-        assertNull(session.getCurrentNode());
+        session.getCurrentNode().edges().forEach(edge -> {
+            LOG.info("Available responses: {}: {} [{}]", edge.responseText(), edge.targetNode().label(), edge.targetNode().type());});
+
+        // FIXME still need to formalize how we know which edge was the placeholder. For now, it's the last one in the list.
+        LOG.info("Replaced node: {}", session.getCurrentNode().edges().getLast().targetNode().label());
+
+        assertNotNull(session.getCurrentNode());
     }
 
     @Test

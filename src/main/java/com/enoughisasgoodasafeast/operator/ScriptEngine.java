@@ -26,7 +26,7 @@ public class ScriptEngine {
      * @param message the Message that initiates or continues the processing of the Session's Node graph.
      * @return false if the processing of the Message fails or there were exceptions thrown.
      */
-    public static boolean process(Session session, Message message) {
+    public static ProcessStateNode/*boolean*/ process(Session session, Message message) {
         synchronized (session) { // FIXME move the synchronization to caller where the session is created?
             try {
                 session.registerInput(message);
@@ -54,35 +54,37 @@ public class ScriptEngine {
                     }
                 }
 
-                assert session.currentNode != null;
+                assert session.getCurrentNode() != null;
 
                 // FIXME Session.evaluate handles appending the evaluated node to the evaluatedScript list
                 // NB Script processing functions are limited to getting the currentNode, never setting it.
                 // Setting it is only done here based on the function's return value but can be
-                Node next = evaluate(session.currentNode, session, message); // FIXME What if currentNode is null? Start using Optionals with a constant sentinel value instead of null?
-                LOG.info("Next node is {}", next);
-                session.currentNode = next;
+                var psn /*Node next*/ = evaluate(session, message); // FIXME What if currentNode is null? Start using Optionals with a constant sentinel value instead of null?
+                Node next = psn.node();
+                session.setCurrentNode(psn.node());
 
                 // Continue to walk the graph until we reach the end (null) or a node that blocks for input
                 while (next != null && !next.type().isAwaitInput()) {
                     LOG.info("Continuing playback...");
-                    next = evaluate(session.currentNode, session, message);
+                    psn /*next*/ = evaluate(session, message);
+                    next = psn.node();
 
-                    session.currentNode = next;
+                    session.setCurrentNode(psn.node());
                 }
 
                 // FIXME For now, if we've advanced to the end of the graph then clear the session.
                 // FIXME ideally should be in a finally block but writing to db can throw. Hmm...
-                boolean flushOk = session.flush(next==null);
-                if(!flushOk) {
+//                boolean flushOk = session.flush(next==null);
+                if(!session.flush(next==null)) {
                     LOG.error("Errors flushing session: {}", session);
+                    psn = new ProcessStateNode(ProcessState.ERROR, session.getCurrentNode());
                 }
 
-                return flushOk;
+                return psn /*flushOk*/;
 
             } catch (IOException e) {
-                LOG.error("Processing error: " + session.getUser().groupId() + " for " + message, e); // TODO need to consider options for better handling of error scenarios.
-                return false;
+                LOG.error("Processing error: {} for {}", session.getUser().groupId(), message, e); // TODO need to consider options for better handling of error scenarios.
+                return /*false*/new ProcessStateNode(ProcessState.ERROR, session.getCurrentNode());
             }
         }
     }
@@ -94,38 +96,44 @@ public class ScriptEngine {
      *  - inserts/updates to the database
      *  - schedule new messages
      *  - invoke an ML operation
-     * @param node the node being evaluated
      * @param session the user context
      * @param moMessage the MO message being processed
      * @return the next Node in the conversation (or null if the conversation is complete?)
      * FIXME Maybe instead of null we return a symbolic Node that indicates the end of Node?
      */
-    private static Node evaluate(@NonNull Node node, @NonNull ScriptContext session, @NonNull Message moMessage) throws IOException {
-        Node nextNode = switch (node.type()) {
+    private static ProcessStateNode evaluate(@NonNull ScriptContext session, @NonNull Message moMessage) throws IOException {
+
+        var node = session.getCurrentNode();
+        // DEBUG ONLY
+        if (node == null) {
+            LOG.error("Current node is null. Last output was {}", session.getEvaluatedNodes().getLast().text());
+            return new ProcessStateNode(ProcessState.ERROR, null);
+        }
+
+        ProcessStateNode stateAndNode = switch (node.type()) {
 
             case PRESENT_MULTI ->
-                    Multi.Present.evaluate(session, moMessage); // Could re-use SendMessage logic while keeping the type difference
+                    Multi.Present.evaluate(session, moMessage); // Could re-use SendMessage logic while keeping the type difference.
 
-            case PROCESS_MULTI ->
-                    Multi.Process.evaluate(session, moMessage);
+            case PROCESS_MULTI -> Multi.Process.evaluate(session, moMessage);
 
             // TODO Behaves like a SendMessage albeit with the expectation that there's no "next" node so we could replace impl
-            case END_OF_CHAT -> SendMessage.evaluate(session, moMessage); //EndOfSession? 'request' that the session be cleared?
+            case END_OF_CHAT ->
+                    SendMessage.evaluate(session, moMessage); //EndOfSession? 'request' that the session be cleared?
 
             // TODO Even easier to replace with SendMessage.evaluate(). The Editor will always pair it with an Input.Process
-            case REQUEST_INPUT ->
-                    Input.Request.evaluate(session, moMessage);
+            case REQUEST_INPUT -> null;
+//                    Input.Request.evaluate(session, moMessage);
 
-            case PROCESS_INPUT ->
-                    Input.Process.evaluate(session, moMessage);
+            case PROCESS_INPUT -> null;
+//                    Input.Process.evaluate(session, moMessage);
 
-            case SEND_MESSAGE ->
-                    SendMessage.evaluate(session, moMessage);
+            case SEND_MESSAGE -> SendMessage.evaluate(session, moMessage);
 
         };
 
         session.registerEvaluated(node);
-        return nextNode;
+        return stateAndNode;
 
     }
 }

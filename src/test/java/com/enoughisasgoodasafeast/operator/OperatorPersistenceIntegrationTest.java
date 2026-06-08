@@ -10,6 +10,7 @@ import org.slf4j.LoggerFactory;
 
 import java.time.Instant;
 import java.util.Random;
+import java.util.SequencedSet;
 import java.util.UUID;
 
 import static com.enoughisasgoodasafeast.datagen.KnownData.knownRootNodeIds;
@@ -51,15 +52,114 @@ class OperatorPersistenceIntegrationTest {
     }
 
     @Test
+    void getChangeTopicNodeGraph() {
+
+        final UUID nodeId = UUID.fromString(knownRootNodeIds[0]);
+        final Node stopNode = pm.getNodeGraph(nodeId);
+        assertNotNull(stopNode);
+        assertEquals(stopNode.id(), nodeId);
+//        Node.printGraph(stopNode, stopNode, 2); // simple cycle
+
+        // Fetch and validate the initial PRESENT node of the 'change topic' graph.
+        final var startingChangeTopicNodeId = UUID.fromString(knownUnreferencedNodeIds[0]);
+        final var presentChangeTopic = pm.getNodeGraph(startingChangeTopicNodeId);
+        assertNotNull(presentChangeTopic);
+        assertEquals(presentChangeTopic.id(), startingChangeTopicNodeId);
+        assertSame(NodeType.PRESENT_MULTI, presentChangeTopic.type());
+        assertTrue(presentChangeTopic.text().contains("Oh, you want to talk about something else?"));
+
+//        Node.printGraph(stopNode, presentChangeTopic, 2); // explodes
+
+        // Check the single Edge connecting initial PRESENT to PROCESS
+        final SequencedSet<Edge> presentChangeEdges = presentChangeTopic.edges();
+        assertNotNull(presentChangeEdges);
+        assertFalse(presentChangeEdges.isEmpty());
+        assertEquals(1, presentChangeEdges.size());
+        assertEquals("n/a", presentChangeEdges.getFirst().responseText());
+
+        // Check the paired PROCESS node
+        final var processChangeTopic = presentChangeEdges.getFirst().targetNode();
+        assertNotNull(processChangeTopic);
+        assertSame(NodeType.PROCESS_MULTI, processChangeTopic.type());
+        assertTrue(processChangeTopic.text().contains("Sorry. I'm confused. The options are"));
+
+        // Check the two (and only two) Edges on the PROCESS
+        final SequencedSet<Edge> processChangeEdges = processChangeTopic.edges();
+        assertNotNull(processChangeEdges);
+        assertFalse(processChangeEdges.isEmpty());
+        assertEquals(2, processChangeEdges.size());
+
+        // The first edge should point to a PRESENT_MULTI
+        final Edge processEdgeFirst = processChangeEdges.getFirst();
+        assertTrue(processEdgeFirst.responseText().contains("Sure, no problem"));
+        final var yesChange = processEdgeFirst.targetNode();
+        assertSame(NodeType.PRESENT_MULTI, yesChange.type());
+        assertTrue(yesChange.text().contains("Here are the things we can talk about"));
+
+        // Check each of the yesChange.edges
+        final var linkChangeTopicPresentToProcess = yesChange.edges();
+        assertEquals(1, linkChangeTopicPresentToProcess.size());
+        var topicProcessNode = linkChangeTopicPresentToProcess.getFirst().targetNode();
+        var topicSelectedEdges = topicProcessNode.edges();
+
+        assertEquals("Great!", topicSelectedEdges.getFirst().responseText());
+        assertEquals("My least favorite topic...", topicSelectedEdges.getLast().responseText());
+
+        final Edge processEdgeSecond = processChangeEdges.getLast();
+        assertTrue(processEdgeSecond.responseText().contains("Ok, I'll repeat"));
+        // The second edge should point to an END_OF_CHAT node.
+        final var noContinue = processEdgeSecond.targetNode();
+        assertSame(NodeType.END_OF_CHAT, noContinue.type());
+
+
+    }
+
+    @Test
     void getNodeGraph() {
         final UUID nodeId = UUID.fromString(knownRootNodeIds[0]);
         final Node node = pm.getNodeGraph(nodeId);
         assertNotNull(node);
         assertEquals(node.id(), nodeId);
         //Node.printGraph(node, node, 1);
-        assertEquals(1, node.edges().size()); // just a single connecting edge expected for PRESENT_MULTI nodes.
-        // Dive into the graph and check we can find an Edge we recognize. Relies on KnownData.
-        assertEquals("Blue is my fave, as well.", node.edges().getFirst().targetNode().edges().getFirst().responseText());
+        assertEquals(1, node.edges().size()); // just a single connecting edge expected to connect PRESENT_MULTI node with PROCESS_MULI.
+
+        // Dive into the graph and look for the Nodes we expect. Relies on KnownData.
+        var processMultiNode = node.edges().getFirst().targetNode();
+        assertEquals(NodeType.PROCESS_MULTI, processMultiNode.type(), "Type of node connected to root is unexpected.");
+
+        // Check size and ordering.
+        var edgesForProcessMulti = processMultiNode.edges();
+        assertEquals(3, edgesForProcessMulti.size());
+        assertEquals("Red is the color of life.", edgesForProcessMulti.getFirst().responseText());
+        assertEquals("Flort is for the cool kids.", edgesForProcessMulti.getLast().responseText());
+
+        // One more level into the graph. Again, totally reliant on KnownData.
+        var firstNode = edgesForProcessMulti.getFirst().targetNode();
+        var lastNode = edgesForProcessMulti.getLast().targetNode();
+        assertNotNull(firstNode);
+        assertNotNull(lastNode);
+        assertEquals(NodeType.PRESENT_MULTI, firstNode.type(), "Type connected to firstNode is unexpected.");
+        assertEquals(NodeType.PRESENT_MULTI, lastNode.type(), "Type connected to lastNode is unexpected.");
+
+        // Find the next paired PROCESS_MULTI nodes and check ordering of its edges
+        var shapeNode = firstNode.edges().getFirst().targetNode();
+        var shapeEdges = shapeNode.edges();
+        assertEquals(3, shapeEdges.size());
+        LOG.info("Match text for shapes {}", shapeEdges.getFirst().matchText());
+        assertTrue(shapeEdges.getFirst().matchText().getFirst().contains("1"));
+        assertTrue(shapeEdges.getLast().matchText().getFirst().contains("3"));
+
+        var stoogesNode = lastNode.edges().getFirst().targetNode();
+        var stoogeEdges = stoogesNode.edges();
+        assertEquals(3, stoogeEdges.size());
+        LOG.info("Match text for stooges {}", stoogeEdges.getFirst().matchText());
+        assertTrue(stoogeEdges.getFirst().matchText().getFirst().contains("1"));
+        assertTrue(stoogeEdges.getLast().matchText().getFirst().contains("3"));
+
+//        assertEquals(1, lastNodeEdges.size());
+//
+//        assertTrue(lastNodeEdges.getFirst().matchText().getFirst().contains("3"));
+
     }
 
     @Test
@@ -80,10 +180,17 @@ class OperatorPersistenceIntegrationTest {
 
     @Test
     void findDefaultScriptByRoute() {
-        final Node node = op.findDefaultScriptByRoute(sk);
+        final var node = op.findDefaultScriptByRoute(sk);
         assertNotNull(node);
         // Node.printGraph(node, node, 1);
         assertEquals("ColorQuiz", node.label());
+    }
+
+    @Test
+    void findInterruptConversationByRoute() {
+        final var node = op.findInterruptConversationByRoute(sk);
+        assertNotNull(node);
+        assertEquals("Oh, you want to talk about something else? 1) yes 2) no, let's continue with the current conversation.", node.text());
     }
 
     @Test

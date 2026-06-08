@@ -72,11 +72,15 @@ public class BrblLogicSqlGenerator {
 
         int cpc = routableNodes.size() / routeOwners.size();
 
+        UUID interruptNodeId = UUID.fromString("019e7f4d-7996-702c-9dcc-d8a9de56dee8"); // See line 7 of known_scripts.tsv.
+
         for (int i = 0; i < routableNodes.size(); i++) {
             NodeRow nodeRow = routableNodes.get(i);
             CustomerRow customerRow = routeOwners.get(Math.min(i/cpc, 2));
 
-            routes.add(new RouteRow(adjustPlatformId(CountryCode.US, faker.phoneNumber().phoneNumberNational()), nodeRow.id, customerRow.id));
+            routes.add(new RouteRow(
+                    adjustPlatformId(CountryCode.US, faker.phoneNumber().phoneNumberNational()), nodeRow.id,
+                    customerRow.id, interruptNodeId));
             scripts.add(new ScriptRow("Script "+ i, "Description " + i, customerRow.id, nodeRow.id));
         }
 

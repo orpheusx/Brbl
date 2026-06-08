@@ -1,0 +1,17 @@
+version_schema: 0008
+operations:
+  - add_column:
+      table: routes
+      up: SELECT s.id FROM scripts s WHERE s.node_id = '019e7f4d-799c-79b8-b1e6-020688a61773'
+      column:
+        name: interrupt_script_id
+        type: uuid
+        comment: The script to use when handling intent to change the topic of discussion.
+        nullable: false
+        unique: false
+        pk: false
+        references:
+          name: fk_routes_interrupt_script_id_scripts
+          table: scripts
+          column: id
+          on_delete: RESTRICT

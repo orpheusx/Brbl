@@ -73,7 +73,7 @@ public class RoleMigrator {
 
             List<String[]> roleData = new ArrayList<>();
             do {
-                // Should we validate that the grantees are one of KnownData.
+                // Should we validate that the grantees are one of KnownData.APPLICATION_SCHEMAS?
                 roleData.add(new String[]{
                         rs.getString("privilege_type"),
                         rs.getString("table_name"),
@@ -154,11 +154,11 @@ public class RoleMigrator {
         if (grants.isEmpty()) {
             IO.print("ERROR: No grants to execute.");
             System.exit(1);
-        } /*else {
+        } else {
             boolean ok = rm.executeGrants(grants);
             println("Grants executed: " + (ok ? "OK" : "FAIL"));
             System.exit(ok ? 0 : 1);
-        }*/
+        }
 
         // Return the new list of application schemas (including the one that was newly migrated.)
         List<String> currentSchemas = new ArrayList<>(APPLICATION_SCHEMAS.length);

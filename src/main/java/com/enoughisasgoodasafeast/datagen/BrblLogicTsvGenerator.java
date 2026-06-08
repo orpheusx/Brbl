@@ -55,14 +55,14 @@ public class BrblLogicTsvGenerator extends BrblUsersTsvGenerator {
         return scriptRows;
     }
 
-    public List<BrblRow> generateKnownRoutes(UUID companyId, String[][] routeIdsAndChannels, String[][] scriptData) {
+    public List<BrblRow> generateKnownRoutes(UUID companyId, String[][] routeIdsAndChannels, String[][] scriptData, String interruptScript) {
         if (routeIdsAndChannels.length != scriptData.length)
             throw new IllegalStateException("Expected equal sized arrays.");
 
         var routeRows = new ArrayList<BrblRow>();
         for (int i = 0; i < routeIdsAndChannels.length; i++) {
             var route = new RouteRow(fromString(routeIdsAndChannels[i][0]), routeIdsAndChannels[i][1],
-                    fromString(scriptData[i][0]), Platform.SMS, companyId); // all SMS, all ACTIVE for now
+                    fromString(scriptData[i][0]), Platform.SMS, companyId, fromString(interruptScript)); // all SMS, all ACTIVE for now
             routeRows.add(route);
         }
 
@@ -75,7 +75,8 @@ public class BrblLogicTsvGenerator extends BrblUsersTsvGenerator {
         var rowData = generator.generateKnownRoutes(
                 fromString(knownCompanyId),
                 knownRouteIdsAndChannels,
-                knownScriptData);
+                knownScriptData,
+                knownUnreferencedScriptData[0][0]); // Only one 'change topic' script
         rowData.forEach(out::println);
 
         // keywords
@@ -84,15 +85,19 @@ public class BrblLogicTsvGenerator extends BrblUsersTsvGenerator {
         keywordData.addAll(generator.generateKnownKeywords(
                 getKnownKeywordIdsAndPatterns2, knownScriptData[1][0], knownRouteIdsAndChannels[2][0]
         ));
-        // FIXME add a third row?
+        // The food quiz graph remains un-referenced by either the keywords or routes (default_script_id) tables.
 
         keywordData.forEach(out::println);
 
+        var companyUUID = fromString(knownCompanyId);
         // scripts
         var scriptData = generator.generateKnownScripts(
-                fromString(knownCompanyId),
+                companyUUID,
                 knownScriptData,
                 knownRootNodeIds);
+
+        scriptData.addAll(generator.generateKnownScripts(companyUUID, knownUnreferencedScriptData, knownUnreferencedNodeIds));
+
         scriptData.forEach(out::println);
 
         if (!generator.outputRowsAsTsv(rowData, "routes", "known_")) {

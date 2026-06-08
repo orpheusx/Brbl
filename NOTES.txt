@@ -5405,3 +5405,110 @@ Optionally we could also include "3) no, I'm all set for now" which would then g
 
 It would problematic for reporting to log a generated nodes. So maybe create regular scripts for most of it but dynamically replace the "place we left off" node with the one pointed at by the second option.
 
+===== 2026-05-31 ====
+
+Ok let's dig into the switching mechanism outlined yesterday.
+
+1. First thing let's add the favorite food quiz nodes to the list of scripts...DONE.
+    (This new script isn't referenced by any keyword and it doesn't act as the default for any of our routes.)
+2. Next, create a "topics" script that references our three scripts...DONE.
+3. Then, create a "change topic" script that will point to 1) "topics", 2) the node that received the "change topic" response. #2 will point to a  placeholder node (of type EndOfConversation?) but will be replaced by the ChangeTopic function...DONE
+4. Update code to make use of the special change topic script (id=019e7f4d-7996-702c-9dcc-d8a9de56dee8)
+    OperatorConsumer->Operator->ScriptEngine->Multi.Process - if we, at this point, determine we should be switching to a different script how/where do we get access to it and can we pass the reference to the Node we were on in case they change their mind and want to continue where they left off?
+    Not sure if the ScriptEngine abstraction is a benefit.
+    We could move it's functionality into Operator (where it would have access to the script cache) but we still need a way for the various script type functions to explain the situation to the caller.
+    Maybe return a tuple record with an enum describing the result of the processing plus the Node where the switch occurred? The latter feels like it might be useful generally and is definitely needed for the ChangeTopic case. On the other hand, the Session is available and provides access to the currentNode as well as the historical record of evaluated Nodes. On the third hand, the functions for each NodeType return current Node. So maybe we do want both.
+        enum ProcessState { OK, ERROR, SWITCH, others possible }
+        record ProcessStateNode(ProcessState, Node)
+
+First pass at an implementation is quite ugly and has multiple failures in OperatorTest.
+
+REMINDER:
+    The Maven test runner complains of a corrupted channel and, due to this, ends up passing the build even if there are test failures.
+    Need to address this...
+
+===== 2026-06-02 ====
+
+Working on the ChangeTopic implementation...so so ugly right now.
+Sorta working (see OperatorTest.stepThroughWithUnexpectedInputAndChangeTopic()) but the Nodes linked at the end should both be PRESENT_MULTI...
+Problem in the setup configuration? Ah, yes, fixed now.
+Next, is the lookup mechanism to find the graph that should handle the change topic/interrupt.
+
+A default per route seems like a good idea but script and/or keyword level override seem like they could be useful.
+
+===== 2026-06-04 ====
+
+Some surgery needed to get the change topic script lookup working, including a possibly regretable SQL xwhack.
+Running this with Confab and the container orchestrated setup reveals that we're missing a glue Node/Edge to link the PRESENT_MULTI for the change topic conversation and the PROCESS_MULTI that evaluates the user input.
+
+PRESENT 019e7f4d-799c-79b8-b1e6-020688a61773 is being referenced as the src of two edges (019e7f4d-799c-763d-bba1-61d21985f778 and                  019e7f4d-799c-7bf5-a154-17d105effc35). This is wrong and the ScriptEngine.process() is advancing through them. Here's what that looks like in Confab:
+
+    [ME] foo
+    [THEM] What is your favorite color? 1) red 2) blue 3) flort
+    [ME] change topic
+    [THEM] Oh, you want to talk about something else? 1) yes 2) no, let's continue with
+           the current conversation.
+    [THEM] N/A
+    [THEM] What is your favorite color? 1) red 2) blue 3) flort
+
+Added a PROCESS_MULTI node and repointed the edges mentioned above to be their src.
+Added a new edge that just links the change topic PRESENT node to the new PROCESS node.
+Now the conversation actually handles the transition.
+
+However, the handling of either of the presented options is still NOT working:
+
+    [THEM] What is your favorite color? 1) red 2) blue 3) flort
+    [ME] change topic
+    [THEM] Oh, you want to talk about something else? 1) yes 2) no, let's continue with the current conversation.
+    [ME] 2
+    [THEM] Ok, I'll repeat the last question.
+    [THEM] N/A
+    [ME] red
+    [THEM] What is your favorite color? 1) red 2) blue 3) flort
+
+If I instead choose '1) yes':
+
+    [THEM] What is your favorite color? 1) red 2) blue 3) flort
+    [ME] 2
+    [THEM] Blue is my fave, as well.
+    [THEM] What is your fave utensil: 1) fork, 2) knife or 3) spoon
+    [ME] change topic
+    [THEM] Oh, you want to talk about something else? 1) yes 2) no, let's continue with
+           the current conversation.
+    [ME] 1
+    [THEM] Sure, no problem.
+    [THEM] What is your fave utensil: 1) fork, 2) knife or 3) spoon
+
+The "1) yes something else" response is behaving like the 2nd option apart from the immediate "Sure, no problem" message.
+
+The problem is that we're relying on the ordering of the edges for the change topic node to match what the lexigraphic ordering of the match_text column. The collection of Edges on the Node class is a SortedSet but there's nothing in the relational model that enforces an order.
+
+In this particular case we're replacing the "last" edge which is not, in this instance, the second of the two options. Unless we can find a robust alternate method of identifying the edge we want to replace we probably need to add an ordering column.
+Apart from this use, it seems ideal for the options to be presented in the order in which the authoring system assigns them, right?
+
+Created a migration that adds an 'ndx' column to the edges table and updated the SELECT_SCRIPT_GRAPH_RECURSIVE query to include it in the ordering clause. The new column isn't yet part of the Edge record, however...
+
+Of course, after doing the migration work to add the new column I had another idea:
+    > Add a new column that defines an EdgeType. This might be more useful generally as well as avoiding a "last edge" convention design for identifying the node to be replaced.
+
+Hmm, let's come back to that and, instead, run some tests to see if the ordering has fixed the current problem.
+
+Partly. The 'continue with the current conversation' option is doing what we want now but the "yes, talk about something else" option is not:
+
+    [THEM] What is your favorite color? 1) red 2) blue 3) flort
+    [ME] blue
+    [THEM] Blue is my fave, as well.
+    [THEM] What is your fave utensil: 1) fork, 2) knife or 3) spoon
+    [ME] change topic
+    [THEM] Oh, you want to talk about something else? 1) yes 2) no, let's continue with
+           the current conversation.
+    [ME] 1
+    [THEM] Sure, no problem.
+    [THEM] What is your fave utensil: 1) fork, 2) knife or 3) spoon
+
+The behavior, apart from giving the correct response, is to continue with the previous conversation.
+Review Operator code...ah, we were replacing the first node instead of the last.
+Fixed. Now the correct PRESENT node is sent though I suspect it's not wired to the the correct PROCESS node.
+...Actually it looks like it's correct.
+
+

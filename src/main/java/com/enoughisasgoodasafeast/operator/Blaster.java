@@ -194,8 +194,8 @@ public class Blaster {
 
             // Execute the first node of the script, using the associated session, generating an MT and pushing it onto the regular,
             //  rate-limited output queue, possibly with a lower priority.
-            final boolean ok = scriptEngine.process(sessionForCampaignUser, initialMessage);
-            if (!ok) {
+            final /*boolean ok*/ProcessStateNode psn = scriptEngine.process(sessionForCampaignUser, initialMessage);
+            if (psn.processState()==ProcessState.ERROR) {
 //                report.usersSkippedDueToScriptErrors.add(campaignUser.user().platformIds().get(platform));
                 report.usersSkippedDueToScriptErrors.add(campaignUser.user().groupId());
             } else {

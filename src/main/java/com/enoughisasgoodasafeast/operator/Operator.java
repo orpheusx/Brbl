@@ -18,6 +18,7 @@ import java.util.function.Supplier;
 import java.util.regex.Pattern;
 
 import static com.enoughisasgoodasafeast.Functions.randomUUID;
+import static com.enoughisasgoodasafeast.operator.ProcessState.SWITCH_REQUESTED;
 import static com.enoughisasgoodasafeast.operator.Telecom.deriveCountryCodeFromId;
 import static io.jenetics.util.NanoClock.utcInstant;
 
@@ -42,7 +43,7 @@ public class Operator implements SessionAwareMessageProcessor {
 
     final LoadingCache<@NonNull UUID, Node> scriptCache = Caffeine.newBuilder()
             .expireAfterAccess(20, TimeUnit.MINUTES)
-            .build(id -> getScript(id));
+            .build(id -> getNode(id));
 
     // NB: This is an odd duck because it's intended to contain a single entry with all the keyword data.
     // We're using a LoadingCache here to benefit from its auto-eviction and thread safety features.
@@ -95,7 +96,7 @@ public class Operator implements SessionAwareMessageProcessor {
     /**
      * Find/setup session and process message, tracking state changes in the session.
      * @param message the message being processed.
-     * @return true if processing was complete, false if incomplete.
+     * @return BooleanSession indicating the success of the processing and the current Session object.
      */
     public BooleanSession process(Message message) {
         LOG.info("Process message: {}", message);
@@ -108,14 +109,72 @@ public class Operator implements SessionAwareMessageProcessor {
 
         // FIXME the gap between the creation/retrieval of the Session and it being locked for
         //  processing is worrisome but possibly unavoidable...
-        boolean ok = ScriptEngine.process(session, message);
+        /*boolean ok*/var processStateNode = ScriptEngine.process(session, message);
 
-        if (session.currentNode == null) {
+        if (SWITCH_REQUESTED.equals(processStateNode.processState())) {
+            LOG.info("Switch requested: {}", processStateNode);
+
+            // Grab the conversation that is configured for the route.
+            var changeTopicPresentNode = findInterruptConversationByRoute(sessionKey);
+            if (changeTopicPresentNode == null) {
+                // This would signal a very bad configuration issue.
+                LOG.error("Failed to find the change topic script!!!");
+                return new BooleanSession(false, null);
+            }
+
+            assert changeTopicPresentNode.type()==NodeType.PRESENT_MULTI;
+            assert changeTopicPresentNode.edges().getFirst().targetNode().type()==NodeType.PROCESS_MULTI;
+
+            // Find the PRESENT_MULTI node paired with the current PROCESS_MULTI. It should be two slots prior in the list.
+            // This will be Node we swap in as the target of the
+            Node convoToContinue = findPairedPrecursor(session.getEvaluatedNodes(), processStateNode.node());
+            assert convoToContinue != null;
+
+            assert changeTopicPresentNode.edges().size() == 1; // Just the connecting edge expected.
+
+            var changeTopicProcessNode = changeTopicPresentNode.edges().getFirst().targetNode();
+            assert changeTopicProcessNode.edges().size() >= 2;
+
+            LOG.info("Switching node '{}' found with edge: {}",
+                    changeTopicPresentNode.label(),
+                    changeTopicPresentNode.edges().getFirst());
+
+            // In this change topic node we're going to replace the target of one of the edges in the
+            //  PROCESS node with the current node.
+            Edge continueCurrent = changeTopicProcessNode.edges().removeLast();
+
+            changeTopicProcessNode.edges().addLast(continueCurrent.copyReplacing(convoToContinue));
+
+            LOG.info("Updated edges for ChangeTopicProcessNode: {}", changeTopicProcessNode.edges());
+
+            session.setCurrentNode(changeTopicPresentNode);  // FIXME some way to formalize the updating of the currentNode?
+            processStateNode = ScriptEngine.process(session, message);
+            LOG.info("PSN after: " + processStateNode.node().label());
+            LOG.info("After ScriptEngine.process: {}", session.getCurrentNode().label());
+        }
+
+        if (session.getCurrentNode() == null) {
             LOG.debug("Clearing completed session from cache: {}", session);
             sessionCache.invalidate(sessionKey);
         }
 
-        return new BooleanSession(ok, session);
+        return new BooleanSession(processStateNode.processState()!=ProcessState.ERROR, session);
+    }
+
+    // Iterate backwards through evaluatedNodes and return the first node of type PRESENT_MULTI found prior to processNode.
+    private Node findPairedPrecursor(List<Node> evaluatedNodes, Node processNode) {
+        int index = evaluatedNodes.indexOf(processNode);
+        if (index <= 0) {
+            return null;
+        }
+
+        for (int i = index - 1; i >= 0; i--) {
+            Node node = evaluatedNodes.get(i);
+            if (NodeType.PRESENT_MULTI.equals(node.type())) {
+                return node;
+            }
+        }
+        return null;
     }
 
     @Override
@@ -187,8 +246,8 @@ public class Operator implements SessionAwareMessageProcessor {
             }
 
             // If we had an existing session, check if we were awaiting input. If not replace the script with one we looked up above.
-            if (!session.currentNode.type().equals(NodeType.PROCESS_MULTI)) { // add other input expecting node types here.
-                session.currentNode = script;
+            if (!session.getCurrentNode().type().equals(NodeType.PROCESS_MULTI)) { // add other input expecting node types here.
+                session.setCurrentNode(script);
             }
 
             return session.postDeserialize(getQueueProducer(sessionKey.platform()), persistenceManager);
@@ -264,9 +323,9 @@ public class Operator implements SessionAwareMessageProcessor {
             LOG.error("CRITICAL: No keywords available from system for new session!!!");
             return null;
         }
-        UUID scriptId = findMatch(all, keywordCacheKey);
-        if (scriptId != null) {
-            return scriptCache.get(scriptId);
+        UUID nodeId = findMatch(all, keywordCacheKey);
+        if (nodeId != null) {
+            return scriptCache.get(nodeId);
         } else {
             return null;
         }
@@ -295,7 +354,7 @@ public class Operator implements SessionAwareMessageProcessor {
         return null;
     }
 
-    @Nullable Node getScript(UUID nodeId) {
+    @Nullable Node getNode(UUID nodeId) {
         return persistenceManager.getNodeGraph(nodeId);
     }
 
@@ -330,6 +389,19 @@ public class Operator implements SessionAwareMessageProcessor {
     }
 
 
+    Node findInterruptConversationByRoute(SessionKey sessionKey) {
+        LOG.info("Finding interrupt convo node for route channel: {}", sessionKey.to());
+        Route route = findRoute(sessionKey); // no null check required; we couldn't have made it this far if it didn't exist
+        if (route == null) {
+            LOG.error("findInterruptConversationByRoute: failed to find Route data for channel {}:{}.", sessionKey.platform(), sessionKey.to());
+            return null;
+        } else {
+            LOG.info("findInterruptConversationByRoute: found route: {}", route);
+            return scriptCache.get(route.interruptNodeId());
+        }
+    }
+
+
     @Nullable UUID findOwningCompanyIdByRouteChannel(SessionKey sessionKey) {
         Route route = findRoute(sessionKey);
         if (route != null) {
@@ -341,6 +413,9 @@ public class Operator implements SessionAwareMessageProcessor {
 
     @Nullable Route findRoute(SessionKey sessionKey) {
         final Route[] routes = activeRoutesCache.get(ALL);
+        for (int i = 0; i < routes.length; i++) {
+            LOG.info("cached route: {}", routes[i].channel() );
+        }
         if (routes != null) {
             for (Route route : routes) {
                 if (route.platform() == sessionKey.platform() && route.channel().equals(sessionKey.to())) {

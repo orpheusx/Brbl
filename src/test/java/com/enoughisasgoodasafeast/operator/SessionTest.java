@@ -276,7 +276,7 @@ public class SessionTest {
             assertNotEquals(session, clone);
 
             assertEquals(session.getId().toString(), clone.getId().toString());
-            assertEquals(session.currentNode, clone.currentNode);
+            assertEquals(session.getCurrentNode(), clone.getCurrentNode());
 
             clone.postDeserialize(queueProducer, persistenceManager);
             assertEquals(session, clone);

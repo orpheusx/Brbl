@@ -138,6 +138,8 @@ def main():
     except SystemExit as e:
         if e.code != 0:
             print(f"RoleMigrator failed with exit code {e.code}.")
+            print(f"Trying to rollback migration...")
+            run_command(["pgroll", "rollback", "--schema", source_schema], False)
             sys.exit(1)
 
 

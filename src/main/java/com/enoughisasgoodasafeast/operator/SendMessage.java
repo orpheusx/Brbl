@@ -12,13 +12,13 @@ public class SendMessage {
 
     private static final Logger LOG = LoggerFactory.getLogger(SendMessage.class);
 
-    static Node evaluate(ScriptContext context, Message moMessage) {
+    static ProcessStateNode evaluate(ScriptContext context, Message moMessage) {
         LOG.info("SendMessage evaluating '{}'", moMessage.text()); // we're not really evaluating the message but...
         context.registerOutput(
                 newMTfromMO(moMessage,
                         renderForPlatform(moMessage.platform(), context.getCurrentNode().text())
                 )
         );
-        return advanceToFirstAndOnly(context);
+        return new ProcessStateNode(ProcessState.OK, advanceToFirstAndOnly(context));
     }
 }

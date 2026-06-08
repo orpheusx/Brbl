@@ -98,6 +98,13 @@ public class KnownData {
             "89eddcb8-7fe5-4cd1-b18b-78858f0789fb", // What is your favorite color?
     };
 
+    public static String[] knownUnreferencedNodeIds = {
+            "019e7f4d-799c-79b8-b1e6-020688a61773", // Change topic choice
+            "0fc4ef6c-082f-4e90-b2f4-e14dbac78623", // Favorite foods by group.
+            "019e7ea4-eaa1-798d-8afe-1b13fdd90eaa", // Present list of discussion topics
+
+    };
+
     public static String[][] knownRouteIdsAndChannels = {
             {"019dca4b-bb1e-756c-9050-7960e5828d68", "17814567890"},
             {"019dca4b-bb23-7e0d-bfb6-9226d5c4166b", "18163456789"},
@@ -122,7 +129,14 @@ public class KnownData {
     public static String[][] knownScriptData = {
             {"019dcf76-aa1e-7fb6-87d4-733deb0d4c95", "Fave color", "Starts conversation with chained multiple choice questions"},
             {"019dcf76-aa24-738d-99c0-28fb89344f22", "The truth", "People bad: true or false"},
-            {"019e19af-5995-7d53-bb50-86f5b0a035f1", "Example questionnaire", "Same as Fave color script. Shows the separation of nodes and scripts."}
+            {"019e19af-5995-7d53-bb50-86f5b0a035f1", "Example questionnaire", "Same as Fave color script. Shows the separation of nodes and scripts."},
+    };
+
+    // These scripts aren't accessed via keyword and do not serve as the default script for any route.
+    public static String[][] knownUnreferencedScriptData = {
+            {"019e7f4d-7996-702c-9dcc-d8a9de56dee8", "ChangeTopic", "Allows user to detour to the topic selection."}, // The only change topic script
+            {"019e7e6a-8238-7d34-b60b-eacc1c7b8b10", "Food faves", "Starts a multiple choice quiz about food groups."},
+            {"019e7f2a-9e20-719d-b432-0f17f5d0b45c", "TopicSelection", "Presents the list of topics a user can choose from"},
     };
 
     public static String[] APPLICATION_SCHEMAS = {

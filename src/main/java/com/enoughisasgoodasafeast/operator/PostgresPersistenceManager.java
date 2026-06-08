@@ -257,20 +257,20 @@ public class PostgresPersistenceManager implements PersistenceManager {
                     
                     ) CYCLE node_id SET is_cycle USING path
                     SELECT
-                        s.id, s.created_at, s.text, s.type, s.label,
+                        n.id, n.created_at, n.text, n.type, n.label,
                         e.id, e.created_at, e.match_text, e.response_text, e.src, e.dst
                     FROM
-                        nodes s
+                        nodes n
                     INNER JOIN
-                        edges e ON s.id = e.src
+                        edges e ON n.id = e.src
                     INNER JOIN
-                        rgraph ON s.id = rgraph.node_id
+                        rgraph ON n.id = rgraph.node_id
                     WHERE
-                        s.id = rgraph.node_id
+                        n.id = rgraph.node_id
                         AND
                         rgraph.is_cycle IS FALSE
-                    ORDER BY s.id ;
-                    """; // FIXME redundant to include 's.id = rgraph.node_id' in the where clause when its already an inner join.
+                    ORDER BY n.id, e.ndx ;
+                    """; // FIXME redundant to include 'n.id = rgraph.node_id' in the where clause when its already an inner join.
 
 //     public static final String SELECT_SCRIPT_GRAPH_RECURSIVE_FOR_KEYWORD =
 //             """
@@ -315,6 +315,7 @@ public class PostgresPersistenceManager implements PersistenceManager {
                     ;
                     """;
 
+    // Not sure the nested select is a great idea.
     public static final String SELECT_ALL_ROUTES_WITH_STATUS =
             """
                     SELECT
@@ -325,11 +326,13 @@ public class PostgresPersistenceManager implements PersistenceManager {
                         r.company_id,
                         r.status,
                         r.created_at,
-                        r.updated_at
+                        r.updated_at,
+                        (select node_id from scripts where id = r.interrupt_script_id)
                     FROM
                         routes r
                     INNER JOIN
-                        scripts s ON s.id = r.default_script_id
+                        scripts s
+                            ON s.id = r.default_script_id
                     WHERE
                         r.status = ?::brbl_logic.route_status
                     """;
@@ -833,8 +836,10 @@ public class PostgresPersistenceManager implements PersistenceManager {
                 Instant createdAt = rs.getTimestamp(7).toInstant();
                 // r.updated_at
                 Instant updatedAt = rs.getTimestamp(8).toInstant();
+                // r.interrupt_id
+                UUID interruptNodeId = (UUID) rs.getObject(9);
 
-                Route route = new Route(id, platform, channel, nodeId, companyId, status, createdAt, updatedAt);
+                Route route = new Route(id, platform, channel, nodeId, companyId, status, interruptNodeId, createdAt, updatedAt);
                 allRoutes.add(route);
             }
             if (allRoutes.isEmpty()) {
@@ -942,6 +947,7 @@ public class PostgresPersistenceManager implements PersistenceManager {
     @Override
     public @Nullable Node getNodeGraph(@NonNull UUID nodeId) {
         try (Connection connection = fetchConnection()) {
+            LOG.info("getNodeGraph: fetching node graph for {}", nodeId); // FIXME remove this
             return getNodeGraph(connection, nodeId);
         } catch (SQLException e) {
             LOG.error("getNodeGraph: fetchConnection failed", e);
