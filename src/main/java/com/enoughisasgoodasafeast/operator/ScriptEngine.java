@@ -26,7 +26,7 @@ public class ScriptEngine {
      * @param message the Message that initiates or continues the processing of the Session's Node graph.
      * @return false if the processing of the Message fails or there were exceptions thrown.
      */
-    public static ProcessStateNode/*boolean*/ process(Session session, Message message) {
+    public static ProcessStateNode process(Session session, Message message) {
         synchronized (session) { // FIXME move the synchronization to caller where the session is created?
             try {
                 session.registerInput(message);
@@ -59,17 +59,17 @@ public class ScriptEngine {
                 // FIXME Session.evaluate handles appending the evaluated node to the evaluatedScript list
                 // NB Script processing functions are limited to getting the currentNode, never setting it.
                 // Setting it is only done here based on the function's return value but can be
-                var psn /*Node next*/ = evaluate(session, message); // FIXME What if currentNode is null? Start using Optionals with a constant sentinel value instead of null?
+                var psn = evaluate(session, message);
                 Node next = psn.node();
                 session.setCurrentNode(psn.node());
 
                 // Continue to walk the graph until we reach the end (null) or a node that blocks for input
                 while (next != null && !next.type().isAwaitInput()) {
                     LOG.info("Continuing playback...");
-                    psn /*next*/ = evaluate(session, message);
+                    psn = evaluate(session, message);
                     next = psn.node();
 
-                    session.setCurrentNode(psn.node());
+                    session.setCurrentNode(next);
                 }
 
                 // FIXME For now, if we've advanced to the end of the graph then clear the session.
@@ -80,11 +80,11 @@ public class ScriptEngine {
                     psn = new ProcessStateNode(ProcessState.ERROR, session.getCurrentNode());
                 }
 
-                return psn /*flushOk*/;
+                return psn;
 
             } catch (IOException e) {
                 LOG.error("Processing error: {} for {}", session.getUser().groupId(), message, e); // TODO need to consider options for better handling of error scenarios.
-                return /*false*/new ProcessStateNode(ProcessState.ERROR, session.getCurrentNode());
+                return new ProcessStateNode(ProcessState.ERROR, session.getCurrentNode());
             }
         }
     }

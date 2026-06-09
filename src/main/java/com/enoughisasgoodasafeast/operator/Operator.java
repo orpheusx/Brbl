@@ -109,7 +109,7 @@ public class Operator implements SessionAwareMessageProcessor {
 
         // FIXME the gap between the creation/retrieval of the Session and it being locked for
         //  processing is worrisome but possibly unavoidable...
-        /*boolean ok*/var processStateNode = ScriptEngine.process(session, message);
+        var processStateNode = ScriptEngine.process(session, message);
 
         if (SWITCH_REQUESTED.equals(processStateNode.processState())) {
             LOG.info("Switch requested: {}", processStateNode);
@@ -149,8 +149,7 @@ public class Operator implements SessionAwareMessageProcessor {
 
             session.setCurrentNode(changeTopicPresentNode);  // FIXME some way to formalize the updating of the currentNode?
             processStateNode = ScriptEngine.process(session, message);
-            LOG.info("PSN after: " + processStateNode.node().label());
-            LOG.info("After ScriptEngine.process: {}", session.getCurrentNode().label());
+
         }
 
         if (session.getCurrentNode() == null) {
@@ -212,7 +211,7 @@ public class Operator implements SessionAwareMessageProcessor {
             LOG.debug("findOrCreateSession: keyword node: {}", keywordScript.get());
             LOG.debug("findOrCreateSession: route default node: {}", defaultScript.get());
 
-            if (script == null) { // For now let's fail hard on configuration errors even if the user has an existing session that could be used instead.
+            if (script == null) { // FIXME For now let's fail hard on configuration errors even if the user has an existing session that could be used instead.
                 LOG.error("No script available by keyword match or route default. Configuration error in route table for {}:{} ",
                         sessionKey.platform(), sessionKey.to());
                 return null;
@@ -246,7 +245,7 @@ public class Operator implements SessionAwareMessageProcessor {
             }
 
             // If we had an existing session, check if we were awaiting input. If not replace the script with one we looked up above.
-            if (!session.getCurrentNode().type().equals(NodeType.PROCESS_MULTI)) { // add other input expecting node types here.
+            if (!session.getCurrentNode().type().equals(NodeType.PROCESS_MULTI)) { // FIXME add other input-expecting node types here.
                 session.setCurrentNode(script);
             }
 

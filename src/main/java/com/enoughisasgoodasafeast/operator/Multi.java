@@ -54,7 +54,7 @@ public class Multi {
                 or say 'change topic' to start talking about something else.
                 """;
 
-        public static ProcessStateNode/*Node*/ evaluate(ScriptContext context, Message moMessage) throws IOException {
+        public static ProcessStateNode evaluate(ScriptContext context, Message moMessage) throws IOException {
             LOG.info("Multi.Process evaluating '{}'", moMessage.text());
 
             Node currentNode = context.getCurrentNode();
@@ -70,7 +70,7 @@ public class Multi {
                     LOG.info("Input, {}, matched logic: {}", userText, edge.matchText()); // TODO change to .debug
                     Message mt = newMTfromMO(moMessage, edge.responseText());
                     context.registerOutput(mt);
-                    //LOG.info("Enqueued {}", mt);
+
                     return new ProcessStateNode(ProcessState.OK, edge.targetNode());
                 } else {
                     LOG.info("No match: {} != {}", userText, edge.matchText());
@@ -79,24 +79,13 @@ public class Multi {
 
             // Handle the "I want to talk about something else" case here
             if (userRequestingChangeOfTopic(userText)) { // some kind of ML-based assessment of the input might be genuinely useful here...
-                // Create a new Node graph
-                // TODO this should all be handled in the called methods.
-
-//                Message changeTopicNotification = newMTfromMO(moMessage, CHANGE_TOPIC_RESPONSE);
-//                context.registerOutput(changeTopicNotification);
-//                return Process.constructTopicScript(context, moMessage);
-                // We need something like the findScriptForKeywordShortCode method from the Operator for this.
-                LOG.error("Unsupported feature: change topic");
-                // Find the Customer's preconfigured topic script.
-                return new ProcessStateNode(ProcessState.SWITCH_REQUESTED, currentNode); // FIXME return a constant symbolic Node that the Operator handles specially?
+                return new ProcessStateNode(ProcessState.SWITCH_REQUESTED, currentNode);
             }
 
             // TODO add "go back to revisit a previous stage"?
             // ...
 
             // Still here? Provide a 'bad input' message.
-            // Would it make sense to re-print the previous Multi.Present? Seems like it would be clear what the
-            // actual options are since it's only a few lines above in the chat history, right?
             context.registerOutput(newMTfromMO(moMessage, noMatchText==null ? UNEXPECTED_INPUT_MESSAGE : noMatchText));
 
             return new ProcessStateNode(ProcessState.OK, currentNode); // we won't advance in this case.

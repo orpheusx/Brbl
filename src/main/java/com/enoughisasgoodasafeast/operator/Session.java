@@ -86,10 +86,6 @@ public class Session implements ScriptContext, Serializable {
         return inputHistory;
     }
 
-    //public Queue<Message> getOutputBuffer() {
-    //    return outputBuffer;
-    //}
-
     public Node previousScript() {
         return evaluatedNodes.getLast();
     }
@@ -155,8 +151,7 @@ public class Session implements ScriptContext, Serializable {
     }
 
     public boolean flush(boolean clearSession) {
-        int numInBuffer = outputBuffer.size();
-        LOG.info("flush: outputBuffer size = {}", numInBuffer);
+        LOG.info("flush: outputBuffer size = {}", outputBuffer.size());
         Message mtMessage;
         while ((mtMessage = outputBuffer.poll()) != null) {
             if (!producer.enqueue(mtMessage)) {

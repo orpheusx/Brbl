@@ -615,7 +615,7 @@ public class PostgresPersistenceManager implements PersistenceManager {
             ps.setString(4, message.to());                              // _to
             ps.setString(5, message.text());                            // _text
             ps.setObject(6, session.getId());                           // session_id
-            ps.setObject(7, session.previousScript().id());    // script_id
+            ps.setObject(7, session.previousScript().id());             // script_id
             ps.execute();
         } catch (SQLException e) {
             LOG.error("insertMT failed", e);

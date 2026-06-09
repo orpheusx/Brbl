@@ -5247,7 +5247,7 @@ Hoping for some response. Really annoyed at the lack of documentation about it.
 
 ===== 2026-05-21 ====
 
-Not suprised native compilation isn't more popular. Figuring out how to get it working with the TamboUI and Helidon libraries was pretty frustrating. Working now after lots of Slack discussion with the nice guy on the Helidon team.
+Not suprised native compilation isn't more popular; figuring out how to get it working with the TamboUI and Helidon libraries was pretty frustrating. Working now after lots of Slack discussion with the nice guy on the Helidon team.
 
 ===== 2026-05-22 ====
 
@@ -5509,6 +5509,37 @@ Partly. The 'continue with the current conversation' option is doing what we wan
 The behavior, apart from giving the correct response, is to continue with the previous conversation.
 Review Operator code...ah, we were replacing the first node instead of the last.
 Fixed. Now the correct PRESENT node is sent though I suspect it's not wired to the the correct PROCESS node.
-...Actually it looks like it's correct.
 
+Problem was another case of PRESENT/PROCESS lacking a single, linking edge.
+
+
+===== 2026-06-08 ====
+
+Corrected the graph structure. The system works correctly now. Woot!
+
+Collecting all the undone tasks from the recent past...
+TODO
+    X Add the "What kind of food? 1) vegetables 2) meat 3) fruit" top level node to known data.
+    X Provide an actual error message for ColorQuizProcess et al e.g. "Sorry, that's not one of the choices. Try again."
+    _ Implement additional script behaviors including END_OF_CONVERSATION (resetting session state)
+    _ Migrations
+        _ Drop the num_type column from the nodes table.
+        _ Rename the script_id columns on messages_mo_prcd and messages_mt to node_id.
+    _ BlasterIntegrationTest.pushCampaignLifecycle doesn't update the campaign_users.delivered column; it remains PENDING.
+        (Probably need to revisit the enum values in light of the somewhat complicated send process. e.g. not sure INFLIGHT makes practical sense. When is a push message considered SENT given that Blaster only goes as far as queueing it.)
+    _ Have a think about end-to-end MO-MT tracing/reporting. The current design doesn't provide this completely; the input and outputs can only be correlated at the session level.
+
+What other script functions do we need?
+
+    - REQUEST_INPUT/PROCESS_INPUT
+
+How to achieve end-to-end message tracing/reporting?
+
+    Add an in_reponse_to column on messages_mt?
+    Looks like we can use Session's inputs collection to add the id of the "current" MO to the data written by
+    PersistenceManager's insertMT() method.
+    There are some assertions about how many elements can be contained in the sequenced set at one time. See Session.currentInputsCount().
+    We don't actually take any action if this is found to be false other than logging an error. See ScriptEngine, line ~34.
+    Likewise, when updating the inputHistory in the Session.flush(), however, we acknowledge that its type allows for multiple values.
+    If it really can only hold a single input (Message) at a time we should use a different type.
 

@@ -180,7 +180,7 @@ SELECT * FROM edges WHERE id IN (
 
 --> 0:FoodQuiz
         -- Nodes
-SELECT * FROM nodes WHERE id IN (
+SELECT * FROM brbl_logic.nodes WHERE id IN (
         '0fc4ef6c-082f-4e90-b2f4-e14dbac78623',
         'ed0fbc0d-a3e3-40b4-91a4-9be24803e2db',
         '369d49d1-6c17-4afe-a6c1-ba01026798f3',
@@ -192,7 +192,7 @@ SELECT * FROM nodes WHERE id IN (
         '1b76e670-f683-4863-a30d-9262c3664a82'
     );
         -- Edges
-SELECT * FROM edges WHERE id IN (
+SELECT * FROM brbl_logic.edges WHERE id IN (
         '056e6fb7-05a2-4646-b40c-851c9c6d1081',
         '341df59c-b544-4435-9110-fa7fd2673eb8',
         '83d2e3e6-fa99-4c08-993b-74f43ff19e63',
@@ -214,14 +214,14 @@ SELECT * FROM edges WHERE id IN (
 
 
 -- Practice delete/reload:
-DELETE FROM nodes WHERE id IN (
+DELETE FROM brbl_logic.nodes WHERE id IN (
         '525028ae-0a33-4c80-a22f-868f77bb9531',
         'ae28c0e3-9303-4807-979f-694bc9981dd7',
         'cf72ce06-50fc-4bf1-852b-dbdbd9f97f66',
         'aec8789f-546f-42c2-b1d5-c80bd10014f0'
     );
 --         Edges:
-DELETE FROM edges WHERE id IN (
+DELETE FROM brbl_logic.edges WHERE id IN (
         '83408cce-85a9-4824-b622-651c6839f399',
         '2361468c-571d-43e1-a5cc-a5580841253c',
         '4aaf8877-f0dc-4182-94f9-86f05e87de3a',
@@ -229,16 +229,52 @@ DELETE FROM edges WHERE id IN (
         'f6c08bf6-a984-4619-97be-3bb2526ba81d'
     );
 
-select * from scripts;
+select * from brbl_logic.scripts;
 
 -- Starting data cleanup
+-- brbl_logic first...
 BEGIN TRANSACTION ;
-    DELETE FROM campaign_users WHERE delivered IN ('PENDING', 'SENT');
-    DELETE FROM push_campaigns WHERE created_at > '1980-01-01';
-    DELETE FROM scripts WHERE created_at > '1980-01-01';
-    DELETE FROM keywords WHERE created_at > '1980-01-01';
-    DELETE FROM routes WHERE created_at > '1980-01-01';
+    DELETE FROM brbl_logic.campaign_users WHERE delivered IN ('PENDING', 'SENT');
+    DELETE FROM brbl_logic.push_campaigns WHERE created_at > '1980-01-01';
+    DELETE FROM brbl_logic.scripts WHERE created_at > '1980-01-01';
+    DELETE FROM brbl_logic.keywords WHERE created_at > '1980-01-01';
+    DELETE FROM brbl_logic.routes WHERE created_at > '1980-01-01';
+
+    DELETE FROM brbl_logic.sessions WHERE created_at > '1980-01-01';
+
+    DELETE FROM brbl_logic.edges WHERE created_at > '1980-01-01';
+    DELETE FROM brbl_logic.nodes WHERE created_at > '1980-01-01';
 COMMIT;
 
-DELETE FROM sessions WHERE created_at > '1980-01-01';
+-- now brbl_users...
+BEGIN TRANSACTION ;
+    DELETE FROM brbl_users.amalgams  WHERE created_at > '1980-01-01';
+    DELETE FROM brbl_users.profiles  WHERE created_at > '1980-01-01';
+    DELETE FROM brbl_users.customers WHERE created_at > '1980-01-01';
+    DELETE FROM brbl_users.users     WHERE created_at > '1980-01-01';
+    DELETE FROM brbl_users.companies WHERE created_at > '1980-01-01';
+END;
 
+-- And, just for good measure, brbl_logs.
+DELETE FROM messages_mo WHERE rcvd_at       > '1980-01-01';
+DELETE FROM messages_mo_prcd WHERE prcd_at  > '1980-01-01';
+DELETE FROM messages_mt WHERE sent_at       > '1980-01-01';
+DELETE FROM messages_mt_dlvr WHERE dlvr_at  > '1980-01-01';
+
+
+-- Then reloading just the validated data...
+
+-- Into brbl_logic
+-- nodes_*.tsv and edges_*.tsv (colorquiz, foodquiz, and people)
+
+
+SELECT r.id,
+       r.platform,
+       r.channel,
+       r.default_node_id,
+       r.company_id,
+       r.status,
+       r.created_at,
+       r.updated_at
+FROM brbl_logic.routes r
+WHERE r.status = 'ACTIVE'::brbl_logic.route_status;
