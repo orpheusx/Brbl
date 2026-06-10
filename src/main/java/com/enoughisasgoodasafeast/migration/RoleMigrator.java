@@ -41,6 +41,8 @@ public class RoleMigrator {
     // GRANT <privilege_type> ON <new_schema>.<table_name> TO <grantee>;
     private static final String GRANT = "\n\tGRANT %s ON %s.%s TO %s ;";
 
+    private static final String OUTPUT_PREFIX = "UPDATED CURRENT_SCHEMAS=";
+
 
     public RoleMigrator(Properties props) {
         dataSource = new ComboPooledDataSource();
@@ -170,6 +172,6 @@ public class RoleMigrator {
             }
         }
 
-        System.out.println("\n" + String.join(",", currentSchemas));
+        System.out.println("\n" + OUTPUT_PREFIX + String.join(",", currentSchemas));
     }
 }

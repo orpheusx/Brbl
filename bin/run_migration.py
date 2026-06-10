@@ -125,9 +125,18 @@ def main():
     ]
     try:
         output = run_command(java_command, capture_output=True)
-        # grab the last line of the output
-        new_search_path = output.splitlines()[-1].strip()
-        print(f"\tNew search_path: {new_search_path}")
+        # Find the line in output that starts with "UPDATED CURRENT_SCHEMAS=" and set new_search_path with the remainder of that line.
+        new_search_path = None
+        for line in output.splitlines():
+            if line.startswith("UPDATED CURRENT_SCHEMAS="):
+                new_search_path = line.split("=", 1)[1].strip()
+                break
+
+        if not new_search_path:
+            print("Error: Could not find UPDATED CURRENT_SCHEMAS in RoleMigrator output.")
+            sys.exit(1)
+
+        print(f"\tUpdated search_path: {new_search_path}")
 
         # 4. Update JDBC URLs in properties files to use the new search_path
         print(f"\n--- Updating configuration properties files with new search_path ---")

@@ -5535,7 +5535,7 @@ What other script functions do we need?
 
 How to achieve end-to-end message tracing/reporting?
 
-    Add an in_reponse_to column on messages_mt?
+    Add an in_response_to column on messages_mt?
     Looks like we can use Session's inputs collection to add the id of the "current" MO to the data written by
     PersistenceManager's insertMT() method.
     There are some assertions about how many elements can be contained in the sequenced set at one time. See Session.currentInputsCount().
@@ -5543,3 +5543,11 @@ How to achieve end-to-end message tracing/reporting?
     Likewise, when updating the inputHistory in the Session.flush(), however, we acknowledge that its type allows for multiple values.
     If it really can only hold a single input (Message) at a time we should use a different type.
 
+Before proceeding with this let's take a full backup...
+    pg_dumpall > backups/full_cluster_backup_20260609_01.sql
+
+The migration, 0002_brbl_logs_add_in_reference_to_and_rename_script_id_to_node_id.yaml, worked as expected.
+Cleared all the log tables then ran some test conversations using Confab. Looks good.
+
+Make a post-migration backup:
+    pg_dumpall > backups/full_cluster_backup_20260610_01.sql

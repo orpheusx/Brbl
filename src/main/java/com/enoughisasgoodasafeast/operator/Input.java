@@ -1,6 +1,7 @@
 package com.enoughisasgoodasafeast.operator;
 
 import com.enoughisasgoodasafeast.Message;
+import org.jspecify.annotations.NonNull;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -15,19 +16,19 @@ public class Input {
     static class Request {
 
         // NOTE: This is nearly identical to SendMessage.evaluate. // TODO DRY opportunity here
-        public static Node evaluate(ScriptContext context, Message moMessage) {
+        public static ProcessStateNode evaluate(ScriptContext context, Message moMessage) {
             LOG.info("Input.Request evaluating '{}'", context.getCurrentNode());
             context.registerOutput(
                     newMTfromMO(moMessage,
                             renderForPlatform(moMessage.platform(), context.getCurrentNode().text())
                     )
             );
-            return advanceToFirstAndOnly(context);
+            return new ProcessStateNode(ProcessState.OK, advanceToFirstAndOnly(context));
         }
     }
 
     static class Process {
-        public static Node evaluate(ScriptContext context, Message moMessage) {
+        public static ProcessStateNode evaluate(@NonNull ScriptContext context, @NonNull Message moMessage) {
             String userText = moMessage.text().trim().toLowerCase();
             LOG.info("Input.Process evaluating '{}'", userText);
 
@@ -41,7 +42,7 @@ public class Input {
             context.registerOutput(mt);
             //LOG.info("Enqueued {}", mt);
 
-            return advanceToFirstAndOnly(context);
+            return  new ProcessStateNode(ProcessState.OK, advanceToFirstAndOnly(context));
         }
     }
 }

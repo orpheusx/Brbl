@@ -1,0 +1,22 @@
+version_schema: 0002
+# Rename the script_id columns on messages_mo_prcd and messages_mt to node_id.
+# Add in_response_to column on messages_mo.
+operations:
+  - rename_column:
+      table: messages_mo_prcd
+      from: script_id
+      to: node_id
+  - rename_column:
+      table: messages_mt
+      from: script_id
+      to: node_id
+  - add_column:
+      table: messages_mt
+      up: null
+      column:
+        name: in_response_to
+        type: uuid
+        comment: The MO message to which this MT is a response. Used for end-to-end tracing and reporting.
+        nullable: true
+        unique: false
+        pk: false

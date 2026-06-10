@@ -122,11 +122,11 @@ public class ScriptEngine {
                     SendMessage.evaluate(session, moMessage); //EndOfSession? 'request' that the session be cleared?
 
             // TODO Even easier to replace with SendMessage.evaluate(). The Editor will always pair it with an Input.Process
-            case REQUEST_INPUT -> null;
-//                    Input.Request.evaluate(session, moMessage);
+            case REQUEST_INPUT ->
+                    Input.Request.evaluate(session, moMessage);
 
-            case PROCESS_INPUT -> null;
-//                    Input.Process.evaluate(session, moMessage);
+            case PROCESS_INPUT ->
+                    Input.Process.evaluate(session, moMessage);
 
             case SEND_MESSAGE -> SendMessage.evaluate(session, moMessage);
 

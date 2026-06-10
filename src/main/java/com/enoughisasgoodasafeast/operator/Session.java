@@ -78,6 +78,10 @@ public class Session implements ScriptContext, Serializable {
         return inputs.size();
     }
 
+    public Message getCurrentInput() {
+        return inputs.getLast();
+    }
+
     public Message previousInput() {
         return inputHistory.isEmpty() ? null : inputHistory.getLast();
     }

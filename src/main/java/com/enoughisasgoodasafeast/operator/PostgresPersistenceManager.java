@@ -66,7 +66,7 @@ public class PostgresPersistenceManager implements PersistenceManager {
     public static final String MO_MESSAGE_PRCD =
             """
                     INSERT INTO messages_mo_prcd
-                        (id, prcd_at, session_id, script_id)
+                        (id, prcd_at, session_id, node_id)
                     VALUES
                         (?, ?, ?, ?);
                     """;
@@ -74,9 +74,9 @@ public class PostgresPersistenceManager implements PersistenceManager {
     public static final String MT_MESSAGE_INSERT =
             """
                     INSERT INTO messages_mt
-                        (id, sent_at, _from, _to, _text, session_id, script_id)
+                        (id, sent_at, _from, _to, _text, session_id, node_id, in_response_to)
                     VALUES
-                        (?, ?, ?, ?, ?, ?, ?);
+                        (?, ?, ?, ?, ?, ?, ?, ?);
                     """;
 
     public static final String MT_MESSAGE_DLVR =
@@ -569,10 +569,10 @@ public class PostgresPersistenceManager implements PersistenceManager {
     private static boolean insertProcessedMO(Connection connection, Message message, Session session) {
         //Instant before = utcInstant();
         try (PreparedStatement ps = connection.prepareStatement(MO_MESSAGE_PRCD)) {
-            ps.setObject(1, message.id());                              // id
-            ps.setTimestamp(2, Timestamp.from(utcInstant()));          // prcd_at
-            ps.setObject(3, session.getId());                           // session_id
-            ps.setObject(4, session.getScriptForProcessedMO().id());    // script_id
+            ps.setObject(1, message.id());                           // id
+            ps.setTimestamp(2, Timestamp.from(utcInstant()));        // prcd_at
+            ps.setObject(3, session.getId());                        // session_id
+            ps.setObject(4, session.getScriptForProcessedMO().id()); // node_id
             ps.execute();
         } catch (SQLException e) {
             LOG.error("insertProcessedMO failed", e);
@@ -596,16 +596,6 @@ public class PostgresPersistenceManager implements PersistenceManager {
         }
     }
 
-    // Called by Operator
-    //    public boolean insertMTs(List<Message> messages, Session session) {
-    //        try (Connection connection = fetchConnection()) {
-    //                //            return insertMTs(connection, messages, session);
-    //        } catch (SQLException e) {
-    //            LOG.error("insertMTs: fetchConnection failed", e);
-    //            return false;
-    //        }
-    //    }
-
     private static boolean insertMT(Connection connection, Message message, Session session) {
         //Instant before = utcInstant();
         try (PreparedStatement ps = connection.prepareStatement(MT_MESSAGE_INSERT)) {
@@ -616,6 +606,7 @@ public class PostgresPersistenceManager implements PersistenceManager {
             ps.setString(5, message.text());                            // _text
             ps.setObject(6, session.getId());                           // session_id
             ps.setObject(7, session.previousScript().id());             // script_id
+            ps.setObject(8, session.getCurrentInput().id());            // in_response_to
             ps.execute();
         } catch (SQLException e) {
             LOG.error("insertMT failed", e);
