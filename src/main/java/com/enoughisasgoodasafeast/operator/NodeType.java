@@ -4,12 +4,12 @@ package com.enoughisasgoodasafeast.operator;
  * An enumeration used to define the type of logic applied to the processing of a message.
  */
 public enum NodeType {
-    PRESENT_MULTI(false),
-    PROCESS_MULTI(true),
-    END_OF_CHAT(false),
-    REQUEST_INPUT(false),
-    PROCESS_INPUT(true),
-    SEND_MESSAGE(false);
+    PRESENT_MULTI(false), // 3
+    PROCESS_MULTI(true),  // 4
+    END_OF_CHAT(false),   // 5
+    REQUEST_INPUT(false), // 1
+    PROCESS_INPUT(true),  // 2
+    SEND_MESSAGE(false);  // 6
 
     private final boolean awaitInput;
 

@@ -1,0 +1,7 @@
+id	created_at	text	num_type	label	updated_at	type
+019eb2ed-3edb-7441-a6b9-a62f0991a3f0	2025-05-30 14:18:37.249297 +00:00	Cupcake Kings thanks you for your patronage! Thanks for your patronage!	6	IntroToService	2025-05-30 14:18:37.249297 +00:00	SEND_MESSAGE
+019eb2ed-3ee0-7728-bfdc-aca27f637899	2025-05-25 15:07:24.344176 +00:00	Are there any areas where you think we could improve?	1	InviteComments	2025-05-25 15:07:24.344176 +00:00	REQUEST_INPUT
+019eb2ed-3ee0-79b3-a3b3-beb2e51c719f	2025-05-25 15:07:24.348591 +00:00	Thanks for the input.	2	ProcessComments	2025-05-25 15:07:24.348591 +00:00	PROCESS_INPUT
+019eb2ed-3ee0-75d8-97d2-fcdb5d6d21ee	2025-05-30 14:18:23.686057 +00:00	Would you like to get notifications for specials? 1) Just Friday specials 2) Friday and week long specials 3) No thanks	3	SignUpForSpecials	2025-05-30 14:18:23.686057 +00:00	PRESENT_MULTI
+019eb2ed-3ee0-74f9-87ea-32707823b95a	2025-05-30 14:18:23.686057 +00:00	Sorry, please respond with one of the options.	4	SignUpProcess	2025-05-30 14:18:23.686057 +00:00	PROCESS_MULTI
+019eb6bf-03c3-7b6c-91b9-cf1ec6a744c2	2025-05-30 14:18:23.686057 +00:00	Have a great day. We hope to chat again soon!	5	EndOfFollowUp	2025-05-30 14:18:23.686057 +00:00	END_OF_CHAT

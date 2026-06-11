@@ -5524,10 +5524,11 @@ TODO
     _ Implement additional script behaviors including END_OF_CONVERSATION (resetting session state)
     _ Migrations
         _ Drop the num_type column from the nodes table.
-        _ Rename the script_id columns on messages_mo_prcd and messages_mt to node_id.
+        X Rename the script_id columns on messages_mo_prcd and messages_mt to node_id.
     _ BlasterIntegrationTest.pushCampaignLifecycle doesn't update the campaign_users.delivered column; it remains PENDING.
         (Probably need to revisit the enum values in light of the somewhat complicated send process. e.g. not sure INFLIGHT makes practical sense. When is a push message considered SENT given that Blaster only goes as far as queueing it.)
-    _ Have a think about end-to-end MO-MT tracing/reporting. The current design doesn't provide this completely; the input and outputs can only be correlated at the session level.
+    X Have a think about end-to-end MO-MT tracing/reporting. The current design doesn't provide this completely; the input and outputs can only be correlated at the session level.
+    X Implement the changes needed to support end-to-end MO-MT tracing/reporting.
 
 What other script functions do we need?
 
@@ -5549,5 +5550,70 @@ Before proceeding with this let's take a full backup...
 The migration, 0002_brbl_logs_add_in_reference_to_and_rename_script_id_to_node_id.yaml, worked as expected.
 Cleared all the log tables then ran some test conversations using Confab. Looks good.
 
-Make a post-migration backup:
+
+===== 2026-06-10 ====
+
+Made a post-migration backup:
     pg_dumpall > backups/full_cluster_backup_20260610_01.sql
+
+TODO
+    _ Implement additional script behaviors including SEND_MESSAGE, Input.REQUEST/PROCESS, and END_OF_CHAT (resetting session state)
+    _ Test these implementations.
+    _ Re-verify operation of Blaster then test it with Confab as the receiver.
+    _ BlasterIntegrationTest.pushCampaignLifecycle doesn't update the campaign_users.delivered column; it remains PENDING.
+        (Probably need to revisit the enum values in light of the somewhat complicated send process. e.g. not sure INFLIGHT makes practical sense. When is a push message considered SENT given that Blaster only goes as far as queueing it.)
+    _ Migrations
+        _ Any changes to the enum type, brbl_logic.delivery_status re: previous to-do.
+        _ Drop the num_type column from the nodes table.
+
+Proof-of-concept SQL Queries:
+    This will link records in each of the log tables to provide the full end-to-end audit trail.
+    Change the INNER JOINs to LEFT OUTER if you want to see the MOs that were _not_ processed by Opr8r or were queued but never delivered:
+
+        SELECT
+            mos.id, mos.rcvd_at AS rcvd, mos._from AS phone, mos._text AS MO, mts._text AS MT, mts.node_id
+        FROM
+            messages_mo mos
+        INNER JOIN
+            messages_mo_prcd prcd
+                ON prcd.id = mos.id
+        INNER JOIN
+            messages_mt mts
+                ON mts.in_response_to = prcd.id
+        INNER JOIN
+            messages_mt_dlvr dlvr
+                ON dlvr.id = mts.id
+        ORDER BY
+            mos.rcvd_at DESC ;
+
+    See the number of active connections to Postgres along with their state (active, idle, etc):
+        SELECT
+            backend_type, state, count(*)
+        FROM
+            pg_stat_activity
+        WHERE
+            backend_type IS NOT NULL --> This column will be null for internal processes when the current role lacks the privs.
+        GROUP BY
+            backend_type, state;
+
+
+
+TODO
+    X Implement additional script behaviors including SEND_MESSAGE, Input.REQUEST/PROCESS, and END_OF_CHAT (resetting session state)
+    _ Test these implementations.
+    _ Re-verify operation of Blaster then test it with Confab as the receiver.
+    _ BlasterIntegrationTest.pushCampaignLifecycle doesn't update the campaign_users.delivered column; it remains PENDING.
+        (Probably need to revisit the enum values in light of the somewhat complicated send process. e.g. not sure INFLIGHT makes practical sense. When is a push message considered SENT given that Blaster only goes as far as queueing it.)
+    _ Migrations
+        _ Any changes to the enum type, brbl_logic.delivery_status re: previous to-do.
+        _ Drop the num_type column from the nodes table.
+
+Added a chat graph that excercises the SendMessage and Input.Request/Process NodeTypes.
+See nodes_welcome.tsv and edges_welcome.tsv.
+
+New chat functionality:
+    Implement STOP. This is required by telcos and the SMS consortium.
+    Create a subtype/extension/whatevs of PRESENT/PROCESS Multi that adds a user to a table tracking their subscription state. Blaster could use this to prepare user segments for push campaigns.
+
+
+
