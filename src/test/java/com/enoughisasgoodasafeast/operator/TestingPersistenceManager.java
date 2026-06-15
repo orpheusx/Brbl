@@ -22,7 +22,6 @@ public class TestingPersistenceManager implements PersistenceManager {
 
     public static final UUID KEYWORD_ID = randomUUID();
     public static final UUID SCRIPT_ID = UUID.fromString("89eddcb8-7fe5-4cd1-b18b-78858f0789fb");
-    public static final UUID SWITCH_NODE_ID = UUID.fromString("019e84dc-519d-7fdd-883e-5833181cf4c4");
     public static final String USER_ID = OperatorTest.MOBILE_MX;
     public static final UUID CLAIMANT_ID = randomUUID();
 
@@ -84,6 +83,11 @@ public class TestingPersistenceManager implements PersistenceManager {
     public Route[] getActiveRoutes() {
         LOG.info("getActiveRoutes called");
         return routes;
+    }
+
+    @Override
+    public boolean updateUserStatus(User user, Platform platform, UserStatus status) {
+        return true;
     }
 
     public void setActiveRoutes(Route[] routes) {

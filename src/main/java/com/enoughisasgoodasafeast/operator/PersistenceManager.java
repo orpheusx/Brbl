@@ -42,7 +42,7 @@ public interface PersistenceManager {
     // Called by Operator
     Route[] getActiveRoutes();
 
-    //Node getScriptForKeyword(Platform platform, String keyword);
+    boolean updateUserStatus(User user, Platform platform, UserStatus status);
 
     void saveSession(Session session) throws PersistenceManagerException;
 

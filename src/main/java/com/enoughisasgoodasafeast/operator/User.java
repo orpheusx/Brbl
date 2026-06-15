@@ -48,7 +48,8 @@ public record User(
         @Nullable UUID customerId, // Optional but, if present, same cardinality as groupId and claimantId
         @NonNull Map<Platform, String> platformNickNames,
         @Nullable Map<Platform, Profile> platformProfiles,
-        @NonNull Map<Platform,UserStatus> platformStatus
+        @NonNull Map<Platform, UserStatus> platformStatus
+
     ) implements Serializable {
 
     private static final Logger LOG = LoggerFactory.getLogger(User.class);

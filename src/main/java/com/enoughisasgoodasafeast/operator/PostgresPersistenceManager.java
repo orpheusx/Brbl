@@ -21,7 +21,8 @@ import static com.enoughisasgoodasafeast.operator.SessionSerde.sessionToBytes;
 import static io.jenetics.util.NanoClock.utcInstant;
 import static java.sql.Types.*;
 
-public class PostgresPersistenceManager implements PersistenceManager {
+public class
+PostgresPersistenceManager implements PersistenceManager {
 
     private static final Logger LOG = LoggerFactory.getLogger(PostgresPersistenceManager.class);
 
@@ -315,6 +316,16 @@ public class PostgresPersistenceManager implements PersistenceManager {
                     ;
                     """;
 
+    public static final String UPDATE_USER_STATUS =
+            """
+                UPDATE users
+                SET
+                    status = ?::brbl_users.user_status,
+                    updated_at = ?::TIMESTAMP
+                WHERE
+                    id = ?::UUID ;
+                """;
+
     // Not sure the nested select is a great idea.
     public static final String SELECT_ALL_ROUTES_WITH_STATUS =
             """
@@ -605,7 +616,7 @@ public class PostgresPersistenceManager implements PersistenceManager {
             ps.setString(4, message.to());                              // _to
             ps.setString(5, message.text());                            // _text
             ps.setObject(6, session.getId());                           // session_id
-            ps.setObject(7, session.previousScript().id());             // script_id
+            ps.setObject(7, session.previousNode().id());             // script_id
             ps.setObject(8, session.getCurrentInput().id());            // in_response_to
             ps.execute();
         } catch (SQLException e) {
@@ -840,6 +851,29 @@ public class PostgresPersistenceManager implements PersistenceManager {
             }
         } catch (SQLException e) {
             LOG.error("getActiveRoutes failed.");
+            throw new RuntimeException(e);
+        }
+    }
+
+    @Override
+    public boolean updateUserStatus(User user, Platform platform, UserStatus status) {
+        try (Connection connection = fetchConnection()) {
+            return optOutUser(connection, user, platform, status);
+        } catch (SQLException e) {
+            LOG.error("optOutUser: fetchConnection failed", e);
+            throw new RuntimeException(e);
+        }
+    }
+
+    private boolean optOutUser(Connection connection, User user, Platform platform, UserStatus status) {
+        try (PreparedStatement ps = connection.prepareStatement(UPDATE_USER_STATUS)) {
+            ps.setObject(1, status, OTHER);
+            ps.setTimestamp(2, Timestamp.from(utcInstant()));
+            ps.setObject(3, user.platformIds().get(platform));
+            final int usersUpdated = ps.executeUpdate();
+            return usersUpdated == 1;
+        } catch (SQLException e) {
+            LOG.error("optOutUser update failed.");
             throw new RuntimeException(e);
         }
     }
@@ -1123,7 +1157,7 @@ public class PostgresPersistenceManager implements PersistenceManager {
             // Merge the set of languages, attempting to preserve the user's preferred order
             // languages.addAll(otherLanguages);
             Set<LanguageCode> userLanguages = new HashSet<>(languages);
-            LOG.info("Languages for user: {}", languages);
+            // LOG.info("Languages for user: {}", languages);
 
             return new User(
                     platformIdMap, groupId, platformNumberMap, platformCreatedMap, country, userLanguages,
@@ -1173,7 +1207,8 @@ public class PostgresPersistenceManager implements PersistenceManager {
 
             int numInserted = ps.executeUpdate();
 
-            LOG.info("insertUserAmalgam: inserted {} rows.", numInserted);
+
+            LOG.info("insertUserAmalgam: update {} user status.", numInserted);
             return (numInserted == 1);
 
         } catch (SQLException e) {

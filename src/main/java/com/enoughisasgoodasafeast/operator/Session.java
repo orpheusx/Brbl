@@ -6,7 +6,6 @@ import org.jspecify.annotations.NonNull;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
-import java.io.IOException;
 import java.io.Serial;
 import java.io.Serializable;
 import java.time.Instant;
@@ -90,7 +89,7 @@ public class Session implements ScriptContext, Serializable {
         return inputHistory;
     }
 
-    public Node previousScript() {
+    public Node previousNode() {
         return evaluatedNodes.getLast();
     }
 

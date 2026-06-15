@@ -5596,24 +5596,124 @@ Proof-of-concept SQL Queries:
         GROUP BY
             backend_type, state;
 
-
-
 TODO
     X Implement additional script behaviors including SEND_MESSAGE, Input.REQUEST/PROCESS, and END_OF_CHAT (resetting session state)
-    _ Test these implementations.
+    X Test these implementations.
+    _ Implement STOP.
     _ Re-verify operation of Blaster then test it with Confab as the receiver.
     _ BlasterIntegrationTest.pushCampaignLifecycle doesn't update the campaign_users.delivered column; it remains PENDING.
         (Probably need to revisit the enum values in light of the somewhat complicated send process. e.g. not sure INFLIGHT makes practical sense. When is a push message considered SENT given that Blaster only goes as far as queueing it.)
     _ Migrations
-        _ Any changes to the enum type, brbl_logic.delivery_status re: previous to-do.
+        _ Any changes made to the brbl_logic.delivery_status enum type re: previous to-do.
         _ Drop the num_type column from the nodes table.
 
 Added a chat graph that excercises the SendMessage and Input.Request/Process NodeTypes.
 See nodes_welcome.tsv and edges_welcome.tsv.
 
 New chat functionality:
-    Implement STOP. This is required by telcos and the SMS consortium.
-    Create a subtype/extension/whatevs of PRESENT/PROCESS Multi that adds a user to a table tracking their subscription state. Blaster could use this to prepare user segments for push campaigns.
+    - Implement STOP. This is required by telcos and the SMS consortium. We can't ask the user to confirm the stop. Only messages consisting of one of the following are considered: STOP, UNSUBSCRIBE, CANCEL, QUIT, or END. In other words we don't look for those words in a sentence.
+    - Historical OPT-IN state tracking. This is required by SMS providers/telcos for legal compliance.
+    - Beyond basic OPT-IN history, reate a subtype/extension/whatevs of PRESENT/PROCESS Multi that adds a user to a table tracking their subscription state. Blaster could use this to prepare user segments for push campaigns.
+
+Permissions problem with brbl_operator (as used by the OperatorPersistenceIntegrationTest) accessing the brbl_users.users table.
+
+The brbl_user_write_role only provides INSERT access, not UPDATE.
+So, to fix that:
+    GRANT UPDATE ON brbl_users.users TO brbl_user_write_role;
+
+Previously I'd had neglected to grant it to brbl_operator.
+    GRANT brbl_user_write_role TO brbl_operator;
+
+==== 2026/06/13 ====
+
+TODO
+    _ Implement STOP.
+        _ Track OPT_IN history in a separate insert-only table, brbl_history.user_history.
+    _ Re-verify operation of Blaster then test it with Confab as the receiver.
+    _ BlasterIntegrationTest.pushCampaignLifecycle doesn't update the campaign_users.delivered column; it remains PENDING.
+        (Probably need to revisit the enum values in light of the somewhat complicated send process. e.g. not sure INFLIGHT makes practical sense. When is a push message considered SENT given that Blaster only goes as far as queueing it.)
+    _ Migrations
+        _ Any changes made to the brbl_logic.delivery_status enum type re: previous to-do.
+        _ Drop the num_type column from the nodes table.
+
+NB: Made the non-login role names plural for consistency with <schemaName>_read_role pattern we follow elsewhere:
+    ALTER ROLE brbl_user_read_role RENAME TO brbl_users_read_role;
+    ALTER ROLE brbl_user_write_role RENAME TO brbl_users_write_role;
+
+To record the history of INs and OUTs of user use a trigger or insert directly in the same part of the code making the updates to users
+
+The pros for the trigger approach: it works whether I make changes through application code or via direct SQL and it's nice to have the flexibility of the latter.
+The pros for the application code approach: it's explicitly called out  to anyone reading the code.
+
+Hmm...let's try using the trigger approach:
+
+    CREATE SCHEMA brbl_history
+        CREATE TABLE user_history (
+            user_id UUID NOT NULL,
+            user_status  brbl_users.user_status,
+            changed_at  timestamp with time zone
+        )
+    ;
+
+    CREATE OR REPLACE FUNCTION record_user_status_change() RETURNS trigger AS $record_user_status_change$
+        BEGIN
+            IF NEW.status <> OLD.status THEN
+                INSERT INTO brbl_history.user_history(user_id, user_status, changed_at)
+                VALUES (OLD.id, NEW.status, NEW.updated_at);
+            END IF;
+            RETURN NEW;
+        END;
+    $record_user_status_change$ LANGUAGE plpgsql;
+
+    CREATE TRIGGER on_opt_in_out AFTER INSERT OR UPDATE ON brbl_users.users
+        FOR EACH ROW EXECUTE PROCEDURE record_user_status_change();
+
+Working as desired. Reporting seems like it will be relatively straightforward to add later.
+It does require that the caller of the PersistenceManager.updateUserStatus() method has access to the table that the triggered function writes into (brbl_history.user_history). So let's add that:
+
+    CREATE ROLE brbl_history_write_role;
+    GRANT USAGE ON SCHEMA brbl_history TO brbl_history_write_role;
+    GRANT INSERT, UPDATE ON brbl_history.user_history TO brbl_history_write_role;
+    GRANT brbl_history_write_role TO brbl_operator;
+
+Impl of STOP:
+
+    I refactored Operator.process(Message) to better structure the two special cases (opt-out and change topic) but the former blows up on the session.getCurrentNode call (because, duh, we'd previously setCurrentNode(null))
+
+    So in the interest of unifying the behavior maybe we create a new NodeType (OPT_OUT) where the process flow is somewhat like what we do for the change topic process.
+
+    This seems to work for opt-outs now although the refactoring seems to have broken the change topic handling; taking the "no, let's continue with the current conversation" option returns the "Ok, I'll repeat the last question." message but does not, in fact, repeat the question. Instead,the session is somehow getting set to null after the "Ok" message.
+    If the user replies "yes" to the new topic everything still works as before.
+
+    The problem was that we were looking for the currentNode in the history (evaluatedNodes) but we hadn't been added to it yet. This was an overcomplication; we can simply start looking for the paired precursor from the end of the history.
+
+    Next, handle opt-ins and (re) opt-ins.
+
+pg_dump -d brbl_db_dev --schema-only > ./ddl/brbl_db_schema_20260614.ddl
 
 
+==== 2026/06/14 ====
+
+TODO
+    X Implement STOP.
+    _ Define behavior and implement OPT-IN when user exists or does not exist.
+    _ Re-verify operation of Blaster then test it with Confab as the receiver.
+    _ BlasterIntegrationTest.pushCampaignLifecycle doesn't update the campaign_users.delivered column; it remains PENDING.
+        (Probably need to revisit the enum values in light of the somewhat complicated send process. e.g. not sure INFLIGHT makes practical sense. When is a push message considered SENT given that Blaster only goes as far as queueing it.)
+    _ Migrations
+        _ Any changes made to the brbl_logic.delivery_status enum type re: previous to-do.
+        _ Drop the num_type column from the nodes table.
+
+Impl of OPT-IN
+    For text-to-opt-in where the user initiates contact via SMS (or other platform.) If they do this the first message should explain what they can expect in terms of topics, frequency, additional options, and how to OPT-OUT.
+    Double opt-in refers to the user signing up on a webform or via email. It should trigger a message sent to the user to confirm that the phone number is theirs and that they want to be opted in. The UserStatus.KNOWN state should be the initial state for such users.
+
+    The question of scope is, as in other cases, the real concern. How do we provide the needed script and allow it to be overridden intelligently?
+    This is another case where we seem to need to lookup a node graph by factors beyond keyword, channel, and channel owner's customer_id.
+    The route encapsulates the channel and the customer_id and, via the brblAdmin application, can
+    We already have the route's default_script_id (for when there are no applicable keywords) and the interrupt_script_id (so we can provide different scripts depending on the channel.) Should we just add another id for an OPT-IN script?
+    Seems reasonable but what if they're opting in via a keyword? (This feels like a common case.) How would it differ for existing users?
+
+    New User: lookup OPT-IN *notification* script, lookup keyword script, chain the latter to the end of the former, use the result.
+    Existing User: lookup keyword script, use it directly.
 

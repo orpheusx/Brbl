@@ -117,6 +117,7 @@ public class BlasterIntegrationTest {
             // The EXPECTED_SKIPPED would only be 6 if we properly avoided creating campaign user segments with the more than a single Platform ...
             // Likewise, the value of EXPECTED_SUCCESSES would be one greater.
             // assertEquals(EXPECTED_SKIPPED, pushReport.invalidUsersSkipped.size(), "Unexpected number of invalid users skipped");
+
             assertEquals(EXPECTED_SUCCESSES, pushReport.processedUsers.size(), "Unexpected number of processed users"); // See knownUserIds list.
 
             // Fetch campaign and check its status.
@@ -142,7 +143,7 @@ public class BlasterIntegrationTest {
                 assertTrue(testStart.isBefore(session.getLastUpdatedNanos())); // make sure this isn't just an old session
                 // Check the initial node was executed. NB: this assumes the selected script only advances by a single Node.
                 // This is dependent on the script, however.
-                assertEquals(pushCampaign.nodeId(), session.previousScript().id(),
+                assertEquals(pushCampaign.nodeId(), session.previousNode().id(),
                         "Session script " + pushCampaign.scriptId() + " not in expected state for user " + processedUserId);
             }
             

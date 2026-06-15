@@ -48,7 +48,7 @@ public class ScriptEngine {
                 Message previousInputMessage = session.previousInput();
                 if (previousInputMessage != null) {
                     if (previousInputMessage.receivedAt().isAfter(message.receivedAt())) {
-                        LOG.error("Oh shit, we processed an MO received later than this one: {} > {}",
+                        LOG.error("WTF, we processed an MO received later than this one: {} > {}",
                                 previousInputMessage.receivedAt(), message.receivedAt());
                         // TODO fetch a special script to apologize to the user then replay the Node returned by Session.getScriptForProcessedMO()?
                     }
@@ -74,7 +74,6 @@ public class ScriptEngine {
 
                 // FIXME For now, if we've advanced to the end of the graph then clear the session.
                 // FIXME ideally should be in a finally block but writing to db can throw. Hmm...
-//                boolean flushOk = session.flush(next==null);
                 if(!session.flush(next==null)) {
                     LOG.error("Errors flushing session: {}", session);
                     psn = new ProcessStateNode(ProcessState.ERROR, session.getCurrentNode());
@@ -128,7 +127,14 @@ public class ScriptEngine {
             case PROCESS_INPUT ->
                     Input.Process.evaluate(session, moMessage);
 
-            case SEND_MESSAGE -> SendMessage.evaluate(session, moMessage);
+            case SEND_MESSAGE ->
+                    SendMessage.evaluate(session, moMessage);
+
+            case OPT_IN ->
+                    Opt.In.evaluate(session, moMessage);
+
+            case OPT_OUT ->
+                    Opt.Out.evaluate(session, moMessage);
 
         };
 

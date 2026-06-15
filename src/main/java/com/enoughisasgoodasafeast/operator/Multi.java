@@ -24,7 +24,7 @@ public class Multi {
          * @param moMessage the incoming MO message that triggered the response message produced here.
          * @return the next Node in the context's node graph.
          */
-        public static ProcessStateNode/*Node*/ evaluate(ScriptContext context, Message moMessage) {
+        public static ProcessStateNode evaluate(ScriptContext context, Message moMessage) {
             LOG.info("Multi.Present evaluating '{}'", moMessage.text());
             // Is this the right place to handle platform-dependent message text formatting?
             String mtText = Functions.renderForPlatform(moMessage.platform(), context.getCurrentNode().text());
@@ -77,11 +77,6 @@ public class Multi {
                 }
             }
 
-            // Handle the "I want to talk about something else" case here
-            if (userRequestingChangeOfTopic(userText)) { // some kind of ML-based assessment of the input might be genuinely useful here...
-                return new ProcessStateNode(ProcessState.SWITCH_REQUESTED, currentNode);
-            }
-
             // TODO add "go back to revisit a previous stage"?
             // ...
 
@@ -89,11 +84,6 @@ public class Multi {
             context.registerOutput(newMTfromMO(moMessage, noMatchText==null ? UNEXPECTED_INPUT_MESSAGE : noMatchText));
 
             return new ProcessStateNode(ProcessState.OK, currentNode); // we won't advance in this case.
-        }
-
-        // TODO implement a more flexible assessment of intent.
-        private static boolean userRequestingChangeOfTopic(String message) {
-            return message.contains("change topic");
         }
     }
 

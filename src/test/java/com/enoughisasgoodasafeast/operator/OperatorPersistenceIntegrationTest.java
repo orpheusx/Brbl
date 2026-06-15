@@ -211,11 +211,36 @@ class OperatorPersistenceIntegrationTest {
     }
 
     @Test
+    void updateUserStatus() {
+        var sk = new SessionKey(Platform.SMS, knownNumbersForUsers[0], knownRouteIdsAndChannels[0][1], "random keyword");
+        var optedInUser = pm.getUser(sk);
+        assertNotNull(optedInUser);
+        assertEquals(UserStatus.IN, optedInUser.platformStatus().get(Platform.SMS));
+        LOG.info("OptedIN? {}", optedInUser);
+
+        // now test the updating of the status to OUT
+        pm.updateUserStatus(optedInUser, Platform.SMS, UserStatus.OUT);
+        var optedOutUser = pm.getUser(sk);
+        assertNotEquals(optedInUser, optedOutUser);
+        assertEquals(optedInUser.groupId(), optedOutUser.groupId());
+        LOG.info("OptedOUT? {}", optedInUser);
+
+        assertEquals(UserStatus.OUT, optedOutUser.platformStatus().get(Platform.SMS));
+
+        // Restore the original status
+        pm.updateUserStatus(optedOutUser, Platform.SMS, UserStatus.IN);
+        var restoredStatusUser = pm.getUser(sk);
+        LOG.info("Reverted status? {}", restoredStatusUser);
+        assertEquals(UserStatus.IN, restoredStatusUser.platformStatus().get(Platform.SMS));
+        assertEquals(optedInUser, restoredStatusUser);
+    }
+
+    @Test
     void findAllKeywords() {
         // Note: assumes system under test contains (at least) data contained in the generated known_keywords.tsv file.
         var keywordsByPattern = pm.getKeywords();
         assertFalse(keywordsByPattern.isEmpty());
-        assertEquals(5, keywordsByPattern.size()); // keywords w/out route_id value are excluded
+        assertEquals(6, keywordsByPattern.size()); // keywords w/out route_id value are excluded
         assertTrue(keywordsByPattern.entrySet().stream().anyMatch(entry -> {
             return entry.getValue().wordPattern().equals("foo"); // at least one of the keywords should be "foo"
         }));

@@ -5,6 +5,7 @@ import com.enoughisasgoodasafeast.operator.PersistenceManager.PersistenceManager
 import com.github.benmanes.caffeine.cache.Caffeine;
 import com.github.benmanes.caffeine.cache.LoadingCache;
 import io.jenetics.util.NanoClock;
+import jakarta.validation.constraints.Null;
 import org.jspecify.annotations.NonNull;
 import org.jspecify.annotations.Nullable;
 import org.slf4j.Logger;
@@ -18,7 +19,6 @@ import java.util.function.Supplier;
 import java.util.regex.Pattern;
 
 import static com.enoughisasgoodasafeast.Functions.randomUUID;
-import static com.enoughisasgoodasafeast.operator.ProcessState.SWITCH_REQUESTED;
 import static com.enoughisasgoodasafeast.operator.Telecom.deriveCountryCodeFromId;
 import static io.jenetics.util.NanoClock.utcInstant;
 
@@ -26,7 +26,8 @@ public class Operator implements SessionAwareMessageProcessor {
 
     private static final Logger LOG = LoggerFactory.getLogger(Operator.class);
 
-    //private static final int EXPECTED_INPUT_COUNT = 1;
+    // Do we need other language support?
+    public static final String[] STOP_WORDS = {"stop", "unsubscribe", "cancel", "quit", "end"};
 
     public static final String ALL = "ALL";
 
@@ -96,7 +97,7 @@ public class Operator implements SessionAwareMessageProcessor {
     /**
      * Find/setup session and process message, tracking state changes in the session.
      * @param message the message being processed.
-     * @return BooleanSession indicating the success of the processing and the current Session object.
+     * @return BooleanSession indicating the success of the processing and the current stateful Session object.
      */
     public BooleanSession process(Message message) {
         LOG.info("Process message: {}", message);
@@ -106,51 +107,20 @@ public class Operator implements SessionAwareMessageProcessor {
             LOG.error("Failed to find or create session for {}", sessionKey);
             return new BooleanSession(false, null);
         }
+        // FIXME
+        //  Currently, sessions are cleared once the currentNode becomes null but we could instead check for that condition
+        //   and provide an appropriate script here.
+        //  ...
 
-        // FIXME the gap between the creation/retrieval of the Session and it being locked for
-        //  processing is worrisome but possibly unavoidable...
-        var processStateNode = ScriptEngine.process(session, message);
+        var processStateNode = switch (normalizedMessageText(message)) {
 
-        if (SWITCH_REQUESTED.equals(processStateNode.processState())) {
-            LOG.info("Switch requested: {}", processStateNode);
+            case String txt when isOptOutRequest(txt) -> handleOptOut(session, message);
 
-            // Grab the conversation that is configured for the route.
-            var changeTopicPresentNode = findInterruptConversationByRoute(sessionKey);
-            if (changeTopicPresentNode == null) {
-                // This would signal a very bad configuration issue.
-                LOG.error("Failed to find the change topic script!!!");
-                return new BooleanSession(false, null);
-            }
+            case String txt when isChangeTopicRequest(txt) -> handleChangeTopic(session, message, sessionKey);
 
-            assert changeTopicPresentNode.type()==NodeType.PRESENT_MULTI;
-            assert changeTopicPresentNode.edges().getFirst().targetNode().type()==NodeType.PROCESS_MULTI;
+            default -> ScriptEngine.process(session, message);
 
-            // Find the PRESENT_MULTI node paired with the current PROCESS_MULTI. It should be two slots prior in the list.
-            // This will be Node we swap in as the target of the
-            Node convoToContinue = findPairedPrecursor(session.getEvaluatedNodes(), processStateNode.node());
-            assert convoToContinue != null;
-
-            assert changeTopicPresentNode.edges().size() == 1; // Just the connecting edge expected.
-
-            var changeTopicProcessNode = changeTopicPresentNode.edges().getFirst().targetNode();
-            assert changeTopicProcessNode.edges().size() >= 2;
-
-            LOG.info("Switching node '{}' found with edge: {}",
-                    changeTopicPresentNode.label(),
-                    changeTopicPresentNode.edges().getFirst());
-
-            // In this change topic node we're going to replace the target of one of the edges in the
-            //  PROCESS node with the current node.
-            Edge continueCurrent = changeTopicProcessNode.edges().removeLast();
-
-            changeTopicProcessNode.edges().addLast(continueCurrent.copyReplacing(convoToContinue));
-
-            LOG.info("Updated edges for ChangeTopicProcessNode: {}", changeTopicProcessNode.edges());
-
-            session.setCurrentNode(changeTopicPresentNode);  // FIXME some way to formalize the updating of the currentNode?
-            processStateNode = ScriptEngine.process(session, message);
-
-        }
+        };
 
         if (session.getCurrentNode() == null) {
             LOG.debug("Clearing completed session from cache: {}", session);
@@ -160,19 +130,107 @@ public class Operator implements SessionAwareMessageProcessor {
         return new BooleanSession(processStateNode.processState()!=ProcessState.ERROR, session);
     }
 
-    // Iterate backwards through evaluatedNodes and return the first node of type PRESENT_MULTI found prior to processNode.
-    private Node findPairedPrecursor(List<Node> evaluatedNodes, Node processNode) {
-        int index = evaluatedNodes.indexOf(processNode);
-        if (index <= 0) {
-            return null;
+    // A helper to standardize how message text is evaluated.
+    private String normalizedMessageText(Message message) {
+        return message.text().trim().toLowerCase();
+    }
+
+    /**
+     * Returns true if the message text matches exactly the set of stop words.
+     * @param txt a string that has been returned from normalizedMessageText
+     * @return true if there's a match, false otherwise.
+     */
+    private boolean isOptOutRequest(String txt) {
+        for (int i = 0; i < STOP_WORDS.length; i++) {
+            if (STOP_WORDS[i].equals(txt)) {
+                return true;
+            }
+        }
+        return false;
+    }
+
+    private boolean isChangeTopicRequest(String txt) {
+        return "change topic".equals(txt);
+    }
+
+    ProcessStateNode handleOptOut(Session session, Message message) {
+        // Replace the currentNode with one of type OPT_OUT. Should this be a constant value? Pulled from the database?
+        var optOutNode = new Node("Okay, You're now opted out of messages from Brbl.", NodeType.OPT_OUT);
+        optOutNode.edges().add(new Edge(null));
+        session.setCurrentNode(optOutNode);
+
+        final var processStateNode = ScriptEngine.process(session, message);
+        boolean processOk = ProcessState.ERROR != processStateNode.processState();
+        if (!processOk) {
+            LOG.error("handleOptOut: Failed to process message: {}", message);
+        }
+        // FIXME Not sure how to handle failures in the processing (above) or the status update (below)
+
+        // Update the user record status to UserStatus.OUT.
+        boolean updateOk = persistenceManager.updateUserStatus(session.getUser(), message.platform(), UserStatus.OUT);
+        if (!updateOk) {
+            LOG.error("handleOptOut: Failed to set user status to OUT. User: {}", session.getUser());
         }
 
-        for (int i = index - 1; i >= 0; i--) {
+        return new ProcessStateNode((processOk && updateOk) ? ProcessState.OK : ProcessState.ERROR, processStateNode.node());
+    }
+
+    ProcessStateNode handleChangeTopic(Session session, Message message, SessionKey sessionKey) {
+        // Grab the conversation that is configured for the route.
+        var interruptConversationNode = findInterruptConversationByRoute(sessionKey);
+        if (interruptConversationNode == null) {
+            // This signals a VERY BAD configuration issue.
+            LOG.error("Failed to find the change topic script for {}", sessionKey);
+            return new ProcessStateNode(ProcessState.ERROR, null);
+        }
+
+        //assert changeTopicPresentNode.type() == NodeType.PRESENT_MULTI;
+        //assert changeTopicPresentNode.edges().getFirst().targetNode().type() == NodeType.PROCESS_MULTI;
+
+        // Find the PRESENT_MULTI node that immediately preceded with the current PROCESS_MULTI.
+        // It should be two slots prior in the list.
+        // This will be Node we swap in as the target of the "no, continue" option.
+        Node convoToContinue = findPairedPrecursor(session.getEvaluatedNodes(), session.getCurrentNode());
+        assert convoToContinue != null;
+
+        assert interruptConversationNode.edges().size() == 1; // Just the connecting edge expected.
+
+        var changeTopicProcessNode = interruptConversationNode.edges().getFirst().targetNode();
+        assert changeTopicProcessNode.edges().size() >= 2;
+
+        LOG.info("Switching node '{}' found with edge: {}",
+                interruptConversationNode.label(),
+                interruptConversationNode.edges().getFirst());
+
+        // In this change topic node we're going to replace the target of one of the edges in the
+        //  PROCESS node with the current node.
+        Edge continueCurrent = changeTopicProcessNode.edges().removeLast();
+
+        changeTopicProcessNode.edges().addLast(continueCurrent.copyReplacing(convoToContinue));
+
+        LOG.info("Updated edges for ChangeTopicProcessNode: {}", changeTopicProcessNode.edges());
+
+        session.setCurrentNode(interruptConversationNode);
+
+        return ScriptEngine.process(session, message);
+
+    }
+
+    // Note: Only NodeTypes where isAwaitInput==true make sense here because only when waiting for user input can a CHANGE TOPIC
+    // or STOP message be received.
+    private Node findPairedPrecursor(List<Node> evaluatedNodes, Node processNode) {
+        for (int i = evaluatedNodes.size() - 1; i >= 0; i--) {
             Node node = evaluatedNodes.get(i);
-            if (NodeType.PRESENT_MULTI.equals(node.type())) {
+            if (processNode.type().equals(NodeType.PROCESS_MULTI) && NodeType.PRESENT_MULTI.equals(node.type())) {
+                LOG.info("Found paired Precursor for PROCESS_MULTI node: {}", node);
+                return node;
+            }
+            if (processNode.type().equals(NodeType.PROCESS_INPUT) && NodeType.REQUEST_INPUT.equals(node.type())) {
+                LOG.info("Found paired Precursor for PROCESS_INPUT node: {}", node);
                 return node;
             }
         }
+
         return null;
     }
 
@@ -180,13 +238,6 @@ public class Operator implements SessionAwareMessageProcessor {
     public boolean log(Session session, Message message) {
         return persistenceManager.insertProcessedMO(message, session);
     }
-
-    /*
-     * Check for an active Session without triggering the builder method.
-     */
-//    public @Nullable Session getActiveSession(SessionKey sessionKey) {
-//        return sessionCache.getIfPresent(sessionKey);
-//    }
 
     /**
      * Builder method used with the LoadingCache.
@@ -202,6 +253,8 @@ public class Operator implements SessionAwareMessageProcessor {
             Supplier<User> suppliedUser = scope.fork(()  -> userCache.get(sessionKey));
             Supplier<Node> keywordScript = scope.fork(() -> scriptByKeywordCache.get(KeywordCacheKey.newKey(sessionKey)));
             Supplier<Node> defaultScript = scope.fork(() -> findDefaultScriptByRoute(sessionKey));
+            // Also look up the route specific OPT-IN script?
+            // ...
 
             scope.join().throwIfFailed(); // TODO consider using joinUntil() to enforce a collective timeout.
 
@@ -230,7 +283,8 @@ public class Operator implements SessionAwareMessageProcessor {
             final Instant userCreatedAt = user.platformCreationTimes().get(sessionKey.platform());
             try {
                 if (start.isBefore(userCreatedAt) || start.equals(userCreatedAt) || null == (session = persistenceManager.loadSession(user.groupId()))) {
-                    // brand new
+                    // brand-new user needs to have the OPT-IN notification run first, followed by whatever script is normally expected.
+
                     LOG.info("Creating new Session for user {}", suppliedUser.get().groupId());
                     return new Session(
                             randomUUID(),
@@ -258,6 +312,11 @@ public class Operator implements SessionAwareMessageProcessor {
         return queueProducer;
     }
 
+    /**
+     * How do we denote a new user vs an existing one?
+     * @param sessionKey
+     * @return
+     */
     @Nullable User findOrCreateUser(@NonNull SessionKey sessionKey) {
         User user = persistenceManager.getUser(sessionKey);
         if (user == null) {
@@ -366,20 +425,10 @@ public class Operator implements SessionAwareMessageProcessor {
 
     /*
      * Loops through the routes looking for one that matches the provided platform and channel.
-     * NB: For (even not so) small numbers of elements, looping is faster that using a map.
+     *  NB: For (even not so) small numbers of elements, looping is faster that using a map.
      */
     @Nullable Node findDefaultScriptByRoute(SessionKey sessionKey) {
-        //final Route[] routes = activeRoutesCache.get(ALL);
-        //if (routes != null) {
-        //    for (Route route : routes) {
-        //        if (route.platform() == sessionKey.platform() && route.channel().equals(sessionKey.to())) {
-        //            LOG.info("Found
-        //            default script for route: {}", route);
-        //            return scriptCache.get(route.default_node_id());
-        //        }
-        //    }
-        //}
-        Route route = findRoute(sessionKey);
+        var route = findRoute(sessionKey);
         if (route != null) {
             return scriptCache.get(route.defaultNodeId());
         } else {
@@ -387,34 +436,40 @@ public class Operator implements SessionAwareMessageProcessor {
         }
     }
 
-
-    Node findInterruptConversationByRoute(SessionKey sessionKey) {
-        LOG.info("Finding interrupt convo node for route channel: {}", sessionKey.to());
-        Route route = findRoute(sessionKey); // no null check required; we couldn't have made it this far if it didn't exist
-        if (route == null) {
-            LOG.error("findInterruptConversationByRoute: failed to find Route data for channel {}:{}.", sessionKey.platform(), sessionKey.to());
-            return null;
+    @Nullable Node findOptInScriptByRoute(SessionKey sessionKey) {
+        var route = findRoute(sessionKey);
+        if (route != null) {
+            return scriptCache.get(route.defaultNodeId());
         } else {
-            LOG.info("findInterruptConversationByRoute: found route: {}", route);
-            return scriptCache.get(route.interruptNodeId());
+            return null;
         }
     }
 
+    Node findInterruptConversationByRoute(SessionKey sessionKey) {
+        LOG.info("Finding interrupt convo node for route channel: {}", sessionKey.to());
+        var route = findRoute(sessionKey); // no null check required; we couldn't have made it this far if it didn't exist
+        if (route != null) {
+            LOG.info("findInterruptConversationByRoute: found route: {}", route);
+            return scriptCache.get(route.interruptNodeId());
+        } else {
+            LOG.error("findInterruptConversationByRoute: failed to find Route data for channel {}:{}.", sessionKey.platform(), sessionKey.to());
+            return null;
+        }
+    }
 
     @Nullable UUID findOwningCompanyIdByRouteChannel(SessionKey sessionKey) {
-        Route route = findRoute(sessionKey);
+        var route = findRoute(sessionKey);
         if (route != null) {
+            LOG.info("findOwningCompanyIdByRouteChannel: found route: {}", route);
             return route.companyId();
         } else { // If this is null we have a MAJOR configuration error. Routes without an owner cannot exist!
+            LOG.error("findOwningCompanyIdByRouteChannel: failed to find Route data for sessionKey:{}.", sessionKey);
             return null;
         }
     }
 
     @Nullable Route findRoute(SessionKey sessionKey) {
-        final Route[] routes = activeRoutesCache.get(ALL);
-        for (int i = 0; i < routes.length; i++) {
-            LOG.info("cached route: {}", routes[i].channel() );
-        }
+        final var routes = activeRoutesCache.get(ALL);
         if (routes != null) {
             for (Route route : routes) {
                 if (route.platform() == sessionKey.platform() && route.channel().equals(sessionKey.to())) {
@@ -425,13 +480,13 @@ public class Operator implements SessionAwareMessageProcessor {
         return null;
     }
 
-//    private Map<Platform, String> defaultPlatformIdMap(String from) {
-//        return Map.of(defaultPlatform, from);
-//    }
+    //    private Map<Platform, String> defaultPlatformIdMap(String from) {
+    //        return Map.of(defaultPlatform, from);
+    //    }
 
-//    private Map<Platform, Instant> defaultPlatformTimeCreatedMap(Instant createdAt) {
-//        return Map.of(defaultPlatform, createdAt);
-//    }
+    //    private Map<Platform, Instant> defaultPlatformTimeCreatedMap(Instant createdAt) {
+    //        return Map.of(defaultPlatform, createdAt);
+    //    }
 
     private Map<Platform, UserStatus> defaultPlatformStatusMap(UserStatus userStatus) {
         return Map.of(defaultPlatform, userStatus);
