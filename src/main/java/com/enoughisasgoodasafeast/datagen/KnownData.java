@@ -139,8 +139,10 @@ public class KnownData {
             {"019e7f2a-9e20-719d-b432-0f17f5d0b45c", "TopicSelection", "Presents the list of topics a user can choose from"},
     };
 
+    // IMPORTANT: This needs to be updated whenever new schemas are added to the Brbl platform.
     public static String[] APPLICATION_SCHEMAS = {
             "brbl_biz",
+            "brbl_history",
             "brbl_logic",
             "brbl_logs",
             "brbl_users"

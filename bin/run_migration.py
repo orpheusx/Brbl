@@ -104,6 +104,7 @@ def main():
     # 1. Run pgroll start.
     print("\n--- Running pgroll start ---")
     pgroll_start_command = ["pgroll", "start", yaml_file_path, "--schema", source_schema, "--verbose"]
+    print(f"DEBUG: Command: {pgroll_start_command}")
     run_command(pgroll_start_command)
 
     # 2. Run pgroll latest schema and capture output
@@ -133,7 +134,9 @@ def main():
                 break
 
         if not new_search_path:
-            print("Error: Could not find UPDATED CURRENT_SCHEMAS in RoleMigrator output.")
+            print("ERROR: run_command output:")
+            print(f"ERROR: {output}")
+            print("ERROR: Could not find UPDATED CURRENT_SCHEMAS in RoleMigrator output.")
             sys.exit(1)
 
         print(f"\tUpdated search_path: {new_search_path}")

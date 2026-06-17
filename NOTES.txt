@@ -5704,6 +5704,8 @@ TODO
         _ Any changes made to the brbl_logic.delivery_status enum type re: previous to-do.
         _ Drop the num_type column from the nodes table.
 
+==== 2026/06/15 ====
+
 Impl of OPT-IN
     For text-to-opt-in where the user initiates contact via SMS (or other platform.) If they do this the first message should explain what they can expect in terms of topics, frequency, additional options, and how to OPT-OUT.
     Double opt-in refers to the user signing up on a webform or via email. It should trigger a message sent to the user to confirm that the phone number is theirs and that they want to be opted in. The UserStatus.KNOWN state should be the initial state for such users.
@@ -5711,9 +5713,47 @@ Impl of OPT-IN
     The question of scope is, as in other cases, the real concern. How do we provide the needed script and allow it to be overridden intelligently?
     This is another case where we seem to need to lookup a node graph by factors beyond keyword, channel, and channel owner's customer_id.
     The route encapsulates the channel and the customer_id and, via the brblAdmin application, can
-    We already have the route's default_script_id (for when there are no applicable keywords) and the interrupt_script_id (so we can provide different scripts depending on the channel.) Should we just add another id for an OPT-IN script?
+    We already have the route's default_script_id (for when there are no applicable keywords) and the interrupt_script_id (so we can provide different scripts depending on the channel.) Should we just add another id for an OPT-IN script? This could also be where the OPT-OUT script is pulled from...
     Seems reasonable but what if they're opting in via a keyword? (This feels like a common case.) How would it differ for existing users?
 
-    New User: lookup OPT-IN *notification* script, lookup keyword script, chain the latter to the end of the former, use the result.
-    Existing User: lookup keyword script, use it directly.
+        New User --> lookup OPT-IN *notification* script, lookup keyword script, chain the latter to the end of the former, use the result.
+        Existing User --> lookup keyword script, use it directly.
+
+==== 2026/06/16 ====
+
+Been letting the ideas soak for a bit. Adding opt-in and opt-out columns to routes table still seems like a reasonable approach. So let's go...
+TODO
+    _ Drop the num_type column from the nodes table.
+    _ Add opt-in and opt-out columns to routes table
+    _ Update route fetching query and implement the
+
+Created two migration scripts for pgroll.
+
+Had to add values to node_type in the brbl_logic schema:
+    brbl_db_dev=# ALTER TYPE node_type ADD VALUE 'OPT_IN';
+    brbl_db_dev=# ALTER TYPE node_type ADD VALUE 'OPT_OUT';
+
+Then added a placeholder node for the default OPT_OUT:
+    brbl_db_dev=> \copy brbl_logic.nodes FROM 'nodes_stop.tsv' WITH (FORMAT csv, HEADER true, DELIMITER E'\t', NULL 'null');
+
+❯ ./bin/run_migration.py ddl/migrations/brbl_logic/0010_brbl_logic_add_opt_in_out_id.yaml
+
+pgroll latest schema --schema brbl_logic
+    returns brbl_logic_9
+
+When I start a migration, however, pgroll is trying to reuse an older schema name: brbl_logic_8.
+I'm not sure the number really matters as long as it doesn't collide with the others but I was expecting it to match what I provided in the version_schema field (i.e. 0010)
+
+After figuring out yet another bug in RoleMigrator, I got the migration to work. It did indeed use brbl_logic_8.
+Before "completing" the migration we end up with brbl_logic_8 and brbl_logic_9. They are correctly different.
+❯ pgroll complete schema --schema brbl_logic
+ SUCCESS  Migration successful!
+Now we just have brbl_logic_8.
+
+Discovered another lurking issuing while reviewing the results of the updated "currentSchemas" in our properties files.
+We only expect a single schema's worth of changes per execution of run_migration.py.
+We had previously updated brbl_logs such that the latest pgroll schema is brbl_logs_2.
+When we update the currentSchemas property of our JDBC url it will only replace the schema being modified, not any previous changes.
+
+--> Need to run the `pgroll latest schema --schema [x]` for each of our base schemas to avoid this problem.
 

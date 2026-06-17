@@ -1,12 +1,12 @@
 package com.enoughisasgoodasafeast.migration;
 
 import com.enoughisasgoodasafeast.ConfigLoader;
-import com.enoughisasgoodasafeast.datagen.KnownData;
 import com.mchange.v2.c3p0.ComboPooledDataSource;
 
 import java.beans.PropertyVetoException;
-import java.io.IO;
+import java.io.BufferedReader;
 import java.io.IOException;
+import java.io.InputStreamReader;
 import java.sql.ResultSet;
 import java.sql.SQLException;
 import java.util.*;
@@ -131,6 +131,43 @@ public class RoleMigrator {
         return true;
     }
 
+    List<String> findLatestMigrationSchemaByBase(List<String> schemaNames) {
+        // Assumes pgroll in available from the current PATH
+        var migrationSchemas = new ArrayList<String>();
+
+        for (String schemaName : schemaNames) {
+            ProcessBuilder pb = new ProcessBuilder("pgroll", "latest", "schema", "--schema", schemaName);
+
+            pb.redirectErrorStream(true);
+            try {
+                Process process = pb.start();
+                String migrationSchema;
+
+                try (BufferedReader reader = new BufferedReader(new InputStreamReader(process.getInputStream()))) {
+                     migrationSchema = reader.readLine();
+                }
+
+                if (process.waitFor() == 0) {
+                    if(migrationSchema==null) {
+                        println("ERROR: pgroll returned w/out error but without a migration schema for " + schemaName);
+                    } else {
+                        migrationSchemas.add(migrationSchema.trim());
+                    }
+
+                } else {
+                    // no migration schema available, so just use the base schema name
+                    migrationSchemas.add(schemaName);
+                }
+
+            } catch (IOException | InterruptedException e) {
+                System.err.println("Error executing pgroll status command: " + e.getMessage());
+                Thread.currentThread().interrupt(); // Restore interrupted status
+            }
+        }
+
+        return migrationSchemas;
+    }
+
     static void main(String[] args) throws IOException, SQLException {
         if(args.length < 2) {
             println("Usage: <originalSchema> <migrationSchema> [--dry-run]");
@@ -138,6 +175,8 @@ public class RoleMigrator {
         }
         String originalSchema = args[0].trim();
         String migrationSchema = args[1].trim();
+        println("OriginalSchema: " + originalSchema);
+        println("MigrationSchema: " + migrationSchema);
 
         //  if (Arrays.stream(KnownData.APPLICATION_SCHEMAS).noneMatch(originalSchema::equals)) {
         //      println("Error: originalSchema '" + originalSchema + "' is not a supported application schema.");
@@ -154,24 +193,22 @@ public class RoleMigrator {
         println(grants);
 
         if (grants.isEmpty()) {
-            IO.print("ERROR: No grants to execute.");
+            println("ERROR: No grants to execute.");
             System.exit(1);
         } else {
             boolean ok = rm.executeGrants(grants);
             println("Grants executed: " + (ok ? "OK" : "FAIL"));
-            System.exit(ok ? 0 : 1);
-        }
-
-        // Return the new list of application schemas (including the one that was newly migrated.)
-        List<String> currentSchemas = new ArrayList<>(APPLICATION_SCHEMAS.length);
-        Collections.addAll(currentSchemas, APPLICATION_SCHEMAS);
-        for (int i = 0; i < currentSchemas.size(); i++) {
-            if(currentSchemas.get(i).equals(originalSchema)) {
-                currentSchemas.set(i, migrationSchema);
-                break;
+            if(!ok) {
+                println("ERROR: Failed to execute grants. Exiting...");
             }
         }
 
-        System.out.println("\n" + OUTPUT_PREFIX + String.join(",", currentSchemas));
+        // Return the new list of application schemas (including the one that was newly migrated.)
+        List<String> baseSchemas = new ArrayList<>(APPLICATION_SCHEMAS.length);
+        Collections.addAll(baseSchemas, APPLICATION_SCHEMAS);
+
+        List<String> currentSchemas = rm.findLatestMigrationSchemaByBase(baseSchemas);
+
+        println("\n" + OUTPUT_PREFIX + String.join(",", currentSchemas));
     }
 }

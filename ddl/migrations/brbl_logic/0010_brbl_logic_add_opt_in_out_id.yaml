@@ -1,0 +1,32 @@
+version_schema: 0010
+operations:
+  - add_column:
+      table: routes
+      up: "'019eb72e-2364-7d6c-a841-a3e23ef57520'::uuid"
+      column:
+        name: opt_in_script_id
+        type: uuid
+        comment: The script used when new users arrive on this route's channel
+        nullable: false
+        unique: false
+        pk: false
+        references:
+          name: fk_routes_opt_in_script_id_scripts
+          table: scripts
+          column: id
+          on_delete: RESTRICT
+  - add_column:
+      table: routes
+      up: "'019ed08f-a040-74d4-8803-2ef2536eb865'::uuid"
+      column:
+        name: opt_out_script_id
+        type: uuid
+        comment: The script used when users decide to leave this route's channel
+        nullable: false
+        unique: false
+        pk: false
+        references:
+          name: fk_routes_opt_out_script_id_scripts
+          table: scripts
+          column: id
+          on_delete: RESTRICT
