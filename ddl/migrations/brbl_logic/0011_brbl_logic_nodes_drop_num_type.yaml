@@ -1,0 +1,6 @@
+version_schema: 0011
+operations:
+  - drop_column:
+      table: nodes
+      column: num_type
+      down: num_type

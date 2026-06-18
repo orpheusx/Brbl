@@ -5755,5 +5755,37 @@ We only expect a single schema's worth of changes per execution of run_migration
 We had previously updated brbl_logs such that the latest pgroll schema is brbl_logs_2.
 When we update the currentSchemas property of our JDBC url it will only replace the schema being modified, not any previous changes.
 
+
 --> Need to run the `pgroll latest schema --schema [x]` for each of our base schemas to avoid this problem.
+
+The other thing I noticed about the migrations tables that pgroll maintains is that the new schema I created--brbl_history--just showed up without my having created a baseline. Re-reading the docs, the baseline is only required when there's an pre-existing schema that you want pgroll to manage.
+The other use case for baseline is, per the docs, when I "want to consolidate a long migration history into a clean starting point."
+
+Pushed the schema updates without the matching code to make use of the new columns.
+Create another schema that just drops the num_type from the nodes table. Even more strangely than the reuse of brbl_logic_8 above, this migration didn't create a new schema; it also reused brbl_logic_8.
+The RoleMigrator program declared the new search_path: brbl_biz,brbl_history,brbl_logic_8,brbl_logs_2,brbl_users
+Because of this we didn't need to update any of the database configuration.
+However, after `pgroll complete schema --schema brbl_logic` the migration schema for logic was removed. This def doesn't seem correct.
+
+I posted a bug on https://github.com/xataio/pgroll/issues/1041 but got zero replies until I tagged it with @dosubot.
+Then I got a response from the impressively good Dosu agent.
+
+It seems that the library pgroll uses to parse version_schema interprets unquoted numeric strings as being written in octal if they start with zero. The string 0010, in octal, is 8. This is "not a bug" because the YAML 1.1 spec defines this as the appropriate behavior.
+
+0006 --> octal: 6
+0007 --> octal: 7
+0008 --> decimal: 8 (because only 0-7 are legit for octal)
+0009 --> decimal: 9 (because only 0-7 are legit for octal)
+0010 --> octal: 8
+
+The avoid this without changing our numbering convention or switching to the JSON format we can simply quote the value: version_schema: "0010"
+
+Dosu suggested the following to see how pgroll saw the version numbers.
+SELECT
+    name, migration->>'version_schema' as version_schema, parent, done
+FROM pgroll.migrations
+WHERE schema = 'brbl_logic'
+ORDER BY name;
+
+Note: the migration column uses the jsonb data type thus the use of the "->>" operator to extract the named field.
 
