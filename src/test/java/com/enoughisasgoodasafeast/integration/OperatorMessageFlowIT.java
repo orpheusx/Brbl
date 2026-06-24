@@ -1,6 +1,9 @@
 package com.enoughisasgoodasafeast.integration;
 
-import com.enoughisasgoodasafeast.*;
+import com.enoughisasgoodasafeast.InMemoryQueueProducer;
+import com.enoughisasgoodasafeast.Message;
+import com.enoughisasgoodasafeast.QueueProducer;
+import com.enoughisasgoodasafeast.RabbitQueueProducer;
 import com.enoughisasgoodasafeast.operator.Operator;
 import com.enoughisasgoodasafeast.operator.PersistenceManager.PersistenceManagerException;
 import com.enoughisasgoodasafeast.operator.TestingPersistenceManager;

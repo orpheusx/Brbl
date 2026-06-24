@@ -5,8 +5,8 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import static com.enoughisasgoodasafeast.Message.newMTfromMO;
-import static com.enoughisasgoodasafeast.operator.Functions.*;
 import static com.enoughisasgoodasafeast.operator.Functions.advanceToFirstAndOnly;
+import static com.enoughisasgoodasafeast.operator.Functions.renderForPlatform;
 
 public class SendMessage {
 

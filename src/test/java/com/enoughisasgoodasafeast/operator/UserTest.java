@@ -8,7 +8,8 @@ import java.util.*;
 
 import static com.enoughisasgoodasafeast.Functions.randomUUID;
 import static com.enoughisasgoodasafeast.operator.LanguageCode.*;
-import static org.junit.jupiter.api.Assertions.*;
+import static org.junit.jupiter.api.Assertions.assertThrows;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 
 public class UserTest {
 

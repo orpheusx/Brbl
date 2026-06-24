@@ -5,9 +5,7 @@ import com.enoughisasgoodasafeast.operator.Operator;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
-import java.io.IOException;
 import java.util.Arrays;
-import java.util.concurrent.TimeoutException;
 
 /**
  * Rather than building separate binaries for each of the main programs (and likewise building a separate container for

@@ -1,6 +1,5 @@
 package com.enoughisasgoodasafeast.operator;
 
-import io.jenetics.util.NanoClock;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -8,6 +7,8 @@ import java.time.Instant;
 import java.util.ArrayList;
 import java.util.StringJoiner;
 import java.util.UUID;
+
+import static java.time.Instant.now;
 
 /**
  * A summary of the push operation execution.
@@ -55,7 +56,7 @@ public class PushReport {
 
 
     public PushReport(UUID campaignId) {
-        this.startPush = NanoClock.utcInstant();
+        this.startPush = now();
         this.campaignId = campaignId;
     }
 
@@ -122,7 +123,7 @@ public class PushReport {
     }
 
     public void end() {
-        this.endPush = NanoClock.utcInstant();
+        this.endPush = now();
     }
 
     @Override

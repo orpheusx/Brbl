@@ -5,7 +5,7 @@ import java.util.StringJoiner;
 import java.util.UUID;
 
 import static com.enoughisasgoodasafeast.Functions.randomUUID;
-import static io.jenetics.util.NanoClock.utcInstant;
+import static java.time.Instant.now;
 
 public class EdgeRow implements BrblRow {
     //id            | uuid
@@ -38,7 +38,7 @@ public class EdgeRow implements BrblRow {
     public EdgeRow(String responseText) {
         responseText = responseText.replace("'", "''");
         this.id = randomUUID();
-        this.createdAt = utcInstant();
+        this.createdAt = now();
         this.matchText = responseText.substring(0, Math.min(responseText.length(), 10));
         this.responseText = responseText;
         this.updatedAt = this.createdAt;

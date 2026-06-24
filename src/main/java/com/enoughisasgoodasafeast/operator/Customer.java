@@ -3,7 +3,7 @@ package com.enoughisasgoodasafeast.operator;
 import java.util.UUID;
 
 import static com.enoughisasgoodasafeast.Functions.randomUUID;
-import static com.enoughisasgoodasafeast.SharedConstants.*;
+import static com.enoughisasgoodasafeast.SharedConstants.NO_COMPANY;
 
 /**
  * A Customer represents a registered, paying user of Brbl.

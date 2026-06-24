@@ -1,18 +1,18 @@
 package com.enoughisasgoodasafeast.datagen;
 
-import java.time.Instant;
-import java.util.StringJoiner;
-import java.util.UUID;
-
 import com.enoughisasgoodasafeast.operator.CountryCode;
 import com.enoughisasgoodasafeast.operator.LanguageCode;
 import com.enoughisasgoodasafeast.operator.Platform;
 import com.enoughisasgoodasafeast.operator.UserStatus;
 import org.jeasy.random.annotation.Randomizer;
-import org.jeasy.random.randomizers.*;
+import org.jeasy.random.randomizers.PhoneNumberRandomizer;
+
+import java.time.Instant;
+import java.util.StringJoiner;
+import java.util.UUID;
 
 import static com.enoughisasgoodasafeast.Functions.randomUUID;
-import static io.jenetics.util.NanoClock.*;
+import static java.time.Instant.now;
 
 /**
  * A class used with EasyRandom to generate records for the USERS table.
@@ -69,11 +69,11 @@ public class UserRow {
     }
 
     public UserRow withIdPlatform(Platform platform) {
-        return new UserRow(randomUUID(), platform, this.platformId, this.countryCode, this.languageCode, this.nickname, this.userStatus, utcInstant(), utcInstant());
+        return new UserRow(randomUUID(), platform, this.platformId, this.countryCode, this.languageCode, this.nickname, this.userStatus, now(), now());
     }
 
     public UserRow withIdPlatform(String uuid, Platform platform) {
-        return new UserRow(UUID.fromString(uuid), platform, platformId, this.countryCode, this.languageCode, this.nickname, this.userStatus, utcInstant(), utcInstant());
+        return new UserRow(UUID.fromString(uuid), platform, platformId, this.countryCode, this.languageCode, this.nickname, this.userStatus, now(), now());
     }
 
     public String[] headers() {

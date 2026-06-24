@@ -1,10 +1,10 @@
-id	created_at	text	num_type	label	updated_at	type
-89eddcb8-7fe5-4cd1-b18b-78858f0789fb	2025-05-16 03:11:54.752604 +00:00	What is your favorite color? 1) red 2) blue 3) flort	3	ColorQuiz	2025-05-16 03:11:54.752604 +00:00	PRESENT_MULTI
-0b2861b6-a16a-4197-910a-158610967dd9	2025-05-17 23:09:08.262802 +00:00	Which is the best third Stooge: 1) Shemp, 2) Curly or 3) Iggy	3	StoogeQuiz	2025-05-17 23:09:08.262802 +00:00	PRESENT_MULTI
-385a1f99-d844-42e6-9fa3-a0e3a116757d	2025-05-17 22:57:47.352533 +00:00	What is your fave utensil: 1) fork, 2) knife or 3) spoon	3	UtensilQuiz	2025-05-17 22:57:47.352533 +00:00	PRESENT_MULTI
-b48d36ce-2512-4ee0-a9b9-b743d72e95e9	2025-05-17 22:44:52.150316 +00:00	What is your fave shape: 1) triangle, 2) square or 3) circle	3	ShapeQuiz	2025-05-17 22:44:52.150316 +00:00	PRESENT_MULTI
-95441b9a-3636-4f45-bd0a-ec35e84dd5f7	2025-05-30 14:13:10.468380 +00:00	Sorry, that's not one of the color choices. Try again?	4	ColorQuizProcess	2025-05-30 14:13:10.468380 +00:00	PROCESS_MULTI
-3f467ee3-4874-4ad1-82b1-99be06f575ab	2025-05-30 14:17:10.577950 +00:00	Uh, that's not one of the Stooges. Try again?	4	StoogeQuiz_Process	2025-05-30 14:17:10.577950 +00:00	PROCESS_MULTI
-1bda7846-31b4-4983-92ec-161eba46c758	2025-05-30 14:17:48.939489 +00:00	Sorry, that's not one of the choices. Try again?	4	UtensilQuiz_Process	2025-05-30 14:17:48.939489 +00:00	PROCESS_MULTI
-23f00a69-55b7-4c29-b777-5c278b7088ed	2025-05-30 14:18:06.414058 +00:00	Please select one of the shapes listed.	4	ShapeQuiz_Process	2025-05-30 14:18:06.414058 +00:00	PROCESS_MULTI
-f9420f0c-81ca-4f9a-b1d4-7e25fd280399	2025-05-16 03:11:58.523965 +00:00	Thanks for chatting. Bye.	5	EndOfConversation	2025-05-16 03:11:58.523965 +00:00	END_OF_CHAT
+id	created_at	text	label	updated_at	type
+89eddcb8-7fe5-4cd1-b18b-78858f0789fb	2025-05-16 03:11:54.752604 +00:00	What is your favorite color? 1) red 2) blue 3) flort	ColorQuiz	2025-05-16 03:11:54.752604 +00:00	PRESENT_MULTI
+0b2861b6-a16a-4197-910a-158610967dd9	2025-05-17 23:09:08.262802 +00:00	Which is the best third Stooge: 1) Shemp, 2) Curly or 3) Iggy	StoogeQuiz	2025-05-17 23:09:08.262802 +00:00	PRESENT_MULTI
+385a1f99-d844-42e6-9fa3-a0e3a116757d	2025-05-17 22:57:47.352533 +00:00	What is your fave utensil: 1) fork, 2) knife or 3) spoon	UtensilQuiz	2025-05-17 22:57:47.352533 +00:00	PRESENT_MULTI
+b48d36ce-2512-4ee0-a9b9-b743d72e95e9	2025-05-17 22:44:52.150316 +00:00	What is your fave shape: 1) triangle, 2) square or 3) circle	ShapeQuiz	2025-05-17 22:44:52.150316 +00:00	PRESENT_MULTI
+95441b9a-3636-4f45-bd0a-ec35e84dd5f7	2025-05-30 14:13:10.468380 +00:00	Sorry, that's not one of the color choices. Try again?	ColorQuizProcess	2025-05-30 14:13:10.468380 +00:00	PROCESS_MULTI
+3f467ee3-4874-4ad1-82b1-99be06f575ab	2025-05-30 14:17:10.577950 +00:00	Uh, that's not one of the Stooges. Try again?	StoogeQuiz_Process	2025-05-30 14:17:10.577950 +00:00	PROCESS_MULTI
+1bda7846-31b4-4983-92ec-161eba46c758	2025-05-30 14:17:48.939489 +00:00	Sorry, that's not one of the choices. Try again?	UtensilQuiz_Process	2025-05-30 14:17:48.939489 +00:00	PROCESS_MULTI
+23f00a69-55b7-4c29-b777-5c278b7088ed	2025-05-30 14:18:06.414058 +00:00	Please select one of the shapes listed.	ShapeQuiz_Process	2025-05-30 14:18:06.414058 +00:00	PROCESS_MULTI
+f9420f0c-81ca-4f9a-b1d4-7e25fd280399	2025-05-16 03:11:58.523965 +00:00	Thanks for chatting. Bye.	EndOfConversation	2025-05-16 03:11:58.523965 +00:00	END_OF_CHAT

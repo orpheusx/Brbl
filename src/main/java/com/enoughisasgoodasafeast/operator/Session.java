@@ -11,7 +11,7 @@ import java.io.Serializable;
 import java.time.Instant;
 import java.util.*;
 
-import static io.jenetics.util.NanoClock.utcInstant;
+import static java.time.Instant.now;
 
 /**
  * The Session tracks and persists state for a single User interaction with Brbl's runtime.
@@ -27,7 +27,7 @@ public class Session implements ScriptContext, Serializable {
     @Serial
     private static final long serialVersionUID = 1L;
 
-    private final Instant startTimeNanos;
+    private final Instant startTimeMicros;
     private final UUID id;
     private final User user;
 
@@ -50,7 +50,7 @@ public class Session implements ScriptContext, Serializable {
     };
     private final List<Node> evaluatedNodes = new ArrayList<>(); // TODO make this a stack instead?
 
-    private Instant lastUpdatedNanos;
+    private Instant lastUpdatedMicros;
 
     /**
      * Creates a new, fully configured Session object.
@@ -62,14 +62,15 @@ public class Session implements ScriptContext, Serializable {
      * @param persistenceManager the object that writes artifacts created for this Session
      */
     public Session(@NonNull UUID id, Node currentNode, User user, QueueProducer producer, PersistenceManager persistenceManager) {
-        this.startTimeNanos = utcInstant();
-        this.lastUpdatedNanos = startTimeNanos;
+        this.startTimeMicros = now();
+        this.lastUpdatedMicros = startTimeMicros;
 
         this.id = Objects.requireNonNull(id);
         this.currentNode = Objects.requireNonNull(currentNode);
         this.user = Objects.requireNonNull(user);
         this.producer = Objects.requireNonNull(producer);
         this.persistenceManager = persistenceManager;
+
         LOG.debug("Created Session {} for User {}", id, user.platformIds());
     }
 
@@ -192,16 +193,16 @@ public class Session implements ScriptContext, Serializable {
         return id;
     }
 
-    public Instant getStartTimeNanos() {
-        return startTimeNanos;
+    public Instant getStartTimeMicros() {
+        return startTimeMicros;
     }
 
-    public Instant getLastUpdatedNanos() {
-        return lastUpdatedNanos;
+    public Instant getLastUpdatedMicros() {
+        return lastUpdatedMicros;
     }
 
     public void sessionUpdated() {
-        lastUpdatedNanos = utcInstant();
+        lastUpdatedMicros = now();
     }
 
     public User getUser() {
@@ -229,7 +230,7 @@ public class Session implements ScriptContext, Serializable {
     @Override
     public String toString() {
         return new StringJoiner(", ", Session.class.getSimpleName() + "[", "]")
-                .add("startTimeNanos=" + startTimeNanos)
+                .add("startTimeMicros=" + startTimeMicros)
                 .add("id=" + id)
                 .add("user=" + user)
 
@@ -247,11 +248,11 @@ public class Session implements ScriptContext, Serializable {
     public boolean equals(Object o) {
         if (o == null || getClass() != o.getClass()) return false;
         Session session = (Session) o;
-        return Objects.equals(startTimeNanos, session.startTimeNanos) && Objects.equals(id, session.id) && Objects.equals(user, session.user) && Objects.equals(producer, session.producer) && Objects.equals(persistenceManager, session.persistenceManager) && Objects.equals(currentNode, session.currentNode) && Objects.equals(outputBuffer, session.outputBuffer) && Objects.equals(inputs, session.inputs) && Objects.equals(inputHistory, session.inputHistory) && Objects.equals(evaluatedNodes, session.evaluatedNodes) && Objects.equals(lastUpdatedNanos, session.lastUpdatedNanos);
+        return Objects.equals(startTimeMicros, session.startTimeMicros) && Objects.equals(id, session.id) && Objects.equals(user, session.user) && Objects.equals(producer, session.producer) && Objects.equals(persistenceManager, session.persistenceManager) && Objects.equals(currentNode, session.currentNode) && Objects.equals(outputBuffer, session.outputBuffer) && Objects.equals(inputs, session.inputs) && Objects.equals(inputHistory, session.inputHistory) && Objects.equals(evaluatedNodes, session.evaluatedNodes) && Objects.equals(lastUpdatedMicros, session.lastUpdatedMicros);
     }
 
     @Override
     public int hashCode() {
-        return Objects.hash(startTimeNanos, id, user, producer, persistenceManager, currentNode, outputBuffer, inputs, inputHistory, evaluatedNodes, lastUpdatedNanos);
+        return Objects.hash(startTimeMicros, id, user, producer, persistenceManager, currentNode, outputBuffer, inputs, inputHistory, evaluatedNodes, lastUpdatedMicros);
     }
 }

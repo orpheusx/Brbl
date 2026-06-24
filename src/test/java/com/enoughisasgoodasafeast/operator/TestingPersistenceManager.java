@@ -14,7 +14,6 @@ import java.util.*;
 import java.util.regex.Pattern;
 
 import static com.enoughisasgoodasafeast.Functions.randomUUID;
-import static io.jenetics.util.NanoClock.utcInstant;
 
 public class TestingPersistenceManager implements PersistenceManager {
 
@@ -26,7 +25,7 @@ public class TestingPersistenceManager implements PersistenceManager {
     public static final UUID CLAIMANT_ID = randomUUID();
 
     private final Map<Pattern, Keyword> keywordMap = new HashMap<>();
-    private final Map<UUID, Node> nodesByScriptId = new HashMap<>();
+    private final Map<UUID, Node> nodesById = new HashMap<>();
 
     private Route[] routes;
 
@@ -71,12 +70,12 @@ public class TestingPersistenceManager implements PersistenceManager {
     }
 
     void addScript(UUID scriptId, Node presentQuestion) {
-        nodesByScriptId.put(scriptId, presentQuestion);
+        nodesById.put(scriptId, presentQuestion);
     }
 
     @Override
     public Node getNodeGraph(UUID scriptId) {
-        return nodesByScriptId.get(scriptId);
+        return nodesById.get(scriptId);
     }
 
     @Override
@@ -110,7 +109,9 @@ public class TestingPersistenceManager implements PersistenceManager {
     public @Nullable Session loadSession(UUID id) throws PersistenceManagerException {
         final byte[] bytes = savedSessions.get(id);
         if(bytes == null) {
-            throw new PersistenceManagerException("No session data for id: " + id.toString());
+            LOG.error("Session {} not found.", id);
+//            throw new PersistenceManagerException("No session data for id: " + id.toString());
+            return null;
         }
         try {
             return SessionSerde.bytesToSession(bytes);
@@ -141,7 +142,7 @@ public class TestingPersistenceManager implements PersistenceManager {
         Map<Platform, String> platformNumbers = new HashMap<>();
         platformNumbers.put(Platform.SMS, USER_ID);
         Map<Platform, Instant> platformCreatedAt = new HashMap<>();
-        platformCreatedAt.put(Platform.SMS, utcInstant());
+        platformCreatedAt.put(Platform.SMS, Instant.now());
         Map<Platform, String> userNickNames = new LinkedHashMap<>();
         userNickNames.put(Platform.SMS, "Bozo");
         Map<Platform, UserStatus> userStatuses = new LinkedHashMap<>();

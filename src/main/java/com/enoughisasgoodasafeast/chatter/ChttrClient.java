@@ -1,7 +1,13 @@
 package com.enoughisasgoodasafeast.chatter;
 
-import com.enoughisasgoodasafeast.*;
-import com.enoughisasgoodasafeast.operator.*;
+import com.enoughisasgoodasafeast.ConfigLoader;
+import com.enoughisasgoodasafeast.HttpMOHandler;
+import com.enoughisasgoodasafeast.MOHandler;
+import com.enoughisasgoodasafeast.Message;
+import com.enoughisasgoodasafeast.operator.CampaignUser;
+import com.enoughisasgoodasafeast.operator.DeliveryStatus;
+import com.enoughisasgoodasafeast.operator.Platform;
+import com.enoughisasgoodasafeast.operator.PostgresPersistenceManager;
 import io.helidon.webserver.WebServer;
 import io.helidon.webserver.http.Handler;
 import io.helidon.webserver.http.ServerRequest;

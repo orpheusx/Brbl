@@ -3,6 +3,7 @@ package com.enoughisasgoodasafeast.operator;
 import com.enoughisasgoodasafeast.ConfigLoader;
 import com.enoughisasgoodasafeast.FakeQueueConsumer;
 import com.enoughisasgoodasafeast.InMemoryQueueProducer;
+import com.enoughisasgoodasafeast.QueueProducer;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.slf4j.Logger;
@@ -13,10 +14,8 @@ import java.util.Random;
 import java.util.SequencedSet;
 import java.util.UUID;
 
-import static com.enoughisasgoodasafeast.datagen.KnownData.knownRootNodeIds;
-import static com.enoughisasgoodasafeast.datagen.KnownData.knownRouteIdsAndChannels;
+import static com.enoughisasgoodasafeast.Functions.randomUUID;
 import static com.enoughisasgoodasafeast.datagen.KnownData.*;
-import static io.jenetics.util.NanoClock.*;
 import static org.junit.jupiter.api.Assertions.*;
 
 /**
@@ -28,13 +27,15 @@ class OperatorPersistenceIntegrationTest {
     private static final Logger LOG = LoggerFactory.getLogger(OperatorPersistenceIntegrationTest.class);
 
     private PersistenceManager pm;
+    private QueueProducer qp;
     private Operator op;
     private SessionKey sk;
 
     @BeforeEach
     void setUp() throws Exception {
         pm = PostgresPersistenceManager.createPersistenceManager(ConfigLoader.readConfig("persistence_manager_test.properties"));
-        op = new Operator(new FakeQueueConsumer(), new InMemoryQueueProducer(), pm);
+        qp = new InMemoryQueueProducer();
+        op = new Operator(new FakeQueueConsumer(), qp, pm);
         // user.platform_id, route.channel, keyword.pattern
         sk = new SessionKey(Platform.SMS, "13052020804", knownRouteIdsAndChannels[0][1], "keyword");
     }
@@ -176,6 +177,21 @@ class OperatorPersistenceIntegrationTest {
         assertNotNull(activeRoutes);
         assertEquals(knownRouteIdsAndChannels.length, activeRoutes.length);
         // LOG.info("Found expected {} active routes", activeRoutes.length);
+        for (Route activeRoute : activeRoutes) {
+            assertNotNull(activeRoute.optInNodeId());
+            assertNotNull(activeRoute.optOutNodeId());
+        }
+        var sk = new SessionKey(Platform.SMS, randomUserNumber(), knownRouteIdsAndChannels[0][1], "randomNonKeywordInput");
+        final var optInScriptIdByRoute = op.findOptInScriptIdByRoute(sk);
+        assertNotNull(optInScriptIdByRoute);
+        assertEquals(NodeType.SEND_MESSAGE, optInScriptIdByRoute.type());
+        assertTrue(optInScriptIdByRoute.text().contains("Welcome"));
+        assertTrue(optInScriptIdByRoute.text().contains("opt-out"));
+
+        final var optOutScriptIdByRoute = op.findOptOutScriptByRoute(sk);
+        assertNotNull(optOutScriptIdByRoute);
+        assertEquals(NodeType.OPT_OUT, optOutScriptIdByRoute.type());
+        assertTrue(optOutScriptIdByRoute.text().contains("opted out"));
     }
 
     @Test
@@ -196,7 +212,7 @@ class OperatorPersistenceIntegrationTest {
     @Test
     void findOrCreateUser() {
         // FIXME this test creates new users every time it runs.
-        Instant before = utcInstant();
+        Instant before = Instant.now();
         SessionKey unknown = new SessionKey(Platform.SMS, randomUserNumber(), knownRouteIdsAndChannels[0][1], "colour");
         final User createdUser = op.findOrCreateUser(unknown);
         assertNotNull(createdUser);
@@ -244,6 +260,34 @@ class OperatorPersistenceIntegrationTest {
         assertTrue(keywordsByPattern.entrySet().stream().anyMatch(entry -> {
             return entry.getValue().wordPattern().equals("foo"); // at least one of the keywords should be "foo"
         }));
+    }
+
+    @Test
+    void verifySessionTimestamps() {
+        try {
+            final var user = pm.getUser(
+                    new SessionKey(Platform.SMS, knownNumbersForUsers[0], knownRouteIdsAndChannels[0][1], "random keyword")
+            );
+            final var nodeId = UUID.fromString(knownRootNodeIds[0]);
+            final var node = pm.getNodeGraph(nodeId);
+
+            final var sessionId = randomUUID();
+            final var sessionToSave = new Session(sessionId, node, user, qp, pm);
+
+            final var savedGroupId = sessionToSave.getUser().groupId();
+            final var lastUpdatedNanos = sessionToSave.getLastUpdatedMicros();
+
+            LOG.info("Saving lastUpdatedNanos: {}", lastUpdatedNanos);
+            pm.saveSession(sessionToSave);
+
+            LOG.info("Current time {}", Instant.now());
+            final Session loadedSession = pm.loadSession(savedGroupId);
+            assertNotNull(loadedSession, "Failed to load session for group_id, " + savedGroupId);
+            assertEquals(lastUpdatedNanos, loadedSession.getLastUpdatedMicros());
+
+        } catch (PersistenceManager.PersistenceManagerException e) {
+            fail(e.getMessage());
+        }
     }
 
     static String randomUserNumber() {

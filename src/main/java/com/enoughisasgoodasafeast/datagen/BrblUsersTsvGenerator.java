@@ -11,16 +11,17 @@ import java.io.BufferedWriter;
 import java.io.IOException;
 import java.nio.file.Path;
 import java.time.LocalDate;
-import java.util.*;
+import java.util.ArrayList;
+import java.util.List;
+import java.util.Locale;
+import java.util.UUID;
 
 import static com.enoughisasgoodasafeast.datagen.Functions.adjustPlatformId;
-import com.enoughisasgoodasafeast.datagen.KnownData.*;
-
 import static com.enoughisasgoodasafeast.datagen.KnownData.*;
-import static com.enoughisasgoodasafeast.operator.CompanyStatus.*;
-import static com.enoughisasgoodasafeast.operator.CountryCode.*;
-import static com.enoughisasgoodasafeast.operator.Platform.*;
-import static com.enoughisasgoodasafeast.operator.UserStatus.*;
+import static com.enoughisasgoodasafeast.operator.CompanyStatus.ACTIVE;
+import static com.enoughisasgoodasafeast.operator.Platform.SMS;
+import static com.enoughisasgoodasafeast.operator.Platform.WAP;
+import static com.enoughisasgoodasafeast.operator.UserStatus.IN;
 import static java.io.IO.println;
 import static java.lang.String.join;
 import static java.nio.file.Files.newBufferedWriter;

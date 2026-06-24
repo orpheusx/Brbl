@@ -13,8 +13,8 @@ public class Opt {
 
     static class In {
         static ProcessStateNode evaluate(ScriptContext context, Message moMessage) {
-            LOG.info("Input.Request evaluating '{}'", context.getCurrentNode());
-            return null;
+            LOG.info("Opt.In delegating to SendMessage for '{}'", context.getCurrentNode());
+            return SendMessage.evaluate(context, moMessage);
         }
     }
     static class Out {

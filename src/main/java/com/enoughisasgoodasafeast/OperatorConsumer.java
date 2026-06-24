@@ -1,7 +1,8 @@
 package com.enoughisasgoodasafeast;
 
-import com.enoughisasgoodasafeast.operator.MessageProcessor;
-import com.rabbitmq.client.*;
+import com.rabbitmq.client.AMQP;
+import com.rabbitmq.client.Channel;
+import com.rabbitmq.client.Envelope;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 

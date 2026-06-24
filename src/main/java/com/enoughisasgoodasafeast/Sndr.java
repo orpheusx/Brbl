@@ -1,9 +1,8 @@
 package com.enoughisasgoodasafeast;
 
 import com.enoughisasgoodasafeast.operator.PersistenceManager;
-import com.enoughisasgoodasafeast.operator.MessageProcessor;
-import com.enoughisasgoodasafeast.operator.PostgresPersistenceManager;
 import com.enoughisasgoodasafeast.operator.PersistenceManager.PersistenceManagerException;
+import com.enoughisasgoodasafeast.operator.PostgresPersistenceManager;
 import com.enoughisasgoodasafeast.operator.SndrMessageProcessor;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -36,7 +35,7 @@ public class Sndr implements SndrMessageProcessor {
         return delivered;
     }
 
-    public boolean log(/*Session session,*/ Message message) {
+    public boolean log(Message message) {
         boolean isInserted = persistenceManager.insertDeliveredMT(message);
         if(isInserted){
             LOG.info("Delivered {}", message);

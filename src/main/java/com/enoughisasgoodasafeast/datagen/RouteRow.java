@@ -21,7 +21,7 @@ import java.util.StringJoiner;
 import java.util.UUID;
 
 import static com.enoughisasgoodasafeast.Functions.randomUUID;
-import static io.jenetics.util.NanoClock.*;
+import static java.time.Instant.now;
 
 public class RouteRow implements BrblRow {
 
@@ -57,8 +57,8 @@ public class RouteRow implements BrblRow {
         this.companyId = companyId;
         this.interruptScriptId = interruptScriptId;
         this.status = RouteStatus.ACTIVE;
-        this.createdAt = utcInstant();
-        this.updatedAt = utcInstant();
+        this.createdAt = now();
+        this.updatedAt = now();
     }
 
     public RouteRow(UUID id, String channel, UUID defaultScriptId, Platform platform, UUID companyId, UUID interruptScriptId) {
@@ -69,8 +69,8 @@ public class RouteRow implements BrblRow {
         this.companyId = companyId;
         this.interruptScriptId = interruptScriptId;
         this.status = RouteStatus.ACTIVE;
-        this.createdAt = utcInstant();
-        this.updatedAt = utcInstant();
+        this.createdAt = now();
+        this.updatedAt = now();
     }
 
     String getValuesSql() {

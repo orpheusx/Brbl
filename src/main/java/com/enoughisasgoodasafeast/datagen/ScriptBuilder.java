@@ -3,7 +3,6 @@ package com.enoughisasgoodasafeast.datagen;
 import com.enoughisasgoodasafeast.operator.LanguageCode;
 import com.enoughisasgoodasafeast.operator.NodeType;
 import com.enoughisasgoodasafeast.operator.ScriptStatus;
-import io.jenetics.util.NanoClock;
 
 import java.io.IOException;
 import java.nio.file.Path;
@@ -17,6 +16,7 @@ import static com.enoughisasgoodasafeast.datagen.KnownData.knownCompanyId;
 import static java.io.IO.println;
 import static java.nio.file.Files.write;
 import static java.nio.file.Path.of;
+import static java.time.Instant.now;
 
 public class ScriptBuilder {
 
@@ -36,12 +36,12 @@ public class ScriptBuilder {
         }
 
         public NodeStruct(String id, String text) {
-            var now = NanoClock.utcInstant();
+            var now = now();
             this(id, now, text, NodeType.PRESENT_MULTI, null, now);
         }
 
         public NodeStruct(String id, String text, NodeType type) {
-            var now = NanoClock.utcInstant();
+            var now = now();
             this(id, now, text, type, null, now);
         }
     }
@@ -55,7 +55,7 @@ public class ScriptBuilder {
         }
 
         public EdgeStruct(String srcNodeId, String dstNodeId, String matchPatterns, String response) {
-            var now = NanoClock.utcInstant();
+            var now = now();
             this(UUID.randomUUID(), now, matchPatterns, response, srcNodeId, dstNodeId, now);
         }
     }
@@ -252,7 +252,7 @@ public class ScriptBuilder {
             sc.writeEdgesToFile(edges, of("edges_batch_2.tsv"));
 
             // Also write a single row to a file that creates an entry in Scripts table.
-            var now = NanoClock.utcInstant();
+            var now = now();
             var referencingScript = new ScriptStruct(SCRIPT_ID, "Trés", "Three topics to talk about.", nodes.getFirst().id,
                     ScriptStatus.PROD, LanguageCode.ENG, now, now, knownCompanyId);
             sc.writeScriptToFile(referencingScript, of("scripts_batch_2.tsv"));

@@ -1,7 +1,6 @@
 package com.enoughisasgoodasafeast.datagen;
 
 import com.enoughisasgoodasafeast.operator.Platform;
-import io.jenetics.util.NanoClock;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -14,6 +13,7 @@ import static com.enoughisasgoodasafeast.datagen.KnownData.*;
 import static java.io.IO.println;
 import static java.lang.String.join;
 import static java.lang.System.out;
+import static java.time.Instant.now;
 import static java.util.UUID.fromString;
 
 // TODO Extends currently but more sensible to merge the code into it's (renamed) parent class
@@ -29,7 +29,7 @@ public class BrblLogicTsvGenerator extends BrblUsersTsvGenerator {
     private List<BrblRow> generateKnownKeywords(String[][] keywordIdsAndPatterns, String scriptId, String routeId) {
         var keywordRows = new ArrayList<BrblRow>();
         for (int i = 0; i < keywordIdsAndPatterns.length; i++) {
-            var now = NanoClock.utcInstant();
+            var now = now();
             var keyword = new KeywordRow(fromString(keywordIdsAndPatterns[i][0]), keywordIdsAndPatterns[i][1],
                     fromString(scriptId), now, now, fromString(routeId));
             keywordRows.add(keyword);

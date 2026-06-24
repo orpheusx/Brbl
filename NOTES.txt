@@ -5755,7 +5755,6 @@ We only expect a single schema's worth of changes per execution of run_migration
 We had previously updated brbl_logs such that the latest pgroll schema is brbl_logs_2.
 When we update the currentSchemas property of our JDBC url it will only replace the schema being modified, not any previous changes.
 
-
 --> Need to run the `pgroll latest schema --schema [x]` for each of our base schemas to avoid this problem.
 
 The other thing I noticed about the migrations tables that pgroll maintains is that the new schema I created--brbl_history--just showed up without my having created a baseline. Re-reading the docs, the baseline is only required when there's an pre-existing schema that you want pgroll to manage.
@@ -5766,6 +5765,9 @@ Create another schema that just drops the num_type from the nodes table. Even mo
 The RoleMigrator program declared the new search_path: brbl_biz,brbl_history,brbl_logic_8,brbl_logs_2,brbl_users
 Because of this we didn't need to update any of the database configuration.
 However, after `pgroll complete schema --schema brbl_logic` the migration schema for logic was removed. This def doesn't seem correct.
+
+
+==== 2026/06/17 ====
 
 I posted a bug on https://github.com/xataio/pgroll/issues/1041 but got zero replies until I tagged it with @dosubot.
 Then I got a response from the impressively good Dosu agent.
@@ -5780,12 +5782,117 @@ It seems that the library pgroll uses to parse version_schema interprets unquote
 
 The avoid this without changing our numbering convention or switching to the JSON format we can simply quote the value: version_schema: "0010"
 
-Dosu suggested the following to see how pgroll saw the version numbers.
+Dosu suggested the following to see how pgroll understood the version numbers.
 SELECT
     name, migration->>'version_schema' as version_schema, parent, done
 FROM pgroll.migrations
 WHERE schema = 'brbl_logic'
 ORDER BY name;
 
+The output confirmed that 0010 was seen as 8.
+
 Note: the migration column uses the jsonb data type thus the use of the "->>" operator to extract the named field.
 
+Onward to using the new columns...
+
+==== 2026/06/18 ====
+
+RANDOM THOUGHT: when we save the session to the database we effectively create a deep copy of the conversational graph. This is what we want in cases where we have to modify the graph (by adding to or replacing parts of it to handle user decisions to change topics or to STOP.) For the first request, there doesn't seem to be the possibility of needing to make modifications which would alter the graph that other users would receive.
+The OPT-IN we prepend the notification, pointing it at the first node in the keyword or default script. This shouldn't change the graph itself. However, we _would_ be modifying the OPT-IN script by changing what it points to. So a copy needs to be made of the opt-in graph.
+Do we need the Session to store even these ids?
+I think not...
+Opting in can be handled inside Operator at Session creation time.
+For opting out, we handle this in the Operator.process() method which has access to the SessionKey and thus can look up the id/node just when it's actually needed.
+
+How to cleanly and efficiently create a copy of a node/edge graph?
+
+
+==== 2026/06/20 ====
+
+TODO
+    X update all the tsv files for node data to drop the num_type column.
+    X update known_routes.tsv to include the opt_in and opt_out columns (point them at the script entries)
+
+While fixing some unit tests it occurs to me that we might benefit by defining an OPT_IN NodeType to make reporting simpler.
+The functionality should be the same as a SEND_MESSAGE...
+
+==== 2026/06/21 ====
+
+While running tests of the opt-in message process for an existing user we saw a cycle of failures where the correct outbound message is queued (and delivered) but clearSession is getting called and fails which causes the message receive to NACK and get retried in a loop. The clearSession() method only gets called when the session.currentNode is null. Are we not chaining the welcome node (which has a trailing edge with a null destination) to the keyword/default graph?
+Even if this is the case why does the clearSession explode?
+
+Indeed, the chaining operation wasn't doing what we wanted. Created a new version of the code that also handles the linking process:
+    Operator.copyGraphAppending().
+
+Now the conversations behave correctly from the client's perspective. However, the state tracking in users.status and user_history isn't getting udpated correctly. New users are correctly entered and marked as IN but after that, as existing users, it seems they don't get further updated.
+Also, the opt-in message isn't getting re-sent.
+
+The session will be cleared if they opt-out but when we go to create a new session we first look for the user in a read-through cache. This hasn't been updated with that latest state. Should we have cleared this entry as well? Or just hack it directly?
+
+TODO
+    _ Implement the status update flipping users from OPT_OUT to OPTED_IN.
+    _ Unit tests for copyGraphAppending that prove its correctness for graphs that are deeper than a single Node with a single Edge.
+    _ Implement a check for STOP as the first message of a new session from a user. Currently this causes a retry storm.
+
+
+==== 2026/06/22 ====
+
+TODO
+    X Implement the status update flipping users from OPT_OUT to OPTED_IN.
+    _ Implement a check for STOP as the first message of a new session for an existing user. Currently this causes a retry storm.
+    _ Unit tests for copyGraphAppending that prove its correctness for graphs that are deeper than a single Node with a single Edge.
+
+Debugging with Confab...
+
+    > User 1-929-720-9455 starts as OUT
+    > sends "foo"
+    > opr8r responds with opt-in message and favorite color question --> user status remains OUT.
+    > user replies "red"
+    > opr8r responds then asks next question --> user status remains OUT.
+    > user sends "stop"
+    > opr8r responds "Okay, You're now opted out of messages from Brbl." --> user status remains OUT.
+
+Got it. We already create new Users with the OPTED_IN status so just needed to add code that checks when an existing user status needs to be flipped to IN.
+
+Useful query for watching sessions and user states along:
+    SELECT
+        u.platform_code AS platform,
+        u.platform_id,
+        u.status,
+        CASE WHEN s.group_id IS NULL THEN 'INACTIVE' ELSE 'ACTIVE' END AS has_session,
+        s.updated_at::time,
+        u.created_at::date AS user_created_at
+    FROM
+        users u
+    INNER JOIN
+        amalgams a ON a.user_id = u.id
+    LEFT JOIN
+        sessions s ON s.group_id = a.group_id
+    WHERE
+        u.platform_code = 'S'
+        -- Limit by a subset of interest
+        -- AND u.platform_id IN ('15167209453', '19297209455', '17817209452', '17817209454', '17817209468')
+    ORDER BY s.updated_at;
+
+Added a new user to identities.txt used by Confab. It doesn't already exist in the database. The opt-in/change topic/opt-out flow appeared to work as expected.
+
+Observed an uncaught java.lang.UnsupportedOperationException when the code tries to add the updated status to the by-platform map of status. The defaultPlatformStatusMap method that usually creates this map uses Map.of(...) which is an ImmutableCollections.Map1.
+Changed Operator's defaultPlatformStatusMap method to wrap Map.of in a mutable map to avoid this problem. FIXED.
+
+Using the observation query I noticed that currently active sessions were getting their session timestamp updated but not with the current time.
+Current day and time was '2026-06-23 10:27:08,877' as displayed in the application logs.
+The session's lastUpdatedNanos field is updated on flush() with the result of NanoClock.systemUTC().instant() and stored as a 'timestamp with time zone' type. The SQL query with local time zone returns something like: 2026-06-22 18:57:00.838146
+The difference between UTC and local is 4 hours as expected so def not a simple offset difference.
+Creating a new session displays the same weird delta. The server was started yesterday, 6/22.
+It isn't just the timestamp on the session that's out of sync. Sndr's log of the MT has the same out-of-sync value.
+
+    Session:    2026-06-23 01:23:35.634273 +00:00
+    MT          2026-06-23 01:23:35.632624 +00:00
+
+Delete the pointless test, verifySessionTimestamps, in OperatorPersistenceIntegrationTest.
+
+After a bit of research, I discovered that the NanoClock class is only meant for elapsed time calculations not a wall-clock as I'd been using it.
+Gotta convert pretty much all our uses to Instant.now(). On MacOS this provides microsecond precision. On Linux, it's either microseconds or nanoseconds. bash has a `clock_getres CLOCK_REALTIME` that apparently indicates which it is.
+
+TODO
+    _ Uncomment and fix tests in OperatorTest.

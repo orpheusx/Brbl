@@ -5,7 +5,7 @@ import java.time.Instant;
 import java.util.UUID;
 
 import static com.enoughisasgoodasafeast.Functions.randomUUID;
-import static io.jenetics.util.NanoClock.*;
+import static java.time.Instant.now;
 
 /*
                             Table "brbl_users.profiles"
@@ -36,7 +36,7 @@ import static io.jenetics.util.NanoClock.*;
 public record Profile(UUID id, String surname, String givenName, String otherLanguages, Instant createdAt, Instant updatedAt) implements Serializable {
 
     public Profile(String surname, String givenName, String otherLanguages) {
-        var now = utcInstant();
+        var now = now();
         this(randomUUID(), surname, givenName, otherLanguages, now, now);
     }
 }

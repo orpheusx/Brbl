@@ -2,7 +2,6 @@ package com.enoughisasgoodasafeast.operator;
 
 import com.enoughisasgoodasafeast.*;
 import com.enoughisasgoodasafeast.operator.PersistenceManager.PersistenceManagerException;
-import io.jenetics.util.NanoClock;
 import org.jspecify.annotations.NonNull;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -15,6 +14,8 @@ import java.time.Instant;
 import java.util.Properties;
 import java.util.UUID;
 import java.util.concurrent.TimeoutException;
+
+import static java.time.Instant.now;
 
 /**
  * A standalone service that manages 'blasting' out push campaigns.
@@ -71,7 +72,7 @@ public class Blaster {
     public boolean isSessionExpired(@NonNull Instant lastUpdateAt) {
         // FIXME whether an not expired session can be overwritten should be a push campaign param.
         // FIXME with zero as the delta this will always return
-        return sessionLifetime.compareTo(Duration.between(lastUpdateAt, Instant.now())) <= 0; //true if > 20 minutes
+        return sessionLifetime.compareTo(Duration.between(lastUpdateAt, now())) <= 0; //true if > 20 minutes
     }
 
     public void setExpirationSessionLifetime(@NonNull Duration sessionLifetime) {
@@ -212,7 +213,7 @@ public class Blaster {
         }
 
         // Mark the campaign complete here or leave it to the caller? How do we know we're complete? Are we handling retries here?
-        if (!persistenceManager.completePushCampaign(campaignId, NanoClock.utcInstant())) {
+        if (!persistenceManager.completePushCampaign(campaignId, now())) {
             report.campaignCompletionTimeUpdateFail();
         }
 

@@ -1,20 +1,18 @@
 package com.enoughisasgoodasafeast.integration;
 
-import com.enoughisasgoodasafeast.*;
+import com.enoughisasgoodasafeast.ConfigLoader;
+import com.enoughisasgoodasafeast.GatewaySimStrategy;
+import com.enoughisasgoodasafeast.Message;
+import com.enoughisasgoodasafeast.PlatformGateway;
 import org.junit.jupiter.api.AfterAll;
-import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeAll;
-import org.junit.jupiter.api.Test;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.testcontainers.containers.GenericContainer;
 import org.testcontainers.containers.RabbitMQContainer;
 import org.testcontainers.containers.output.Slf4jLogConsumer;
-import org.testcontainers.junit.jupiter.Container;
-import org.testcontainers.junit.jupiter.Testcontainers;
 
 import java.io.IOException;
-import java.net.InetAddress;
 import java.net.UnknownHostException;
 import java.util.*;
 import java.util.concurrent.Callable;

@@ -7,14 +7,13 @@ import java.time.Instant;
 import java.util.*;
 
 import static com.enoughisasgoodasafeast.Functions.randomUUID;
-import static io.jenetics.util.NanoClock.*;
 import static org.junit.jupiter.api.Assertions.*;
 
 public class CustomerTest {
     final static Map<Platform, UUID> platformIds = Map.of(Platform.SMS, randomUUID());
     final static UUID groupId = randomUUID();
     final static Map<Platform, String> platformNumbers = Map.of(Platform.SMS, "17815551234");
-    final static Map<Platform, Instant> platformCreatedMap = Map.of(Platform.SMS, utcInstant());
+    final static Map<Platform, Instant> platformCreatedMap = Map.of(Platform.SMS, Instant.now());
     final static Map<Platform, String> userNickNames = new LinkedHashMap<>();
     final static String countryCode = Locale.getDefault().getCountry();
     final static Set<LanguageCode> languages = Set.of(LanguageCode.SPA, LanguageCode.FRA);

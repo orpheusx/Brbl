@@ -1,6 +1,9 @@
 package com.enoughisasgoodasafeast.operator;
 
-import com.enoughisasgoodasafeast.*;
+import com.enoughisasgoodasafeast.ConfigLoader;
+import com.enoughisasgoodasafeast.InMemoryQueueProducer;
+import com.enoughisasgoodasafeast.Message;
+import com.enoughisasgoodasafeast.QueueProducer;
 import org.junit.jupiter.api.Test;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -12,7 +15,7 @@ import java.util.List;
 import java.util.UUID;
 
 import static com.enoughisasgoodasafeast.Functions.randomUUID;
-import static com.enoughisasgoodasafeast.operator.NodeType.*;
+import static com.enoughisasgoodasafeast.operator.NodeType.SEND_MESSAGE;
 import static com.enoughisasgoodasafeast.operator.Session.MAX_INPUT_HISTORY;
 import static com.enoughisasgoodasafeast.operator.UserTest.*;
 import static java.lang.System.currentTimeMillis;

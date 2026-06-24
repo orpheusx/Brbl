@@ -1,4 +1,5 @@
 package com.enoughisasgoodasafeast;
+
 import ch.qos.logback.classic.Logger;
 import ch.qos.logback.classic.LoggerContext;
 import ch.qos.logback.classic.encoder.PatternLayoutEncoder;
@@ -6,7 +7,6 @@ import ch.qos.logback.classic.spi.Configurator;
 import ch.qos.logback.classic.tyler.TylerConfiguratorBase;
 import ch.qos.logback.core.Appender;
 import ch.qos.logback.core.ConsoleAppender;
-import java.lang.Override;
 
 /*
  *

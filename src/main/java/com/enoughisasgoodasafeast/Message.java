@@ -7,7 +7,7 @@ import java.time.Instant;
 import java.util.UUID;
 
 import static com.enoughisasgoodasafeast.Functions.randomUUID;
-import static io.jenetics.util.NanoClock.*;
+import static java.time.Instant.now;
 
 /**
  * A message received by the platform.
@@ -29,11 +29,11 @@ public record Message(UUID id, Instant receivedAt, MessageType type, Platform pl
     }
 
     public Message(MessageType type, String from, String to, String text) {
-        this(randomUUID(), utcInstant(), type, Platform.SMS, from, to, text);
+        this(randomUUID(), now(), type, Platform.SMS, from, to, text);
     }
 
     public Message(MessageType type, Platform platform, String from, String to, String text) {
-        this(randomUUID(), utcInstant(), type, platform, from, to, text);
+        this(randomUUID(), now(), type, platform, from, to, text);
     }
 
     // Seems like the place for these methods.

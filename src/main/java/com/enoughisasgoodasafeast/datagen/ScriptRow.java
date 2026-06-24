@@ -21,7 +21,7 @@ import java.util.StringJoiner;
 import java.util.UUID;
 
 import static com.enoughisasgoodasafeast.Functions.randomUUID;
-import static io.jenetics.util.NanoClock.utcInstant;
+import static java.time.Instant.now;
 
 public class ScriptRow implements BrblRow {
 
@@ -53,8 +53,8 @@ public class ScriptRow implements BrblRow {
         this.nodeId = nodeId;
         this.status = ScriptStatus.PROD;
         this.language = LanguageCode.ENG;
-        this.createdAt = utcInstant();
-        this.updatedAt = utcInstant();
+        this.createdAt = now();
+        this.updatedAt = now();
     }
 
     public ScriptRow(String name, String description, UUID companyId, UUID nodeId) {
@@ -65,8 +65,8 @@ public class ScriptRow implements BrblRow {
         this.nodeId = nodeId;
         this.status = ScriptStatus.PROD;
         this.language = LanguageCode.ENG;
-        this.createdAt = utcInstant();
-        this.updatedAt = utcInstant();
+        this.createdAt = now();
+        this.updatedAt = now();
     }
 
     String getValuesSql() {

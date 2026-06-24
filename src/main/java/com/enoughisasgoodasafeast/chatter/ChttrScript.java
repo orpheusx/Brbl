@@ -3,7 +3,6 @@ package com.enoughisasgoodasafeast.chatter;
 import java.io.Serial;
 import java.io.Serializable;
 import java.util.List;
-import java.util.StringJoiner;
 
 /**
  * The collection of Events that comprise a client script.

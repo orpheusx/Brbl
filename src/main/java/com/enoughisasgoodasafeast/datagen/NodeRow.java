@@ -7,8 +7,8 @@ import java.util.UUID;
 
 import static com.enoughisasgoodasafeast.Functions.randomUUID;
 import static com.enoughisasgoodasafeast.operator.NodeType.PRESENT_MULTI;
-import static io.jenetics.util.NanoClock.utcInstant;
 import static java.lang.Math.min;
+import static java.time.Instant.now;
 
 public class NodeRow implements BrblRow {
 
@@ -39,7 +39,7 @@ public class NodeRow implements BrblRow {
     public NodeRow(String text) {
         var ctext = text.replaceAll("'", "''");
         this.id = randomUUID();
-        this.createdAt = utcInstant();
+        this.createdAt = now();
         this.text = ctext;
         this.type = PRESENT_MULTI.ordinal();
         int start = min(7, ctext.length());

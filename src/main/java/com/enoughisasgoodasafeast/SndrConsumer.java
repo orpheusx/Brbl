@@ -1,6 +1,5 @@
 package com.enoughisasgoodasafeast;
 
-import com.enoughisasgoodasafeast.operator.MessageProcessor;
 import com.enoughisasgoodasafeast.operator.SndrMessageProcessor;
 import com.rabbitmq.client.AMQP;
 import com.rabbitmq.client.Channel;

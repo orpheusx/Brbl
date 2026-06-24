@@ -1,12 +1,10 @@
 package com.enoughisasgoodasafeast;
 
 import com.enoughisasgoodasafeast.operator.*;
-import io.jenetics.util.NanoClock;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import java.io.IOException;
-import java.time.Instant;
 import java.util.Map;
 import java.util.Properties;
 import java.util.Set;
@@ -14,6 +12,7 @@ import java.util.concurrent.TimeoutException;
 
 import static com.enoughisasgoodasafeast.Functions.randomUUID;
 import static com.enoughisasgoodasafeast.operator.Platform.SMS;
+import static java.time.Instant.now;
 
 /**
  * FIXME we would like the Operator logic to be neutral where the queuing implementation is concerned.
@@ -58,18 +57,18 @@ public class FakeOperator implements SessionAwareMessageProcessor {
                 randomUUID(),
                 new Node("Node text for fake Session", NodeType.END_OF_CHAT),
                 new User(
-                        Map.of(SMS, randomUUID()), // platformIds
-                        randomUUID(), // groupId
-                        Map.of(SMS, "12125551234"), // platformNumbers
-                        Map.of(SMS, NanoClock.utcInstant()), // platformCreationTimes
-                        "CA", // countryCode
-                        Set.of(LanguageCode.ENG), // languages
-                        randomUUID(), // claimantId
-                        randomUUID(), // companyId
-                        Map.of(SMS, "whazzisface"), // platformNickNames
+                        Map.of(SMS, randomUUID()),   // platformIds
+                        randomUUID(),                // groupId
+                        Map.of(SMS, "12125551234"),  // platformNumbers
+                        Map.of(SMS, now()),          // platformCreationTimes
+                        "CA",                        // countryCode
+                        Set.of(LanguageCode.ENG),    // languages
+                        randomUUID(),                // claimantId
+                        randomUUID(),                // companyId
+                        Map.of(SMS, "whazzisface"),  // platformNickNames
                         Map.of(SMS, new Profile(
                                 "surname", "givenName", "SPA")
-                        ), //platformProfiles
+                        ),                          //platformProfiles
                         Map.of(SMS, UserStatus.KNOWN) // platformStatus
                 ),
                 new InMemoryQueueProducer(),

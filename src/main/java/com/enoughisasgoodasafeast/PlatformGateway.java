@@ -12,11 +12,12 @@ import java.time.Duration;
 import java.util.ArrayList;
 import java.util.List;
 
-import static ch.qos.logback.classic.Level.*;
-import static com.enoughisasgoodasafeast.SharedConstants.*;
+import static ch.qos.logback.classic.Level.ERROR;
+import static com.enoughisasgoodasafeast.SharedConstants.BRBL_ENQUEUE_ENDPOINT;
+import static com.enoughisasgoodasafeast.SharedConstants.CONNECTION_TIMEOUT_SECONDS;
 import static io.helidon.http.Status.OK_200;
 import static io.helidon.http.Status.TOO_MANY_REQUESTS_429;
-import static java.time.temporal.ChronoUnit.*;
+import static java.time.temporal.ChronoUnit.SECONDS;
 
 /**
  * This is a simulated and generic representation of a 3rd party message gateway intended for use with unit/integration

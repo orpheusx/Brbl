@@ -4,8 +4,6 @@ import com.enoughisasgoodasafeast.*;
 import com.enoughisasgoodasafeast.operator.PersistenceManager.PersistenceManagerException;
 import com.github.benmanes.caffeine.cache.Caffeine;
 import com.github.benmanes.caffeine.cache.LoadingCache;
-import io.jenetics.util.NanoClock;
-import jakarta.validation.constraints.Null;
 import org.jspecify.annotations.NonNull;
 import org.jspecify.annotations.Nullable;
 import org.slf4j.Logger;
@@ -14,13 +12,16 @@ import org.slf4j.LoggerFactory;
 import java.io.IOException;
 import java.time.Instant;
 import java.util.*;
-import java.util.concurrent.*;
+import java.util.concurrent.ExecutionException;
+import java.util.concurrent.StructuredTaskScope;
+import java.util.concurrent.TimeUnit;
+import java.util.concurrent.TimeoutException;
 import java.util.function.Supplier;
 import java.util.regex.Pattern;
 
 import static com.enoughisasgoodasafeast.Functions.randomUUID;
 import static com.enoughisasgoodasafeast.operator.Telecom.deriveCountryCodeFromId;
-import static io.jenetics.util.NanoClock.utcInstant;
+import static java.time.Instant.now;
 
 public class Operator implements SessionAwareMessageProcessor {
 
@@ -164,13 +165,17 @@ public class Operator implements SessionAwareMessageProcessor {
         if (!processOk) {
             LOG.error("handleOptOut: Failed to process message: {}", message);
         }
-        // FIXME Not sure how to handle failures in the processing (above) or the status update (below)
+        // FIXME Not sure how to handle failures in the processing (above) and/or the status update (below)
+
+        // FIXME remove the direct setting of the user and instead remove the user from the cache.
+        LOG.info("handleOptOut: user status was: {}", session.getUser().platformStatus().get(message.platform()));
+        var userStatus = session.getUser().platformStatus().put(message.platform(), UserStatus.OUT);
+        LOG.info("handleOptOut: user status changed to: {}", session.getUser().platformStatus().get(message.platform()));
 
         // Update the user record status to UserStatus.OUT.
         boolean updateOk = persistenceManager.updateUserStatus(session.getUser(), message.platform(), UserStatus.OUT);
-        if (!updateOk) {
-            LOG.error("handleOptOut: Failed to set user status to OUT. User: {}", session.getUser());
-        }
+        LOG.error("handleOptOut: updateUserStatus result: {}", updateOk);
+
 
         return new ProcessStateNode((processOk && updateOk) ? ProcessState.OK : ProcessState.ERROR, processStateNode.node());
     }
@@ -187,7 +192,7 @@ public class Operator implements SessionAwareMessageProcessor {
         //assert changeTopicPresentNode.type() == NodeType.PRESENT_MULTI;
         //assert changeTopicPresentNode.edges().getFirst().targetNode().type() == NodeType.PROCESS_MULTI;
 
-        // Find the PRESENT_MULTI node that immediately preceded with the current PROCESS_MULTI.
+        // Find the PRESENT_MULTI/REQUEST_INPUT node that immediately preceded with the current PROCESS_MULTI/PROCESS_INPUT.
         // It should be two slots prior in the list.
         // This will be Node we swap in as the target of the "no, continue" option.
         Node convoToContinue = findPairedPrecursor(session.getEvaluatedNodes(), session.getCurrentNode());
@@ -248,63 +253,97 @@ public class Operator implements SessionAwareMessageProcessor {
      * @throws ExecutionException   if any of the subtasks threw an exception
      */
     private @Nullable Session findOrCreateSession(SessionKey sessionKey) throws InterruptedException, ExecutionException {
-        var start = NanoClock.utcInstant();
+        var start = now();
         try (var scope = new StructuredTaskScope.ShutdownOnFailure()) {
             Supplier<User> suppliedUser = scope.fork(()  -> userCache.get(sessionKey));
             Supplier<Node> keywordScript = scope.fork(() -> scriptByKeywordCache.get(KeywordCacheKey.newKey(sessionKey)));
             Supplier<Node> defaultScript = scope.fork(() -> findDefaultScriptByRoute(sessionKey));
-            // Also look up the route specific OPT-IN script?
-            // ...
 
             scope.join().throwIfFailed(); // TODO consider using joinUntil() to enforce a collective timeout.
 
-            var script = (keywordScript.get() != null) ? keywordScript.get() : defaultScript.get();
+            var selectedGraph = (keywordScript.get() != null) ? keywordScript.get() : defaultScript.get();
 
-            // FIXME change these to debug or comment out.
-            LOG.debug("findOrCreateSession: keyword node: {}", keywordScript.get());
-            LOG.debug("findOrCreateSession: route default node: {}", defaultScript.get());
-
-            if (script == null) { // FIXME For now let's fail hard on configuration errors even if the user has an existing session that could be used instead.
-                LOG.error("No script available by keyword match or route default. Configuration error in route table for {}:{} ",
+            if (selectedGraph == null) { // FIXME For now let's fail hard on configuration errors even if the user has an existing session that could be used instead.
+                LOG.error("CRITICAL: No script available by keyword match or route default. Configuration error in route table for {}:{} ",
                         sessionKey.platform(), sessionKey.to());
                 return null;
             }
+
+            // FIXME change these to debug or remove.
+            LOG.debug("findOrCreateSession: selectedGraph: {}", selectedGraph.label());
 
             Session session;
 
             var user = suppliedUser.get();
             if (user == null) {
                 // We should have logged a critical error in the userCache's provider method, findOrCreateUser.
-                LOG.error("findOrCreateSession: no user provided for {}", sessionKey);
+                LOG.error("CRITICAL: findOrCreateSession: no user provided for {}", sessionKey);
                 return null;
             }
 
-            // Check if the Session table has a record for this User. We can skip this check if we just created the User
             final Instant userCreatedAt = user.platformCreationTimes().get(sessionKey.platform());
             try {
-                if (start.isBefore(userCreatedAt) || start.equals(userCreatedAt) || null == (session = persistenceManager.loadSession(user.groupId()))) {
-                    // brand-new user needs to have the OPT-IN notification run first, followed by whatever script is normally expected.
+                boolean isNewUser = start.isBefore(userCreatedAt) || start.equals(userCreatedAt); // true if brand-new user
+                boolean isExistingUserNeedsOptIn =
+                        !isNewUser && UserStatus.OUT.equals(user.platformStatus().get(sessionKey.platform())); // true if returning user
+                LOG.info("isNewUser: {}", isNewUser);
+                LOG.info("isExistingUserNeedsOptIn: {}", isExistingUserNeedsOptIn);
 
+                if (isNewUser || isExistingUserNeedsOptIn) {
+                    // Brand-new users and existing, opted-out users need to have an opt-in notification sent first,
+                    // followed by whatever script is expected given the normal graph selection process.
+                    // The cached opt-in graph is shared between all processes so, since we need to customize it per user,
+                    //  we must make a copy first.
+                    final var originalOptInGraph = findOptInScriptIdByRoute(sessionKey);
+                    if(originalOptInGraph == null) { // The database constraints should make it impossible for a route to lack a script.
+                        throw new IllegalStateException("CRITICAL: Configuration error for opt_in_node_id in route table for " + sessionKey);
+                    }
+
+                    // We don't want to modify the cached opt-in graph, so we create a copy of it that we can modify.
+//                    final var copiedOptInGraph = copyGraphAppending(originalOptInGraph, selectedGraph);
+                    // FIXME we need to replace the target of the last edge of the last node.
+//                    final var link = copiedOptInGraph.edges().getLast().copyReplacing(selectedGraph);
+//                    copiedOptInGraph.edges().clear();
+//                    copiedOptInGraph.edges().add(link);
+//                    selectedGraph = copiedOptInGraph;
+                    selectedGraph = copyGraphAppending(originalOptInGraph, selectedGraph);
+
+                    // FIXME Is this the right place to update the user's status?
+                    if (isExistingUserNeedsOptIn && persistenceManager.updateUserStatus(user, sessionKey.platform(), UserStatus.IN)) {
+                        user.platformStatus().put(sessionKey.platform(), UserStatus.IN);
+                        LOG.info("Updated platform status for user: {}", user.platformStatus().get(sessionKey.platform()));
+                    } else {
+                        LOG.error("CRITICAL: Failed to OPT_IN  existing user: {}", user.platformStatus().get(sessionKey.platform()));
+                    }
+                }
+
+                if (isNewUser || null == (session = persistenceManager.loadSession(user.groupId()))) {
                     LOG.info("Creating new Session for user {}", suppliedUser.get().groupId());
                     return new Session(
                             randomUUID(),
-                            script,
+                            selectedGraph, // selectedGraph,
                             user,
                             getQueueProducer(sessionKey.platform()),
                             persistenceManager);
+                } else {
+                    // If we found an existing session, check if it was awaiting input.
+                    // If not, replace the script with one we looked up above.
+                    if (!isAwaitingInput(session.getCurrentNode())) {
+                        session.setCurrentNode(selectedGraph);
+                    }
+
+                    return session.postDeserialize(getQueueProducer(sessionKey.platform()), persistenceManager);
                 }
+
             } catch (PersistenceManagerException e) {
                 LOG.error("Error loading session for user {}", user.groupId(), e);
                 return null;
             }
-
-            // If we had an existing session, check if we were awaiting input. If not replace the script with one we looked up above.
-            if (!session.getCurrentNode().type().equals(NodeType.PROCESS_MULTI)) { // FIXME add other input-expecting node types here.
-                session.setCurrentNode(script);
-            }
-
-            return session.postDeserialize(getQueueProducer(sessionKey.platform()), persistenceManager);
         }
+    }
+
+    private boolean isAwaitingInput(Node node) {
+        return node.type().isAwaitInput();
     }
 
     private QueueProducer getQueueProducer(Platform platform) {
@@ -314,8 +353,8 @@ public class Operator implements SessionAwareMessageProcessor {
 
     /**
      * How do we denote a new user vs an existing one?
-     * @param sessionKey
-     * @return
+     * @param sessionKey the record that encapsulates the message metadata.
+     * @return a new or existing User matching the provided key.
      */
     @Nullable User findOrCreateUser(@NonNull SessionKey sessionKey) {
         User user = persistenceManager.getUser(sessionKey);
@@ -334,14 +373,14 @@ public class Operator implements SessionAwareMessageProcessor {
                     Map.of(sessionKey.platform(), randomUUID()),            // platformIds
                     randomUUID(),                                           // groupId
                     Map.of(sessionKey.platform(), sessionKey.from()),       // platformNumbers
-                    Map.of(sessionKey.platform(), utcInstant()),            // platformCreationTimes
+                    Map.of(sessionKey.platform(), now()),            // platformCreationTimes
                     deriveCountryCodeFromId(sessionKey.from()),             // countryCode
                     defaultLanguageSet(sessionKey.from(), sessionKey.to()), // languages
                     owningId,                                               // claimant_id
                     null,                                                   // customer_id
                     defaultNickNameMap(),                                   // platformNicknames
                     null, // FIXME need to do a consistency check on how we handle these Platform-keyed maps. How should we represent an absence of values?
-                    defaultPlatformStatusMap(UserStatus.IN) // FIXME is this right initial value?
+                    defaultPlatformStatusMap(UserStatus.IN)
             );
 
             boolean isInserted = persistenceManager.insertNewUser(user);
@@ -436,10 +475,19 @@ public class Operator implements SessionAwareMessageProcessor {
         }
     }
 
-    @Nullable Node findOptInScriptByRoute(SessionKey sessionKey) {
+    @Nullable Node findOptInScriptIdByRoute(SessionKey sessionKey) {
         var route = findRoute(sessionKey);
         if (route != null) {
-            return scriptCache.get(route.defaultNodeId());
+            return scriptCache.get(route.optInNodeId());
+        } else {
+            return null;
+        }
+    }
+
+    @Nullable Node findOptOutScriptByRoute(SessionKey sessionKey) {
+        var route = findRoute(sessionKey);
+        if (route != null) {
+            return scriptCache.get(route.optOutNodeId());
         } else {
             return null;
         }
@@ -489,11 +537,11 @@ public class Operator implements SessionAwareMessageProcessor {
     //    }
 
     private Map<Platform, UserStatus> defaultPlatformStatusMap(UserStatus userStatus) {
-        return Map.of(defaultPlatform, userStatus);
+        return new HashMap<>(Map.of(defaultPlatform, userStatus));
     }
 
     private Map<Platform, String> defaultNickNameMap() {
-        return Collections.emptyMap();
+        return Collections.emptyMap(); // FIXME may need to change to a mutable map.
     }
 
     private Set<LanguageCode> defaultLanguageSet(String from, String to) {
@@ -502,6 +550,76 @@ public class Operator implements SessionAwareMessageProcessor {
         // we could also use the 'from' to guess. E.g. if the number is Mexican we could assume 'SPA'
         return DEFAULT_LANGUAGE_CODE_SET;
     }
+
+    /**
+     * Creates a deep copy of a given Node, including all connected Edges and Nodes in the graph,
+     * appending the provided Node wherever an Edge's targetNode is null.
+     *
+     * @param originalNode The Node to copy.
+     * @param appendedNode The Node to append at the end of originalNode.
+     * @return A deep copy of the original Node graph.
+     */
+    public Node copyGraphAppending(@NonNull Node originalNode, @NonNull Node appendedNode) {
+        Map<UUID, Node> copiedNodes = new HashMap<>();
+        return copyGraphAppending(originalNode, appendedNode, copiedNodes);
+    }
+
+    private Node copyGraphAppending(@NonNull Node src, @NonNull Node appendedNode, @NonNull Map<UUID, Node> copiedNodes) {
+        // If the node has already been copied, return the existing copy.
+        if (copiedNodes.containsKey(src.id())) {
+            return copiedNodes.get(src.id());
+        }
+
+        Node newNode = new Node(src.id(), src.text(), src.type(), null, src.label());
+        copiedNodes.put(src.id(), newNode);
+
+        // Copy edges and add them to the new node's edges set.
+        for (Edge srcEdge : src.edges()) {
+            Node newTargetNode = null;
+            if (srcEdge.targetNode() != null) {
+                newTargetNode = copyGraphAppending(srcEdge.targetNode(), appendedNode, copiedNodes);
+            } else {
+                // any edge with a null targetNode signals the end of the graph, right? Right???
+                assert 1 == src.edges().size();
+                newTargetNode = appendedNode;
+            }
+            // Create a new Edge using the original Edge's ID and other properties.
+            Edge newEdge = new Edge(srcEdge.id(), srcEdge.responseText(), srcEdge.matchText(), newTargetNode);
+            newNode.edges().add(newEdge); // Add to the SequencedSet of the new node.
+        }
+
+        return newNode;
+    }
+
+//    public Node copyNodeGraph(@NonNull Node originalNode) {
+//        // Map to store already copied nodes to handle cycles and avoid redundant copies.
+//        Map<UUID, Node> copiedNodes = new HashMap<>();
+//        return copyNodeRecursive(originalNode, copiedNodes);
+//    }
+//
+//    private Node copyNodeRecursive(@NonNull Node src, @NonNull Map<UUID, Node> copiedNodes) {
+//        // If the node has already been copied, return the existing copy.
+//        if (copiedNodes.containsKey(src.id())) {
+//            return copiedNodes.get(src.id());
+//        }
+//
+//        // Create a new Node using the original Node's ID and other properties.
+//        Node newNode = new Node(src.id(), src.text(), src.type(), null, src.label());
+//        copiedNodes.put(src.id(), newNode); // Put the new node in the map before copying edges to handle cycles.
+//
+//        // Copy edges and add them to the new node's edges set.
+//        for (Edge srcEdge : src.edges()) {
+//            Node newTargetNode = null;
+//            if (srcEdge.targetNode() != null) {
+//                newTargetNode = copyNodeRecursive(srcEdge.targetNode(), copiedNodes);
+//            }
+//            // Create a new Edge using the original Edge's ID and other properties.
+//            Edge newEdge = new Edge(srcEdge.id(), srcEdge.responseText(), srcEdge.matchText(), newTargetNode);
+//            newNode.edges().add(newEdge); // Add to the SequencedSet of the new node.
+//        }
+//
+//        return newNode;
+//    }
 
     public static void main(String[] args) throws IOException, TimeoutException, PersistenceManagerException {
         Operator operator = new Operator();

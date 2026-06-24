@@ -1,8 +1,11 @@
 package com.enoughisasgoodasafeast.chatter;
 
 import com.enoughisasgoodasafeast.ConfigLoader;
-import com.enoughisasgoodasafeast.operator.*;
+import com.enoughisasgoodasafeast.operator.Edge;
+import com.enoughisasgoodasafeast.operator.Node;
+import com.enoughisasgoodasafeast.operator.PersistenceManager;
 import com.enoughisasgoodasafeast.operator.PersistenceManager.PersistenceManagerException;
+import com.enoughisasgoodasafeast.operator.PostgresPersistenceManager;
 import org.jspecify.annotations.NonNull;
 import org.jspecify.annotations.Nullable;
 import org.slf4j.Logger;
@@ -12,7 +15,8 @@ import java.io.*;
 import java.util.*;
 import java.util.stream.Collectors;
 
-import static com.enoughisasgoodasafeast.MessageType.*;
+import static com.enoughisasgoodasafeast.MessageType.MO;
+import static com.enoughisasgoodasafeast.MessageType.MT;
 import static java.io.IO.println;
 
 public class ScriptInterpreter {

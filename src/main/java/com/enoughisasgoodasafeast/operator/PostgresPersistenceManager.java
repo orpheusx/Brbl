@@ -9,7 +9,7 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import java.beans.PropertyVetoException;
-import java.io.*;
+import java.io.IOException;
 import java.sql.*;
 import java.time.Instant;
 import java.util.*;
@@ -18,8 +18,8 @@ import java.util.regex.Pattern;
 import static com.enoughisasgoodasafeast.Functions.randomUUID;
 import static com.enoughisasgoodasafeast.operator.SessionSerde.bytesToSession;
 import static com.enoughisasgoodasafeast.operator.SessionSerde.sessionToBytes;
-import static io.jenetics.util.NanoClock.utcInstant;
-import static java.sql.Types.*;
+import static java.sql.Types.OTHER;
+import static java.time.Instant.now;
 
 public class
 PostgresPersistenceManager implements PersistenceManager {
@@ -326,7 +326,7 @@ PostgresPersistenceManager implements PersistenceManager {
                     id = ?::UUID ;
                 """;
 
-    // Not sure the nested select is a great idea.
+    // Not sure if the nested selects are a great idea.
     public static final String SELECT_ALL_ROUTES_WITH_STATUS =
             """
                     SELECT
@@ -338,7 +338,9 @@ PostgresPersistenceManager implements PersistenceManager {
                         r.status,
                         r.created_at,
                         r.updated_at,
-                        (select node_id from scripts where id = r.interrupt_script_id)
+                        (select node_id from scripts where id = r.interrupt_script_id),
+                        (select node_id from scripts where id = r.opt_in_script_id),
+                        (select node_id from scripts where id = r.opt_out_script_id)
                     FROM
                         routes r
                     INNER JOIN
@@ -500,9 +502,9 @@ PostgresPersistenceManager implements PersistenceManager {
                     """;
 
     public @NonNull Connection fetchConnection() throws SQLException {
-        //Instant before = utcInstant();
+        //Instant before = Instant.now();
         return pds.getConnection();
-        //Instant after = utcInstant();
+        //Instant after = Instant.now();
         //LOG.info("fetchConnection: b {} a {}: d {} ", before, after, Duration.between(before, after));
     }
 
@@ -521,7 +523,7 @@ PostgresPersistenceManager implements PersistenceManager {
     }
 
     private static boolean insertMO(Connection connection, Message message) {
-        //Instant before = utcInstant();
+        //Instant before = Instant.now();
         try (PreparedStatement ps = connection.prepareStatement(MO_MESSAGE_INSERT)) {
             Timestamp timestampFromInstant = Timestamp.from(message.receivedAt());
             ps.setObject(1, message.id());
@@ -535,14 +537,14 @@ PostgresPersistenceManager implements PersistenceManager {
             return false;
         }
 
-        //Instant after = utcInstant();
+        //Instant after = Instant.now();
         //LOG.info("insertMO: b {} a {}: d {} ", before, after, Duration.between(before, after));
         return true;
     }
 
     // Batch mode is definitely slower for single element lists of Messages
     //    private static boolean insertMO(Connection connection, List<Message> messages) {
-    //        //Instant before = utcInstant();
+    //        //Instant before = Instant.now();
     //        try (PreparedStatement ps = connection.prepareStatement(MO_MESSAGE_INSERT)) {
     //            for (Message message : messages) {
     //                Timestamp timestampFromInstant = Timestamp.from(message.receivedAt());
@@ -578,10 +580,10 @@ PostgresPersistenceManager implements PersistenceManager {
     }
 
     private static boolean insertProcessedMO(Connection connection, Message message, Session session) {
-        //Instant before = utcInstant();
+        //Instant before = Instant.now();
         try (PreparedStatement ps = connection.prepareStatement(MO_MESSAGE_PRCD)) {
             ps.setObject(1, message.id());                           // id
-            ps.setTimestamp(2, Timestamp.from(utcInstant()));        // prcd_at
+            ps.setTimestamp(2, Timestamp.from(now()));        // prcd_at
             ps.setObject(3, session.getId());                        // session_id
             ps.setObject(4, session.getScriptForProcessedMO().id()); // node_id
             ps.execute();
@@ -589,7 +591,7 @@ PostgresPersistenceManager implements PersistenceManager {
             LOG.error("insertProcessedMO failed", e);
             return false;
         }
-        /*Instant after = utcInstant();
+        /*Instant after = Instant.now();
          *LOG.info("insertProcessedMO: b {} a {}: d {} ", before, after, Duration.between(before, after)); */
         return true;
     }
@@ -608,7 +610,7 @@ PostgresPersistenceManager implements PersistenceManager {
     }
 
     private static boolean insertMT(Connection connection, Message message, Session session) {
-        //Instant before = utcInstant();
+        //Instant before = Instant.now();
         try (PreparedStatement ps = connection.prepareStatement(MT_MESSAGE_INSERT)) {
             ps.setObject(1, message.id());                              // id
             ps.setTimestamp(2, Timestamp.from(message.receivedAt()));   // sent_at
@@ -623,14 +625,14 @@ PostgresPersistenceManager implements PersistenceManager {
             LOG.error("insertMT failed", e);
             return false;
         }
-        //Instant after = utcInstant();
+        //Instant after = Instant.now();
         //LOG.info("insertMT: b {} a {}: d {} ", before, after, Duration.between(before, after));
         return true;
     }
 
     // As with MOs, batch mode is definitely slower for single element lists of Messages
     //    private static boolean insertMTs(Connection connection, List<Message> messages, Session session) {
-    //        Instant before = utcInstant();
+    //        Instant before = Instant.now();
     //        try (PreparedStatement ps = connection.prepareStatement(MT_MESSAGE_INSERT)) {
     //            for (Message message : messages) {
     //                ps.setObject(1, message.id());                              // id
@@ -649,7 +651,7 @@ PostgresPersistenceManager implements PersistenceManager {
     //            LOG.error("insertMTs failed", e);
     //            return false;
     //        }
-    //        Instant after = utcInstant();
+    //        Instant after = Instant.now();
     //        LOG.info("insertMTs<List>: b {} a {}: d {} ", before, after, Duration.between(before, after));
     //        return true;
     //    }
@@ -667,10 +669,10 @@ PostgresPersistenceManager implements PersistenceManager {
     }
 
     private static boolean insertDeliveredMT(Connection connection, Message message) {
-        //Instant before = utcInstant();
+        //Instant before = Instant.now();
         try (PreparedStatement ps = connection.prepareStatement(MT_MESSAGE_DLVR)) {
             ps.setObject(1, message.id());                              // id
-            ps.setTimestamp(2, Timestamp.from(utcInstant())); // dlvr_at
+            ps.setTimestamp(2, Timestamp.from(now())); // dlvr_at
 
             ps.execute();
 
@@ -679,7 +681,7 @@ PostgresPersistenceManager implements PersistenceManager {
             return false;
         }
 
-        //Instant after = utcInstant();
+        //Instant after = Instant.now();
         //LOG.info("insertDeliveredMT: b {} a {}: d {} ", before, after, Duration.between(before, after));
         return true;
     }
@@ -720,10 +722,11 @@ PostgresPersistenceManager implements PersistenceManager {
         try (PreparedStatement ps = connection.prepareStatement(SESSION_UPSERT)) {
             ps.setObject(1, session.getUser().groupId()); // primary key
             ps.setBytes(2, sessionToBytes(session));
-            ps.setTimestamp(3, Timestamp.from(session.getStartTimeNanos()));
-            ps.setTimestamp(4, Timestamp.from(session.getLastUpdatedNanos()));
-            ps.execute();
-            LOG.info("Session upserted: {} for user {}", session.getId(), session.getUser().groupId());
+            ps.setTimestamp(3, Timestamp.from(session.getStartTimeMicros()));
+            ps.setTimestamp(4, Timestamp.from(session.getLastUpdatedMicros()));
+            int numInsertedOrUpdated = ps.executeUpdate(); // FIXME change return to boolean
+            LOG.info("saveSession: numInsertedOrUpdated = {}", numInsertedOrUpdated);
+            LOG.info("Session upserted: {} for user groupId {}", session.getId(), session.getUser().groupId());
         } catch (SQLException | IOException e) {
             LOG.error(e.getMessage(), e);
             throw new PersistenceManagerException(e);
@@ -747,9 +750,10 @@ PostgresPersistenceManager implements PersistenceManager {
             final boolean next = rs.next();
             if (next) {
                 final byte[] data = rs.getBytes(2);
+                LOG.info("Loaded Session size in bytes = {}", data.length);
                 return bytesToSession(data);
             } else {
-                LOG.error("Session {} not found.", id);
+                LOG.error("Session {} not found.", id); // FIXME make this info since it's not necessarily an error
                 return null;
             }
         } catch (SQLException | IOException | ClassNotFoundException e) {
@@ -840,8 +844,12 @@ PostgresPersistenceManager implements PersistenceManager {
                 Instant updatedAt = rs.getTimestamp(8).toInstant();
                 // r.interrupt_id
                 UUID interruptNodeId = (UUID) rs.getObject(9);
+                // r.opt_in_script_id
+                UUID optInNodeId = (UUID) rs.getObject(10);
+                // r.opt_out_script_id
+                UUID optOutNodeId = (UUID) rs.getObject(11);
 
-                Route route = new Route(id, platform, channel, nodeId, companyId, status, interruptNodeId, createdAt, updatedAt);
+                Route route = new Route(id, platform, channel, nodeId, companyId, status, interruptNodeId, optInNodeId, optOutNodeId, createdAt, updatedAt);
                 allRoutes.add(route);
             }
             if (allRoutes.isEmpty()) {
@@ -858,17 +866,17 @@ PostgresPersistenceManager implements PersistenceManager {
     @Override
     public boolean updateUserStatus(User user, Platform platform, UserStatus status) {
         try (Connection connection = fetchConnection()) {
-            return optOutUser(connection, user, platform, status);
+            return updateUserStatus(connection, user, platform, status);
         } catch (SQLException e) {
             LOG.error("optOutUser: fetchConnection failed", e);
             throw new RuntimeException(e);
         }
     }
 
-    private boolean optOutUser(Connection connection, User user, Platform platform, UserStatus status) {
+    private boolean updateUserStatus(Connection connection, User user, Platform platform, UserStatus status) {
         try (PreparedStatement ps = connection.prepareStatement(UPDATE_USER_STATUS)) {
             ps.setObject(1, status, OTHER);
-            ps.setTimestamp(2, Timestamp.from(utcInstant()));
+            ps.setTimestamp(2, Timestamp.from(now()));
             ps.setObject(3, user.platformIds().get(platform));
             final int usersUpdated = ps.executeUpdate();
             return usersUpdated == 1;
@@ -1188,7 +1196,7 @@ PostgresPersistenceManager implements PersistenceManager {
         final var onlyNumber = user.platformNumbers().entrySet().iterator().next();
         final var onlyStatus = user.platformStatus().entrySet().iterator().next();
         final var onlyProfile = (user.platformProfiles() == null) ? null : user.platformProfiles().entrySet().iterator().next().getValue();
-        Instant createdAt = utcInstant();
+        Instant createdAt = now();
 
         try (PreparedStatement ps = connection.prepareStatement(USER_AMALGAM_INSERT)) {
             ps.setObject(1, onlyId.getValue()); // id
@@ -1221,7 +1229,7 @@ PostgresPersistenceManager implements PersistenceManager {
 //        int numOfPlatforms = user.platformNumbers().size();
 //        assert numOfPlatforms == 1;
 //        final Map.Entry<Platform, String> onlyPlatform = user.platformNumbers().entrySet().iterator().next();
-//        Instant createdAt = utcInstant();
+//        Instant createdAt = Instant.now();
 //
 //        LOG.info("insertUser: {}", user);
 //
@@ -1811,7 +1819,7 @@ PostgresPersistenceManager implements PersistenceManager {
                                    @NonNull UUID scriptId,
                                    @NonNull UUID routeId) throws SQLException {
 
-        var now = Timestamp.from(utcInstant());
+        var now = Timestamp.from(now());
         var campaignId = randomUUID();
 
         try (PreparedStatement ps = connection.prepareStatement(PUSH_CAMPAIGN_INSERT)) {
