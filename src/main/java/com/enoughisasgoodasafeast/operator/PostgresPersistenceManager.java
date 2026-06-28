@@ -686,47 +686,50 @@ PostgresPersistenceManager implements PersistenceManager {
         return true;
     }
 
-    public void clearSession(@NonNull Session session) throws PersistenceManagerException {
+    public boolean clearSession(@NonNull Session session) throws PersistenceManagerException {
         try (Connection connection = fetchConnection()) {
-            clearSession(connection, session);
+            return clearSession(connection, session);
         } catch (SQLException e) {
             LOG.error("clearSession: fetchConnection failed", e);
             throw new PersistenceManagerException(e);
         }
     }
 
-    private void clearSession(@NonNull Connection connection, @NonNull Session session) throws PersistenceManagerException {
+    private boolean clearSession(@NonNull Connection connection, @NonNull Session session) throws PersistenceManagerException {
         try (PreparedStatement ps = connection.prepareStatement(SESSION_DELETE)) {
             ps.setObject(1, session.getUser().groupId());
             ps.execute();
-
-            if (ps.getUpdateCount() != 1) {
-                throw new PersistenceManagerException("Session already deleted: " + session.getUser().groupId());
+            boolean ok = (1 == ps.getUpdateCount());
+            if (!ok) {
+                LOG.warn("clearSession: {} not cleared. No match or already deleted.", session.getUser().groupId());
             }
+            return ok;
         } catch (SQLException e) {
             LOG.error(e.getMessage(), e);
             throw new PersistenceManagerException(e);
         }
     }
 
-    public void saveSession(@NonNull Session session) throws PersistenceManagerException {
+    public boolean saveSession(@NonNull Session session) throws PersistenceManagerException {
         try (Connection connection = fetchConnection()) {
-            saveSession(connection, session);
+            return saveSession(connection, session);
         } catch (SQLException e) {
             LOG.error("saveSession: fetchConnection failed", e);
             throw new PersistenceManagerException(e);
         }
     }
 
-    private void saveSession(@NonNull Connection connection, @NonNull Session session) throws PersistenceManagerException {
+    private boolean saveSession(@NonNull Connection connection, @NonNull Session session) throws PersistenceManagerException {
         try (PreparedStatement ps = connection.prepareStatement(SESSION_UPSERT)) {
             ps.setObject(1, session.getUser().groupId()); // primary key
             ps.setBytes(2, sessionToBytes(session));
             ps.setTimestamp(3, Timestamp.from(session.getStartTimeMicros()));
             ps.setTimestamp(4, Timestamp.from(session.getLastUpdatedMicros()));
-            int numInsertedOrUpdated = ps.executeUpdate(); // FIXME change return to boolean
-            LOG.info("saveSession: numInsertedOrUpdated = {}", numInsertedOrUpdated);
-            LOG.info("Session upserted: {} for user groupId {}", session.getId(), session.getUser().groupId());
+            boolean ok = (1 ==  ps.executeUpdate());
+            if (!ok) {
+                LOG.error("saveSession: {} failed.", session.getUser().groupId());
+            }
+            return ok;
         } catch (SQLException | IOException e) {
             LOG.error(e.getMessage(), e);
             throw new PersistenceManagerException(e);
@@ -1216,7 +1219,7 @@ PostgresPersistenceManager implements PersistenceManager {
             int numInserted = ps.executeUpdate();
 
 
-            LOG.info("insertUserAmalgam: update {} user status.", numInserted);
+            LOG.info("insertUserAmalgam: updated {} user status.", numInserted);
             return (numInserted == 1);
 
         } catch (SQLException e) {

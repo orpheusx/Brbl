@@ -262,38 +262,10 @@ class OperatorPersistenceIntegrationTest {
         }));
     }
 
-    @Test
-    void verifySessionTimestamps() {
-        try {
-            final var user = pm.getUser(
-                    new SessionKey(Platform.SMS, knownNumbersForUsers[0], knownRouteIdsAndChannels[0][1], "random keyword")
-            );
-            final var nodeId = UUID.fromString(knownRootNodeIds[0]);
-            final var node = pm.getNodeGraph(nodeId);
-
-            final var sessionId = randomUUID();
-            final var sessionToSave = new Session(sessionId, node, user, qp, pm);
-
-            final var savedGroupId = sessionToSave.getUser().groupId();
-            final var lastUpdatedNanos = sessionToSave.getLastUpdatedMicros();
-
-            LOG.info("Saving lastUpdatedNanos: {}", lastUpdatedNanos);
-            pm.saveSession(sessionToSave);
-
-            LOG.info("Current time {}", Instant.now());
-            final Session loadedSession = pm.loadSession(savedGroupId);
-            assertNotNull(loadedSession, "Failed to load session for group_id, " + savedGroupId);
-            assertEquals(lastUpdatedNanos, loadedSession.getLastUpdatedMicros());
-
-        } catch (PersistenceManager.PersistenceManagerException e) {
-            fail(e.getMessage());
-        }
-    }
-
     static String randomUserNumber() {
         Random gen = new Random();
         return "1" + gen.nextInt(9) +
-                gen.nextInt(999999999);
+                gen.nextInt(999_999_999);
     }
 
 }

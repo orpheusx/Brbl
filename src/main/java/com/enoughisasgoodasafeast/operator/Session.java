@@ -169,24 +169,18 @@ public class Session implements ScriptContext, Serializable {
 
         this.sessionUpdated();
 
-        try {
-            if (clearSession) {
-                persistenceManager.clearSession(this);
-            } else {
-                persistenceManager.saveSession(this);
-            }
-        } catch (PersistenceManager.PersistenceManagerException e) {
-            LOG.error("flush: failed to {} session: {}", clearSession ? "clear" : "save", this, e);
-            return false;
-        }
-
         outputBuffer.clear();
 
         inputs.forEach(inputHistory::addLast);
 
         inputs.clear();
 
-        return true;
+        try {
+            return (clearSession ? persistenceManager.clearSession(this) : persistenceManager.saveSession(this));
+        } catch (PersistenceManager.PersistenceManagerException e) {
+            LOG.error("flush: failed to {} session: {}", clearSession ? "clear" : "save", this, e);
+            return false;
+        }
     }
 
     public UUID getId() {

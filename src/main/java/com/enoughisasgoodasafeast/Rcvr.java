@@ -39,6 +39,7 @@ public class Rcvr extends WebService {
 
         WebServer.builder()
                 .port(webServerPort)
+                // FIXME replace deprecated connectionConfig method
                 .connectionConfig(config -> {
                             config.connectTimeout(Duration.of(CONNECTION_TIMEOUT_SECONDS, ChronoUnit.SECONDS));
                             config.keepAlive(true);
@@ -97,7 +98,7 @@ public class Rcvr extends WebService {
 
         public void handle(ServerRequest req, ServerResponse res) throws Exception {
             super.handle(req, res);
-            LOG.info("Platform {} requested", platform); // make debug
+            LOG.debug("Platform {} requested", platform); // make debug
             String rcvPayload = req.content().as(String.class); // write this to a log?
 
             //Message moMessage = null;

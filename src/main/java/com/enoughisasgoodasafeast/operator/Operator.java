@@ -102,32 +102,55 @@ public class Operator implements SessionAwareMessageProcessor {
      */
     public BooleanSession process(Message message) {
         LOG.info("Process message: {}", message);
-        final SessionKey sessionKey = SessionKey.newSessionKey(message); //
+        var processStart = now();
+
+        final SessionKey sessionKey = SessionKey.newSessionKey(message);
         Session session = sessionCache.get(sessionKey);
         if (null == session) {
             LOG.error("Failed to find or create session for {}", sessionKey);
             return new BooleanSession(false, null);
         }
-        // FIXME
-        //  Currently, sessions are cleared once the currentNode becomes null but we could instead check for that condition
-        //   and provide an appropriate script here.
-        //  ...
+
+        UserStatus updatedUserStatus = null;
 
         var processStateNode = switch (normalizedMessageText(message)) {
 
-            case String txt when isOptOutRequest(txt) -> handleOptOut(session, message);
+            case String txt when isOptOutRequest(txt) -> {
+                updatedUserStatus = UserStatus.OUT;
+                yield handleOptOut(session, message, processStart);
+            }
 
-            case String txt when isChangeTopicRequest(txt) -> handleChangeTopic(session, message, sessionKey);
+            case String txt when isChangeTopicRequest(txt) -> {
+                updatedUserStatus = UserStatus.IN;
+                yield handleChangeTopic(session, message, sessionKey);
+            }
 
-            default -> ScriptEngine.process(session, message);
-
+            default -> {
+                updatedUserStatus = UserStatus.IN;
+                yield ScriptEngine.process(session, message);
+            }
         };
 
+        var sessionUser = session.getUser();
+        var statusNeedsUpdate = updatedUserStatus != sessionUser.platformStatus().get(sessionKey.platform());
+
+        if (statusNeedsUpdate) {
+            LOG.info("Session status needs update to {}", updatedUserStatus);
+            if(persistenceManager.updateUserStatus(sessionUser, sessionKey.platform(), updatedUserStatus)) {
+                sessionUser.platformStatus().put(sessionKey.platform(), UserStatus.IN);
+                LOG.info("Updated platform status for user: {}", sessionUser.platformStatus().get(sessionKey.platform()));
+            } else {
+                LOG.error("process: failed to update user status to updatedUserStatus for {}", sessionUser);
+                return new BooleanSession(false, session);
+            }
+        }
+
         if (session.getCurrentNode() == null) {
-            LOG.debug("Clearing completed session from cache: {}", session);
+            LOG.info("Clearing completed session from cache: {}", session);
             sessionCache.invalidate(sessionKey);
         }
 
+        // FIXME Consider returning the ProcessStateNode (with RETRY value added) instead?
         return new BooleanSession(processStateNode.processState()!=ProcessState.ERROR, session);
     }
 
@@ -154,7 +177,25 @@ public class Operator implements SessionAwareMessageProcessor {
         return "change topic".equals(txt);
     }
 
-    ProcessStateNode handleOptOut(Session session, Message message) {
+    ProcessStateNode handleOptOut(Session session, Message message, Instant processStart) {
+
+        var platform = message.platform();
+        var sessionUser = session.getUser();
+        var status = sessionUser.platformStatus().get(platform);
+        var isBrandNew = sessionUser.platformCreationTimes().get(platform).isAfter(processStart);
+        LOG.info("handleOptOut: phone {} platform {} status {} isBrandNew {}", message.from(), platform, status, isBrandNew);
+
+        // If the user is brand-new OR an existing user that has already opted out, don't process the message further.
+        // Could we do this sooner (in the findOrCreateSession method)?
+        if (isBrandNew || UserStatus.OUT == status) {
+
+            // Actually, is the user isBrandNew then maybe just delete the user?
+            if (isBrandNew && !persistenceManager.updateUserStatus(sessionUser, platform, UserStatus.OUT)) {
+                LOG.error("handleOptOut: Failed to set OPT_OUT on brand-new user: {}", sessionUser); // FIXME suggests lurking issues
+            }
+            return new ProcessStateNode(ProcessState.NOOP, null);
+        }
+
         // Replace the currentNode with one of type OPT_OUT. Should this be a constant value? Pulled from the database?
         var optOutNode = new Node("Okay, You're now opted out of messages from Brbl.", NodeType.OPT_OUT);
         optOutNode.edges().add(new Edge(null));
@@ -168,12 +209,12 @@ public class Operator implements SessionAwareMessageProcessor {
         // FIXME Not sure how to handle failures in the processing (above) and/or the status update (below)
 
         // FIXME remove the direct setting of the user and instead remove the user from the cache.
-        LOG.info("handleOptOut: user status was: {}", session.getUser().platformStatus().get(message.platform()));
-        var userStatus = session.getUser().platformStatus().put(message.platform(), UserStatus.OUT);
-        LOG.info("handleOptOut: user status changed to: {}", session.getUser().platformStatus().get(message.platform()));
+        LOG.info("handleOptOut: user status was: {}", status);
+        var userStatus = sessionUser.platformStatus().put(platform, UserStatus.OUT);
+        LOG.info("handleOptOut: user status changed to: {}", sessionUser.platformStatus().get(platform));
 
         // Update the user record status to UserStatus.OUT.
-        boolean updateOk = persistenceManager.updateUserStatus(session.getUser(), message.platform(), UserStatus.OUT);
+        boolean updateOk = persistenceManager.updateUserStatus(sessionUser, platform, UserStatus.OUT);
         LOG.error("handleOptOut: updateUserStatus result: {}", updateOk);
 
 
@@ -284,9 +325,13 @@ public class Operator implements SessionAwareMessageProcessor {
             final Instant userCreatedAt = user.platformCreationTimes().get(sessionKey.platform());
             try {
                 boolean isNewUser = start.isBefore(userCreatedAt) || start.equals(userCreatedAt); // true if brand-new user
-                boolean isExistingUserNeedsOptIn =
-                        !isNewUser && UserStatus.OUT.equals(user.platformStatus().get(sessionKey.platform())); // true if returning user
                 LOG.info("isNewUser: {}", isNewUser);
+
+                boolean isExistingUserNeedsOptIn =
+                        !isNewUser
+                                &&
+                        UserStatus.OUT.equals(user.platformStatus().get(sessionKey.platform())); // true if returning user
+
                 LOG.info("isExistingUserNeedsOptIn: {}", isExistingUserNeedsOptIn);
 
                 if (isNewUser || isExistingUserNeedsOptIn) {
@@ -300,21 +345,17 @@ public class Operator implements SessionAwareMessageProcessor {
                     }
 
                     // We don't want to modify the cached opt-in graph, so we create a copy of it that we can modify.
-//                    final var copiedOptInGraph = copyGraphAppending(originalOptInGraph, selectedGraph);
-                    // FIXME we need to replace the target of the last edge of the last node.
-//                    final var link = copiedOptInGraph.edges().getLast().copyReplacing(selectedGraph);
-//                    copiedOptInGraph.edges().clear();
-//                    copiedOptInGraph.edges().add(link);
-//                    selectedGraph = copiedOptInGraph;
                     selectedGraph = copyGraphAppending(originalOptInGraph, selectedGraph);
 
-                    // FIXME Is this the right place to update the user's status?
-                    if (isExistingUserNeedsOptIn && persistenceManager.updateUserStatus(user, sessionKey.platform(), UserStatus.IN)) {
-                        user.platformStatus().put(sessionKey.platform(), UserStatus.IN);
-                        LOG.info("Updated platform status for user: {}", user.platformStatus().get(sessionKey.platform()));
-                    } else {
-                        LOG.error("CRITICAL: Failed to OPT_IN  existing user: {}", user.platformStatus().get(sessionKey.platform()));
-                    }
+//                    if (isExistingUserNeedsOptIn) {
+//                        if (persistenceManager.updateUserStatus(user, sessionKey.platform(), UserStatus.IN)) {
+//                            user.platformStatus().put(sessionKey.platform(), UserStatus.IN);
+//                            LOG.info("Updated platform status for user: {}", user.platformStatus().get(sessionKey.platform()));
+//                        } else {
+//                            LOG.error("CRITICAL: Failed to OPT_IN  existing user: {}", user.platformStatus().get(sessionKey.platform()));
+//                            // FIXME If we arrive here we have a lurking issue that will likely bite us in the butt with weird behavior later on.
+//                        }
+//                    }
                 }
 
                 if (isNewUser || null == (session = persistenceManager.loadSession(user.groupId()))) {

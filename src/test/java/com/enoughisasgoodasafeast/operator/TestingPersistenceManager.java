@@ -96,9 +96,10 @@ public class TestingPersistenceManager implements PersistenceManager {
     private final Map<UUID, byte[]> savedSessions = new HashMap<>();
 
     @Override
-    public void saveSession(Session session) throws PersistenceManagerException {
+    public boolean saveSession(Session session) throws PersistenceManagerException {
         try {
             savedSessions.put(session.getId(), SessionSerde.sessionToBytes(session));
+            return true;
         } catch (IOException e) {
             LOG.error("Failed to serialize session for {}", session.getId(), e);
             throw new PersistenceManagerException(e);
@@ -122,8 +123,9 @@ public class TestingPersistenceManager implements PersistenceManager {
     }
 
     @Override
-    public void clearSession(@NonNull Session session) throws PersistenceManagerException {
+    public boolean clearSession(@NonNull Session session) throws PersistenceManagerException {
         savedSessions.remove(session.getId());
+        return true;
     }
 
     @Override

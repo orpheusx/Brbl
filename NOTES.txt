@@ -5891,8 +5891,70 @@ It isn't just the timestamp on the session that's out of sync. Sndr's log of the
 
 Delete the pointless test, verifySessionTimestamps, in OperatorPersistenceIntegrationTest.
 
-After a bit of research, I discovered that the NanoClock class is only meant for elapsed time calculations not a wall-clock as I'd been using it.
-Gotta convert pretty much all our uses to Instant.now(). On MacOS this provides microsecond precision. On Linux, it's either microseconds or nanoseconds. bash has a `clock_getres CLOCK_REALTIME` that apparently indicates which it is.
+After a bit of research, I discovered that the NanoClock class is only meant for elapsed time calculations, not a wall-clock as I'd been using it.
+Gotta convert pretty much all our uses to Instant.now(). On MacOS this provides microsecond precision. On Linux, it's either microseconds or nanoseconds. Linux has a `clock_getres CLOCK_REALTIME` that apparently indicates which it supports.
 
 TODO
-    _ Uncomment and fix tests in OperatorTest.
+    X Uncomment and fix tests in OperatorTest. Re-run manual tests to verify nothing broke.
+    X Update saveSession and clearSession to return booleans.
+    _ Implement a check for STOP as the first message of a new session for an existing user. Currently this causes a retry storm.
+    _ Update handleOptOut to fetch and use the configured OPT_OUT script (currently hardcoded).
+    _ Unit tests for copyGraphAppending that prove its correctness for graphs that are deeper than a single Node with a single Edge.
+
+After these items, the next thing on our plate should probably be
+1) Script authoring UI. Is it worth using Hibernate for this?
+2) Thinking about triggered actions and where it might fit in the overall architecture.
+    one example: User replies yes to an offer to receive special offers --> trigger adds them to a list of users (campaign_users?)
+2) Scheduling for push campaigns using db-scheduler (Double check pricing of JobRunnr and take a peek at Oban.)
+    BTW push campaigns should/must never send automated or marketing messages late at night or early in the morning. The standard compliant window under the CTIA guidelines is between 9:00 AM and 9:00 PM local time. This generally seems like a good idea though the restriction may not make sense for some applications. The terms and conditions should communicate this explicitly.
+
+==== 2026/06/26 ====
+
+Preventing the STOP Storm:
+It happens when
+    When user exists, is OPTED_OUT, has no session.
+    OR
+    When user doesn't already exist (e.g. "1384405945")
+
+In the output from container "operator-1" we see
+    "Errors flushing session" which is because the sql op didn't find the session that it wanted to delete. Note: The flush() method either upserts the new session or deletes it.
+        and
+    "...OperatorConsumer - Rejecting Message[id=... text=stop]." The latter explains why it turns into a storm (the message is being retried over and over.) Because the delete fails and returns ProcessState.ERROR which later causes the OperatorConsumer to reject the message.
+
+We could add a RETRY value to the ProcessState to distinguish between errors that can be reasonably retried. Either way we should probably ack and push the message to a different queue.
+
+Ok, we now handle the brand-new user case...still have trouble with the no-session and already opted out case...
+
+==== 2026/06/28 ====
+
+Lots of progress yesterday.
+
+TODO
+    X Implement a check for STOP as the first message of a new session for an existing user. Currently this causes a retry storm.
+    _ Update handleOptOut to fetch and use the configured OPT_OUT script (currently hardcoded).
+    _ Unit tests for copyGraphAppending that prove its correctness for graphs that are deeper than a single Node with a single Edge.
+
+Random note: our RabbitMQ container's logs are using UTC while the rest are in the local time zone. Gotta fix this at some point.
+
+Corner cases for handleOptOut
+unknown user X on platform Y sends STOP to channel Z
+    c.e.operator.Operator - New User created: User[platformIds={SMS=019f0e67-47d0-7ac9-890f-25a149526ca8}...platformNumbers={SMS=1092777138}...
+    c.e.operator.Operator - isNewUser: true
+    c.e.operator.Operator - isExistingUserNeedsOptIn: false
+    c.e.operator.Operator - Creating new Session for user 019f0e67-47d0-70f4-aab4-8cb9ce0811de
+    c.e.operator.Operator - handleOptOut: phone 1092777138 platform SMS status null isBrandNew true
+    c.e.operator.Operator - Session status needs update to OUT
+    c.e.operator.Operator - Updated platform status for user: IN
+no response sent to X
+[user record now exists for platform Y with status OUT]
+same user (X) sends STOP to channel Z
+    Operator - handleOptOut: phone X platform Y status IN isBrandNew false << findOrCreate
+    Operator - handleOptOut: user status was: IN
+    Operator - handleOptOut: user status changed to: OUT
+Opt-out response sent to X even though they never opted in to anything.
+
+This is sorta workable but also kind of sucks.
+
+Stepping back...
+implement an scriptype OPT_OUT and use it evaluate the combination with brand new user immediately after the structured concurrent block in findOrCreateSession.
+defer the persisting of new users to the flush call back.

@@ -44,11 +44,11 @@ public interface PersistenceManager {
 
     boolean updateUserStatus(User user, Platform platform, UserStatus status);
 
-    void saveSession(Session session) throws PersistenceManagerException;
+    boolean saveSession(Session session) throws PersistenceManagerException;
 
     Session loadSession(UUID id) throws PersistenceManagerException;
 
-    void clearSession(@NonNull Session session) throws PersistenceManagerException;
+    boolean clearSession(@NonNull Session session) throws PersistenceManagerException;
 
     @Nullable PushCampaign getPushCampaign(@NonNull UUID campaignId);
 

@@ -15,6 +15,7 @@ import java.util.regex.Pattern;
 import static com.enoughisasgoodasafeast.Functions.randomUUID;
 import static com.enoughisasgoodasafeast.Message.newMO;
 import static com.enoughisasgoodasafeast.Message.newMT;
+import static java.io.IO.println;
 import static java.util.Objects.requireNonNull;
 import static org.junit.jupiter.api.Assertions.*;
 
@@ -31,7 +32,7 @@ public class OperatorTest {
     public static final String SHORT_CODE_4 = "12124468003";
     public static final String MO_TEXT_1 = "Hello Brbl";
     public static final String MO_TEXT_2 = "Howdy Brbl";
-    public static final String SCRIPT_RESPONSE = "script node response";
+    public static final String INITIAL_SCRIPT_RESPONSE = "The initial response to the user MO";
 
     public static final String COLOR_QUIZ_KEYWORD = "Color quiz";
     public static final String COLOR_QUIZ_START_TEXT = "What is your favorite color? 1) red 2) blue 3) flort";
@@ -63,7 +64,9 @@ public class OperatorTest {
             MOBILE_MX, SHORT_CODE_4, "wolverine"
     );
 
-    public static final SessionKey SESSION_KEY_US_SHORT_CODE_1 = SessionKey.newSessionKey(mo1);
+    private static final SessionKey SESSION_KEY_US_SHORT_CODE_1 = SessionKey.newSessionKey(mo1);
+    private static final String WELCOME_OPT_IN_MESSAGE = "Welcome. You can opt out at any time by sending 'STOP'";
+    private static final String CHINESE_OPT_IN_MESSAGE = "欢迎。您可以随时发送“STOP”以退订。";
 
     private InMemoryQueueProducer queueProducer;
     private Operator operator = null;
@@ -127,14 +130,21 @@ public class OperatorTest {
                     edge.matchText(), edge.responseText(), edge.targetNode().label(), edge.targetNode().type());
         });
 
-        Node optInNode = new Node("Welcome. You can opt out at any time by sending 'STOP'", NodeType.SEND_MESSAGE, "OptIn");
+        Node optInNode = new Node(WELCOME_OPT_IN_MESSAGE, NodeType.SEND_MESSAGE, "OptIn");
         optInNode.edges().add(new Edge(null));
+
+        Node altOptInNode = new Node(CHINESE_OPT_IN_MESSAGE, NodeType.SEND_MESSAGE, "ChineseOptIn");
+        altOptInNode.edges().add(new Edge(null));
+
         Node optOutNode = new Node("You have been opted out. Thanks for all the fish", NodeType.SEND_MESSAGE, "OptOut");
         optOutNode.edges().add(new Edge(null));
 
         // Define a default conversation graph for the platform-channel, adding it with the default route.
         Node defaultNode = new Node("Welcome! You can talk to us about the following topics...", NodeType.END_OF_CHAT, "CustomerTopicStarter");
-        Route route = new Route(Platform.SMS, mo1.to(), defaultNode.id(), randomUUID(), confirmChangeTopic.id(), optInNode.id(), optOutNode.id());
+        Route route1 = new Route(Platform.SMS, mo1.to(), defaultNode.id(), randomUUID(), confirmChangeTopic.id(), optInNode.id(), optOutNode.id());
+        Route route2 = new Route(Platform.SMS, SHORT_CODE_2, defaultNode.id(), randomUUID(), confirmChangeTopic.id(), optInNode.id(), optOutNode.id());
+        Route route3 = new Route(Platform.SMS, SHORT_CODE_3, defaultNode.id(), randomUUID(), confirmChangeTopic.id(), altOptInNode.id(), optOutNode.id());
+
 
         // Remember the default routes only holds the script id. We still need to add the script itself to the main cache.
         ((TestingPersistenceManager) persistenceManager).addScript(defaultNode.id(), defaultNode);
@@ -142,15 +152,19 @@ public class OperatorTest {
         ((TestingPersistenceManager) persistenceManager).addScript(
                 confirmChangeTopic.id(), confirmChangeTopic);
         ((TestingPersistenceManager) persistenceManager).addScript(optInNode.id(), optInNode);
+        ((TestingPersistenceManager) persistenceManager).addScript(altOptInNode.id(), altOptInNode);
+        ((TestingPersistenceManager) persistenceManager).addScript(optInNode.id(), optInNode);
         ((TestingPersistenceManager) persistenceManager).addScript(optOutNode.id(), optOutNode);
 
         var onlyCompanyId = UUID.fromString("019d2055-922c-75f7-a80e-091f01382fa3");
         var allRoutes = new Route[]{
-                route,
+                route1,
+                route2,
+                route3,
                 new Route(
                         randomUUID(),
                         Platform.SMS,
-                        "12124468003",
+                        SHORT_CODE_4,
                         presentQuestion.id(), // defaultNodeId
                         onlyCompanyId,
                         RouteStatus.ACTIVE,
@@ -165,10 +179,11 @@ public class OperatorTest {
         ((TestingPersistenceManager) persistenceManager).setActiveRoutes(allRoutes);
     }
 
-    //@Test
+
+    @Test
     void processAndCheckResponse() {
 
-        Node node1 = new Node(SCRIPT_RESPONSE, NodeType.SEND_MESSAGE, "labelForProcessAndCheckResponse");
+        Node node1 = new Node(INITIAL_SCRIPT_RESPONSE, NodeType.SEND_MESSAGE, "labelForProcessAndCheckResponse");
         Edge edge1 = new Edge(List.of("1", "2", "3"), null);
         node1.edges().add(edge1);
 
@@ -180,38 +195,59 @@ public class OperatorTest {
         operator.scriptByKeywordCache.put(KeywordCacheKey.newKey(SessionKey.newSessionKey(mo2)), node1);
         operator.scriptByKeywordCache.put(KeywordCacheKey.newKey(SessionKey.newSessionKey(mo3)), node1);
 
-        Message mt1 = newMT(SHORT_CODE_1, MOBILE_CA, SCRIPT_RESPONSE);
-        Message mt2 = newMT(SHORT_CODE_2, MOBILE_MX, SCRIPT_RESPONSE);
-        Message mt3 = newMT(SHORT_CODE_3, MOBILE_US, SCRIPT_RESPONSE);
+        Message mt1 = newMT(SHORT_CODE_1, MOBILE_CA, INITIAL_SCRIPT_RESPONSE);
+        Message mt2 = newMT(SHORT_CODE_2, MOBILE_MX, INITIAL_SCRIPT_RESPONSE);
+        Message mt3 = newMT(SHORT_CODE_3, MOBILE_US, INITIAL_SCRIPT_RESPONSE);
 
         assertDoesNotThrow(() -> {
             operator.process(mo1);
         });
 
-        assertEquals(1, queueProducer.enqueuedCount());
+        //IO.println("------ Messages queued for mo1 ------");
+        //queueProducer.enqueued().forEach(System.out::println);
+        assertEquals(2, queueProducer.enqueuedCount()); // Expect the INITIAL_SCRIPT_RESPONSE MT preceded by the OPT_IN notification.
+
         assertEquals(mt1.to(), queueProducer.enqueued().getFirst().to());
         assertEquals(mt1.from(), queueProducer.enqueued().getFirst().from());
-        assertEquals(mt1.text(), queueProducer.enqueued().getFirst().text());
+        assertEquals(WELCOME_OPT_IN_MESSAGE, queueProducer.enqueued().getFirst().text());
+        assertEquals(INITIAL_SCRIPT_RESPONSE, queueProducer.enqueued().get(1).text());
         assertEquals(mt1.type(), queueProducer.enqueued().getFirst().type());
+        queueProducer.enqueued().clear(); // Need to manually clear the enqueued message list between process() calls.
 
         assertDoesNotThrow(() -> { operator.process(mo2); });
+        println("------ Messages queued for mo2 ------");
+        queueProducer.enqueued().forEach(System.out::println);
+
         assertEquals(2, queueProducer.enqueuedCount());
         assertEquals(mt2.to(), queueProducer.enqueued().get(1).to());
         assertEquals(mt2.from(), queueProducer.enqueued().get(1).from());
         assertEquals(mt2.text(), queueProducer.enqueued().get(1).text());
         assertEquals(mt2.type(), queueProducer.enqueued().get(1).type());
+        queueProducer.enqueued().clear();
 
+        // The opt-in message for the route specified by mo3 is different.
         assertDoesNotThrow(() -> { operator.process(mo3); });
-        assertEquals(3, queueProducer.enqueuedCount());
-        assertEquals(mt3.to(), queueProducer.enqueued().get(2).to());
-        assertEquals(mt3.from(), queueProducer.enqueued().get(2).from());
-        assertEquals(mt3.text(), queueProducer.enqueued().get(2).text());
-        assertEquals(mt3.type(), queueProducer.enqueued().get(2).type());
+        //IO.println("------ Messages queued for mo3 ------");
+        //queueProducer.enqueued().forEach(System.out::println);
+
+        assertEquals(2, queueProducer.enqueuedCount());
+
+        assertEquals(mt3.to(), queueProducer.enqueued().getFirst().to());
+        assertEquals(mt3.from(), queueProducer.enqueued().getFirst().from());
+        assertEquals(CHINESE_OPT_IN_MESSAGE, queueProducer.enqueued().getFirst().text());
+        assertEquals(mt3.type(), queueProducer.enqueued().getFirst().type());
+
+        assertEquals(mt3.to(), queueProducer.enqueued().get(1).to());
+        assertEquals(mt3.from(), queueProducer.enqueued().get(1).from());
+        assertEquals(mt3.text(), queueProducer.enqueued().get(1).text());
+        assertEquals(mt3.type(), queueProducer.enqueued().get(1).type());
+        queueProducer.enqueued().clear();
     }
+
 
     @Test
     void getUserSessionUncachedCached() {
-        Node node1 = new Node(SCRIPT_RESPONSE, NodeType.SEND_MESSAGE);
+        Node node1 = new Node(INITIAL_SCRIPT_RESPONSE, NodeType.SEND_MESSAGE);
         Edge edge1 = new Edge(List.of("1", "2", "3"), null);
         node1.edges().add(edge1);
 
@@ -240,6 +276,7 @@ public class OperatorTest {
 
     }
 
+
     @Test
     void findMatchForKeyword() {
         final Map<Pattern, Keyword> all = operator.allKeywordsByPatternCache.get(Operator.ALL);
@@ -261,12 +298,11 @@ public class OperatorTest {
         assertNull(operator.findMatch(all, keyNotMatchingKeyword));
     }
 
-    //@Test
+
+    @Test
     void stepThroughPresentProcessMulti() {
         // Preflight check: cache is empty.
         assertEquals(0, operator.scriptByKeywordCache.estimatedSize());
-//        ((TestingPersistenceManager) persistenceManager).addScript(
-//                TestingPersistenceManager.SCRIPT_ID, presentQuestion);
 
         // Initiate the conversation
         assertDoesNotThrow(() -> {
@@ -289,26 +325,33 @@ public class OperatorTest {
 
         final List<Message> queuedMessages = queueProducer.enqueued();
 
-        assertEquals(1, queuedMessages.size(), "Unexpected number of messages queued.");
-        assertTrue(requireNonNull(queuedMessages.getFirst()).text().contains("favorite color"), "Expected text not found in first queued message.");
+        assertEquals(2, queuedMessages.size(), "Unexpected number of messages queued.");
+        assertTrue(requireNonNull(queuedMessages.get(0)).text().startsWith(WELCOME_OPT_IN_MESSAGE));
+        assertTrue(requireNonNull(queuedMessages.get(1)).text().contains("favorite color"), "Expected text not found in first queued message.");
 
-        assertEquals(NodeType.PROCESS_MULTI, session.getCurrentNode().type(), "Session node state has unexpected type."); // The current node should be awaiting a response
+        // The session's currentNode should be awaiting a response.
+        // Arguably this is a bad test since it makes assumption about the internal state of the Operator/Session.
+        assertEquals(NodeType.PROCESS_MULTI, session.getCurrentNode().type(), "Session node state has unexpected type.");
 
         // Send a valid response
         assertDoesNotThrow(() -> {
             operator.process(mo5); // answer given should select "flort"
         });
 
+        queuedMessages.forEach(message -> {
+            println("queued message: " + message.text());
+        });
+
         // Check the rest of the MT responses.
-        assertEquals(3, queuedMessages.size(), "Unexpected number of messages queued.");
-        assertEquals(answerFlort.responseText(), queuedMessages.get(1).text(), "Expected text not found in 2nd queued message.");
-        assertEquals(endConversation.text(), queuedMessages.get(2).text());
+        assertEquals(4, queuedMessages.size(), "Unexpected number of messages queued.");
+        assertEquals(answerFlort.responseText(), queuedMessages.get(2).text(), "Expected text not found in 2nd queued message.");
+        assertEquals(endConversation.text(), queuedMessages.get(3).text());
 
         // Check the evaluatedNodes.
         final List<Node> evaluatedNodes = session.getEvaluatedNodes();
-        assertEquals(COLOR_QUIZ_UNEXPECTED_INPUT, evaluatedNodes.get(1).text());
-        assertEquals(COLOR_QUIZ_END_CONVERSATION, evaluatedNodes.get(2).text());
-        assertEquals(COLOR_QUIZ_START_TEXT, evaluatedNodes.get(0).text());
+        assertEquals(COLOR_QUIZ_UNEXPECTED_INPUT, evaluatedNodes.get(2).text());
+        assertEquals(COLOR_QUIZ_END_CONVERSATION, evaluatedNodes.get(3).text());
+        assertEquals(COLOR_QUIZ_START_TEXT, evaluatedNodes.get(1).text());
 
         // Check that the Session's currentNode is now the last node in the conversation
         assertNull(session.getCurrentNode(), "Session's currentNode is unexpectedly not null.");
@@ -317,13 +360,11 @@ public class OperatorTest {
     }
 
 
-//    @Test
+    @Test
     void stepThroughPresentProcessMultiWithBadInput() {
 
         // Preflight check: cache is empty.
         assertEquals(0, operator.scriptByKeywordCache.estimatedSize());
-//        ((TestingPersistenceManager) persistenceManager).addScript(
-//                TestingPersistenceManager.SCRIPT_ID, presentQuestion);
 
         // Initiate the conversation
         assertDoesNotThrow(() -> {
@@ -338,14 +379,19 @@ public class OperatorTest {
 
         // Make sure we get the expected initial response.
         final List<Message> queuedMessages = queueProducer.enqueued();
-        assertEquals(1, queuedMessages.size(), "Unexpected number of messages queued.");
+        queuedMessages.forEach((message -> {println("stepThroughPresentProcessMultiWithBadInput message:" + message.text());}));
+        assertEquals(2, queuedMessages.size(), "Unexpected number of messages queued.");
         // Expect the text from an OPT
-        assertTrue(requireNonNull(queuedMessages.getFirst()).text().contains("Welcome"), "Expected text not found in first queued message.");
+        assertTrue(requireNonNull(queuedMessages.getFirst()).text().contains("STOP"), "Expected text not found in first queued message.");
+        assertTrue(requireNonNull(queuedMessages.get(1)).text().contains(COLOR_QUIZ_START_TEXT),
+                "Expected text not found in second queued message.");
         // The current node should now be awaiting a response
-        assertEquals(NodeType.PRESENT_MULTI, session.getCurrentNode().type(), "Session node state has unexpected type.");
+        assertEquals(NodeType.PROCESS_MULTI, session.getCurrentNode().type(), "Session node state has unexpected type.");
+
+        queueProducer.enqueued().clear();
 
         // Now provide bad input to the question posed
-        for (int i = 1; i < 3; i++) { // TODO At some point we should add handling for repeated failures. Until then we continue to handle bad input the same way.
+        for (int i = 0; i < 3; i++) { // TODO At some point we should add handling for repeated failures. Until then we continue to handle bad input the same way.
             assertDoesNotThrow(() -> { operator.process(unexpected); });
             final Message errorMessage = queuedMessages.get(i);
             LOG.info("Bad input response: {}", errorMessage.text());
@@ -370,17 +416,17 @@ public class OperatorTest {
 
         //evaluatedNodes.forEach(node -> LOG.info("Evaluated node: {}", node));
 
-        assertEquals(3, evaluatedNodes.size());
-        assertEquals(COLOR_QUIZ_START_TEXT, evaluatedNodes.get(0).text());
-        assertEquals(COLOR_QUIZ_UNEXPECTED_INPUT, evaluatedNodes.get(1).text());
-        assertEquals(COLOR_QUIZ_END_CONVERSATION, evaluatedNodes.get(2).text());
+        assertEquals(4, evaluatedNodes.size());
+        assertEquals(WELCOME_OPT_IN_MESSAGE, evaluatedNodes.get(0).text());
+        assertEquals(COLOR_QUIZ_START_TEXT, evaluatedNodes.get(1).text());
+        assertEquals(COLOR_QUIZ_UNEXPECTED_INPUT, evaluatedNodes.get(2).text());
+        assertEquals(COLOR_QUIZ_END_CONVERSATION, evaluatedNodes.get(3).text());
 
-        assertNull(session.getCurrentNode(), "Session's currentNode is unexpected.");
-//        });
+        assertNull(session.getCurrentNode(), "Session's currentNode is unexpected. Should be null");
     }
 
 
-    //@Test
+    @Test
     void stepThroughWithUnexpectedInputAndChangeTopic() {
         // Preflight check: cache is empty.
         assertEquals(0, operator.scriptByKeywordCache.estimatedSize());
@@ -398,18 +444,23 @@ public class OperatorTest {
 
         // Make sure we get the expected initial response.
         final List<Message> queuedMessages = queueProducer.enqueued();
-        assertEquals(1, queuedMessages.size(), "Unexpected number of messages queued.");
-        assertTrue(requireNonNull(queuedMessages.getFirst()).text().contains("favorite color"), "Expected text not found in first queued message.");
+        queuedMessages.forEach((message -> { println("stepThroughWithUnexpectedInputAndChangeTopic: " + message.text()); }));
+        assertEquals(2, queuedMessages.size(), "Unexpected number of messages queued.");
+        assertTrue(requireNonNull(queuedMessages.get(1)).text().contains("favorite color"),
+                "Unexpected text found in first queued message: " + queuedMessages.get(1).text());
         // The current node should now be awaiting a response
         assertEquals(NodeType.PROCESS_MULTI, session.getCurrentNode().type(), "Session node state has unexpected type.");
 
+        queuedMessages.clear();
         // Now provide bad input to the question posed
-        for (int i = 1; i <= 2; i++) { // TODO At some point we should add handling for repeated failures. Until then we continue to handle bad input the same way.
+
+        for (int i = 0; i < 3; i++) { // TODO At some point we should add handling for repeated failures. Until then we continue to handle bad input the same way.
             assertDoesNotThrow(() -> { operator.process(unexpected); });
             final Message errorMessage = queuedMessages.get(i);
-            assertTrue(errorMessage.text().contains(processAnswer.text()), "Expected error response not found.");
+            assertTrue(errorMessage.text().contains(processAnswer.text()), "Wrong error: " + errorMessage.text());
             // Since we don't advance when there's an error we should still be on the ProcessMulti
-            assertEquals(NodeType.PROCESS_MULTI, session.getCurrentNode().type(), "Session node state has unexpected type.");
+            assertEquals(NodeType.PROCESS_MULTI, session.getCurrentNode().type(),
+                    "Session node state has unexpected type: " + session.getCurrentNode().type());
         }
 
         // Current node before interrupt request:
@@ -437,6 +488,7 @@ public class OperatorTest {
         assertNotNull(session.getCurrentNode());
     }
 
+
     @Test
     void findOrCreateUserUncachedCached() {
         assertDoesNotThrow(() -> {
@@ -459,6 +511,7 @@ public class OperatorTest {
             assertTrue((uncachedUser == cachedUser), "User objects were the same instance.");
         });
     }
+
 
     @Test
     void deriveCountryCodeFromId() {
