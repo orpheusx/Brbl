@@ -154,7 +154,7 @@ public class Session implements ScriptContext, Serializable {
         return evaluatedNodes.getFirst();
     }
 
-    public boolean flush(boolean clearSession) {
+    public boolean flush(boolean isClearSession) {
         LOG.info("flush: outputBuffer size = {}", outputBuffer.size());
         Message mtMessage;
         while ((mtMessage = outputBuffer.poll()) != null) {
@@ -176,9 +176,9 @@ public class Session implements ScriptContext, Serializable {
         inputs.clear();
 
         try {
-            return (clearSession ? persistenceManager.clearSession(this) : persistenceManager.saveSession(this));
+            return (isClearSession ? persistenceManager.clearSession(this) : persistenceManager.saveSession(this));
         } catch (PersistenceManager.PersistenceManagerException e) {
-            LOG.error("flush: failed to {} session: {}", clearSession ? "clear" : "save", this, e);
+            LOG.error("flush: failed to {} session: {}", isClearSession ? "clear" : "save", this, e);
             return false;
         }
     }

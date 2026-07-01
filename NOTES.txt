@@ -5953,8 +5953,56 @@ same user (X) sends STOP to channel Z
     Operator - handleOptOut: user status changed to: OUT
 Opt-out response sent to X even though they never opted in to anything.
 
-This is sorta workable but also kind of sucks.
+This is sorta workable but also kind of sucks and could create fuzziness in our reporting that we'd have to munge our way out of.
+In particular it handles STOP in the middle of a conversation but not at the start (where the keywords mechanism could be useful.)
 
-Stepping back...
-implement an scriptype OPT_OUT and use it evaluate the combination with brand new user immediately after the structured concurrent block in findOrCreateSession.
-defer the persisting of new users to the flush call back.
+Stepping back, consider the following approach...
+    require the creation of a keyword entry using the standard STOP_WORDS
+    type the referenced script as ScriptType.OPT_OUT
+    set a flag to indicate that the user in this case should not be persisted.
+    defer the persisting of new users to the end of the process() call and skipping it according the flag.
+
+==== 2026/07/01 ====
+
+TODO
+    _ Update handleOptOut to fetch and use the configured OPT_OUT script (currently hardcoded).
+    _ Unit tests for copyGraphAppending that prove its correctness for graphs that are deeper than a single Node with a single Edge.
+
+Test scheme:
+
+    For unknown user A
+        send STOP x3
+            --> no response for each (no user or session created)
+        send hello
+            --> opt in notification message followed by default script (both user and session created, User status => IN)
+        loop through script
+            --> expect responses per script (session updated timestamp for each)
+        send CHANGE TOPIC
+            --> response asks for confirmation:
+                yes --> response returns to start of conversation
+                no  --> latest blocking Node message (re-asking the question.)
+        loop through script
+            --> expect responses per script (session updated timestamp for each)
+        send STOP
+            --> opted out message received (session removed, User status = IN)
+        send STOP
+            --> no response (no session. user unmodified.)
+        send hello << this is where we currently fail. with existing user account but no session its just eating the input.
+            --> opt in notification message followed by default script (both user and session created, User status => IN)
+    For known but OPTED_OUT user B
+        send STOP x3
+            --> no response for each, no session, user unmodified.)
+        send hello
+            --> opt in notification message followed by default script (new session created, User status => IN)
+        loop through script
+            --> expect responses per script (session updated timestamp for each)
+        send CHANGE TOPIC
+            --> response asks for confirmation:
+                yes --> response returns to start of conversation
+                no  --> latest blocking Node message (re-asking the question.)
+        loop through script
+            --> expect responses per script (session updated timestamp for each)
+        send STOP
+            --> opted out message received (session removed, User status = IN)
+        send STOP
+            --> no response (no session. user unmodified.)

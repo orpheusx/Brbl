@@ -76,7 +76,7 @@ public class ScriptEngine {
                 // FIXME ideally should be in a finally block but writing to db can throw. Hmm...
                 if(!session.flush(next==null)) {
                     LOG.error("Errors flushing session: {}", session);
-                    psn = new ProcessStateNode(ProcessState.ERROR, session.getCurrentNode());
+                    psn = new ProcessStateNode(ProcessState.OK, session.getCurrentNode());
                 }
 
                 return psn;

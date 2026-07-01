@@ -111,6 +111,36 @@ public class Operator implements SessionAwareMessageProcessor {
             return new BooleanSession(false, null);
         }
 
+        // If sessionUser is brand-new and the session's initial Node of the session was not of type OPT_OUT
+        // then persist the user.
+        var userCreatedAt = session.getUser().platformCreationTimes().get(message.platform());
+        var isUserBrandNew = processStart.isBefore(userCreatedAt) || processStart.equals(userCreatedAt);
+        var isSkipProcessing = (NodeType.OPT_OUT == session.getCurrentNode().type())
+                                    && (isUserBrandNew || UserStatus.OUT == session.getUser().platformStatus().get(message.platform()));
+
+        LOG.info("isSkipProcessing: {} for user status {}", isSkipProcessing, session.getUser().platformStatus().get(message.platform()));
+        LOG.info("currentNode type: {}", session.getCurrentNode().type());
+
+        if (isSkipProcessing) {
+            // Send no response and return immediately.
+            userCache.invalidate(sessionKey); // Clear the user from the cache. We expect it will never have been written to database.
+            LOG.info("Removed user from cache for {}", sessionKey);
+            sessionCache.invalidate(sessionKey);
+            LOG.info("Removed session from cache for {}", sessionKey);
+            return new BooleanSession(true, session);
+        }
+
+        if(isUserBrandNew) {
+            var user = session.getUser();
+            boolean isInserted = persistenceManager.insertNewUser(user);
+            if (!isInserted) {
+                LOG.error("Process failed to insert new user: {}", user);
+                return new BooleanSession(false, null);
+            } else {
+                LOG.info("New User created: {}", user);
+            }
+        }
+
         UserStatus updatedUserStatus = null;
 
         var processStateNode = switch (normalizedMessageText(message)) {
@@ -132,6 +162,7 @@ public class Operator implements SessionAwareMessageProcessor {
         };
 
         var sessionUser = session.getUser();
+
         var statusNeedsUpdate = updatedUserStatus != sessionUser.platformStatus().get(sessionKey.platform());
 
         if (statusNeedsUpdate) {
@@ -189,14 +220,13 @@ public class Operator implements SessionAwareMessageProcessor {
         // Could we do this sooner (in the findOrCreateSession method)?
         if (isBrandNew || UserStatus.OUT == status) {
 
-            // Actually, is the user isBrandNew then maybe just delete the user?
             if (isBrandNew && !persistenceManager.updateUserStatus(sessionUser, platform, UserStatus.OUT)) {
                 LOG.error("handleOptOut: Failed to set OPT_OUT on brand-new user: {}", sessionUser); // FIXME suggests lurking issues
             }
             return new ProcessStateNode(ProcessState.NOOP, null);
         }
 
-        // Replace the currentNode with one of type OPT_OUT. Should this be a constant value? Pulled from the database?
+        // TODO Replace the currentNode with one of type OPT_OUT. Should this be a constant value? Pulled from the database?
         var optOutNode = new Node("Okay, You're now opted out of messages from Brbl.", NodeType.OPT_OUT);
         optOutNode.edges().add(new Edge(null));
         session.setCurrentNode(optOutNode);
@@ -294,7 +324,9 @@ public class Operator implements SessionAwareMessageProcessor {
      * @throws ExecutionException   if any of the subtasks threw an exception
      */
     private @Nullable Session findOrCreateSession(SessionKey sessionKey) throws InterruptedException, ExecutionException {
+
         var start = now();
+
         try (var scope = new StructuredTaskScope.ShutdownOnFailure()) {
             Supplier<User> suppliedUser = scope.fork(()  -> userCache.get(sessionKey));
             Supplier<Node> keywordScript = scope.fork(() -> scriptByKeywordCache.get(KeywordCacheKey.newKey(sessionKey)));
@@ -324,17 +356,17 @@ public class Operator implements SessionAwareMessageProcessor {
 
             final Instant userCreatedAt = user.platformCreationTimes().get(sessionKey.platform());
             try {
-                boolean isNewUser = start.isBefore(userCreatedAt) || start.equals(userCreatedAt); // true if brand-new user
-                LOG.info("isNewUser: {}", isNewUser);
+                boolean isBrandNewUser = start.isBefore(userCreatedAt) || start.equals(userCreatedAt); // true if brand-new user
+                LOG.info("isBrandNewUser: {}", isBrandNewUser);
 
                 boolean isExistingUserNeedsOptIn =
-                        !isNewUser
+                        !isBrandNewUser
                                 &&
                         UserStatus.OUT.equals(user.platformStatus().get(sessionKey.platform())); // true if returning user
 
                 LOG.info("isExistingUserNeedsOptIn: {}", isExistingUserNeedsOptIn);
 
-                if (isNewUser || isExistingUserNeedsOptIn) {
+                if (NodeType.OPT_OUT != selectedGraph.type() && (isBrandNewUser || isExistingUserNeedsOptIn)) {
                     // Brand-new users and existing, opted-out users need to have an opt-in notification sent first,
                     // followed by whatever script is expected given the normal graph selection process.
                     // The cached opt-in graph is shared between all processes so, since we need to customize it per user,
@@ -358,7 +390,7 @@ public class Operator implements SessionAwareMessageProcessor {
 //                    }
                 }
 
-                if (isNewUser || null == (session = persistenceManager.loadSession(user.groupId()))) {
+                if (isBrandNewUser || null == (session = persistenceManager.loadSession(user.groupId()))) {
                     LOG.info("Creating new Session for user {}", suppliedUser.get().groupId());
                     return new Session(
                             randomUUID(),
@@ -393,7 +425,7 @@ public class Operator implements SessionAwareMessageProcessor {
     }
 
     /**
-     * How do we denote a new user vs an existing one?
+     * How do we denote a new user vs an existing one? Currently relying on the delta btw createdAt and a given instant.
      * @param sessionKey the record that encapsulates the message metadata.
      * @return a new or existing User matching the provided key.
      */
@@ -414,25 +446,26 @@ public class Operator implements SessionAwareMessageProcessor {
                     Map.of(sessionKey.platform(), randomUUID()),            // platformIds
                     randomUUID(),                                           // groupId
                     Map.of(sessionKey.platform(), sessionKey.from()),       // platformNumbers
-                    Map.of(sessionKey.platform(), now()),            // platformCreationTimes
+                    Map.of(sessionKey.platform(), now()),                   // platformCreationTimes
                     deriveCountryCodeFromId(sessionKey.from()),             // countryCode
                     defaultLanguageSet(sessionKey.from(), sessionKey.to()), // languages
                     owningId,                                               // claimant_id
                     null,                                                   // customer_id
                     defaultNickNameMap(),                                   // platformNicknames
-                    null, // FIXME need to do a consistency check on how we handle these Platform-keyed maps. How should we represent an absence of values?
+                    // FIXME need to do a consistency check on how we handle these Platform-keyed maps. How should we represent an absence of values?
+                    null,                                                   // platformProfileIds
                     defaultPlatformStatusMap(UserStatus.IN)
             );
 
-            boolean isInserted = persistenceManager.insertNewUser(user);
-            if (!isInserted) {
-                LOG.error("findOrCreateUser failed to insert new user: {}", user);
-                return null;
-                // LOG.error("findOrCreateUser failed to insert user. Caching it anyway: {}", user);
-                // Queue or write it to a file so it can be loaded later (when the database is back up)?
-            } else {
-                LOG.info("New User created: {}", user);
-            }
+//            boolean isInserted = persistenceManager.insertNewUser(user);
+//            if (!isInserted) {
+//                LOG.error("findOrCreateUser failed to insert new user: {}", user);
+//                return null;
+//                // LOG.error("findOrCreateUser failed to insert user. Caching it anyway: {}", user);
+//                // Queue or write it to a file so it can be loaded later (when the database is back up)?
+//            } else {
+//                LOG.info("New User created: {}", user);
+//            }
 
         } else {
             LOG.info("Retrieved User: {}", user);

@@ -256,7 +256,7 @@ class OperatorPersistenceIntegrationTest {
         // Note: assumes system under test contains (at least) data contained in the generated known_keywords.tsv file.
         var keywordsByPattern = pm.getKeywords();
         assertFalse(keywordsByPattern.isEmpty());
-        assertEquals(6, keywordsByPattern.size()); // keywords w/out route_id value are excluded
+        assertEquals(8, keywordsByPattern.size()); // keywords w/out route_id value are excluded
         assertTrue(keywordsByPattern.entrySet().stream().anyMatch(entry -> {
             return entry.getValue().wordPattern().equals("foo"); // at least one of the keywords should be "foo"
         }));
