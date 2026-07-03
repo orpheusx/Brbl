@@ -260,9 +260,6 @@ public class Operator implements SessionAwareMessageProcessor {
             return new ProcessStateNode(ProcessState.ERROR, null);
         }
 
-        //assert changeTopicPresentNode.type() == NodeType.PRESENT_MULTI;
-        //assert changeTopicPresentNode.edges().getFirst().targetNode().type() == NodeType.PROCESS_MULTI;
-
         // Find the PRESENT_MULTI/REQUEST_INPUT node that immediately preceded with the current PROCESS_MULTI/PROCESS_INPUT.
         // It should be two slots prior in the list.
         // This will be Node we swap in as the target of the "no, continue" option.

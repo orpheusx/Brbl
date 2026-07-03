@@ -47,14 +47,14 @@ public class KnownData {
     // public static final Platform[] knownPlatformsForUser = {SMS, SMS, SMS, SMS, SMS, SMS, SMS, SMS, SMS, SMS};
 
     public static final String[] knownNumbersForUsers = {
-            "17817209450", // The rest are for U.S.
-            "14157209451", // California
-            "17817209452", // Massachusetts
-            "15167209453", // Kansas City
-            "17817209454",
-            "19297209455", // NYC
-            "17817209456",
-            "19787209457",
+            "17817209450",  // Massachusetts
+            "14157209451",  // California
+            "17817209452",  // Massachusetts
+            "15167209453",  // Kansas City
+            "17817209454",  // Massachusetts
+            "19297209455",  // NYC
+            "17817209456",  // Massachusetts
+            "19787209457",  // Massachusetts
             "14167209458",  // Toronto area code.
             "526641112222", // A very fake number in Mexico City.
     };

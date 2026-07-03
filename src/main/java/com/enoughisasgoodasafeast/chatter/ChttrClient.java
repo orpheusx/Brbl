@@ -4,6 +4,7 @@ import com.enoughisasgoodasafeast.ConfigLoader;
 import com.enoughisasgoodasafeast.HttpMOHandler;
 import com.enoughisasgoodasafeast.MOHandler;
 import com.enoughisasgoodasafeast.Message;
+import com.enoughisasgoodasafeast.datagen.KnownData;
 import com.enoughisasgoodasafeast.operator.CampaignUser;
 import com.enoughisasgoodasafeast.operator.DeliveryStatus;
 import com.enoughisasgoodasafeast.operator.Platform;
@@ -56,9 +57,13 @@ public class ChttrClient {
 
         WebServer.builder()
                 .port(webServerPort)
-                .connectionConfig(config -> {
+                .connectionOptions(config -> {
                             config.connectTimeout(Duration.of(CONNECTION_TIMEOUT_SECONDS, ChronoUnit.SECONDS));
-                            config.keepAlive(true);
+                            config.socketKeepAlive(true);
+                            // Other options can be added here. Keep commented for now...
+                            // config.readTimeout(Duration.ofSeconds(30));
+                            // config.tcpNoDelay(true)
+                            // ...
                         }
                 )
                 .routing(router -> {
@@ -79,9 +84,10 @@ public class ChttrClient {
             LOG.info("ChttrClient executing tests...");
             response.send("OK");
 
-            String keyword = "foo"; // FIXME
+            String keyword = "foo"; // FIXME take as main arg?
             for (UserActor actor : userActors.values()) {
-                var startMessage = new Message(MO, Platform.SMS, actor.getPhoneNumber(), "119839196677", keyword);
+                var startMessage = new Message(MO, Platform.SMS, actor.getPhoneNumber(),
+                        KnownData.knownRouteIdsAndChannels[0][1], keyword);
                 LOG.info("Sending initiating keyword '{}' from user number, {}", keyword, actor.getPhoneNumber());
                 final boolean ok = moHandler.handle(startMessage);
                 if (!ok) {
@@ -91,7 +97,7 @@ public class ChttrClient {
         }
     }
 
-    // TODO Modify the way we did for Rcvr; separate handle for each supported Platform.
+    // TODO Modify the way we did for Rcvr; separate handler for each supported Platform.
     private class ChttrMessageHandler implements Handler {
         @Override
         public void handle(ServerRequest req, ServerResponse res) throws Exception {
@@ -237,15 +243,6 @@ public class ChttrClient {
 
             var persistenceManager = PostgresPersistenceManager.createPersistenceManager(properties);
 
-            Collection<CampaignUser> campaignUsers = persistenceManager.getPushCampaignUsers(pushCampaignId, DeliveryStatus.PENDING);
-            LOG.info("Found {} campaign users for campaign id {}", campaignUsers.size(), pushCampaignId);
-            for (CampaignUser campaignUser : campaignUsers) {
-                LOG.info("users: {}", campaignUser.user().platformNumbers());
-            }
-            if(campaignUsers.isEmpty()) {
-                throw new IllegalStateException("No campaign users found for campaign id " + pushCampaignId);
-            }
-
             var rootNode = persistenceManager.getNodeGraph(nodeId);
             LOG.info("Found root node for campaign id {}: {}", pushCampaignId, rootNode);
             if(rootNode == null) {
@@ -260,11 +257,8 @@ public class ChttrClient {
             }
 
             List<UserActor> actors = new ArrayList<>();
-            for (var cu : campaignUsers) {
-                var phoneNumber = cu.user().platformNumbers().get(Platform.SMS); // FIXME we can't hard code this dumbass
-                if (phoneNumber != null) {
-                    actors.add(new UserActor(phoneNumber, scripts));
-                }
+            for (String knownNumberForUser : KnownData.knownNumbersForUsers) {
+                actors.add(new UserActor(knownNumberForUser, scripts));
             }
 
             var client = new ChttrClient(properties, actors);

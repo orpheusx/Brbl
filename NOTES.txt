@@ -5965,7 +5965,7 @@ Stepping back, consider the following approach...
 ==== 2026/07/01 ====
 
 TODO
-    _ Update handleOptOut to fetch and use the configured OPT_OUT script (currently hardcoded).
+    X Update handleOptOut to fetch and use the configured OPT_OUT script (currently hardcoded).
     _ Unit tests for copyGraphAppending that prove its correctness for graphs that are deeper than a single Node with a single Edge.
 
 Test scheme:
@@ -6006,3 +6006,47 @@ Test scheme:
             --> opted out message received (session removed, User status = IN)
         send STOP
             --> no response (no session. user unmodified.)
+
+Appears to be working as intended now.
+
+
+==== 2026/07/02 ====
+
+TODO
+  _ Unit tests for copyGraphAppending that prove its correctness for graphs that are deeper than a single Node with a single Edge.
+  _ Have a think about our record-replay feature (Chttr) because regression testing the cases above manually is a nightmare.
+  _ Now that we have a fair number of conversation patterns/edge cases have a think about the queue configuration for retries and failures (as is we explode the queue consumer if we return an error for process()).
+
+Chttr is setup to use the campaign users as the targets. Swapped it with the array of knownUserNumbers.
+It pre-dates the switch to using Scripts as the official entry point for conversation graphs; it expects the node id to be provided to its main.
+
+Run the docker compose setup.
+Do NOT run Confab (it uses the same port number.)
+Run com.enoughisasgoodasafeast.chatter.ChttrClient
+curl http://192.168.1.155:2424/chttrStart
+
+Chttr logs the initiating message (the keyword) but nothing else. Fucking useless. To be fair though, all the thrash on the Operator is due to the retry storm. We see a configuration error from Operator:
+
+    c.e.o.PostgresPersistenceManager - getUser: No Users found for SessionKey[platform=SMS, from=17817209454, to=119839196677, keyword=foo]
+    c.e.operator.Operator - Existing user not found.
+    c.e.operator.Operator - findOwningCompanyIdByRouteChannel: failed to find Route data for sessionKey:SessionKey[platform=SMS, from=17817209454, to=119839196677, keyword=foo].
+    c.e.operator.Operator - CRITICAL_CONFIG_ERROR: findOrCreateUser: No owning company found for route SMS:119839196677. (User: 17817209454)
+    c.e.operator.Operator - CRITICAL: No script available by keyword match or route default. Configuration error in route table for SMS:119839196677
+    c.e.operator.Operator - Failed to find or create session for SessionKey[platform=SMS, from=17817209454, to=119839196677, keyword=foo]
+
+There's no Route with channel 119839196677 in the database and thus no owning company.
+Likewise the lookup for the user is scoped in terms of the routes owner.
+Ack, the channel (the "to" value in the message) was hardcoded and no longer exists in the routes table. Changed it to one that also references the same node. Works now. The output shows one error:
+
+    ...
+    2026-07-02 16:36:20,286 INFO  [] [[0x43256ebc 0x3d03e222] WebServer socket] c.e.chatter.ChttrClient - UserActor 15167209453:
+        total rcv: 1
+        total dlv: 0
+         seq errs: [0|0|Sorry, that's not one of the color choices. Try again?]
+         dlv errs: None
+     ...
+
+This appears to have due to some residual session state. Clearing all sessions and re-running shows zero errors.
+If I rerun without first clearing the sessions after a successful run...fails for all users but that's because the script is cyclic and leaves off where it began while the script starts with an unregistered keyword that assumes an empty session.
+
+Glad it all still works.

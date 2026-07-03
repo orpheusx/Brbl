@@ -310,8 +310,8 @@ public class ScriptInterpreter {
         println("Edge:" + edge.id());
     }
 
-    static void main(String[] args) throws IOException, PersistenceManagerException {
-//        var nodeId = UUID.fromString("89eddcb8-7fe5-4cd1-b18b-78858f0789fb");
+    static void main() throws IOException, PersistenceManagerException {
+
         String[] nodeIds = new String[]{
 //                "89eddcb8-7fe5-4cd1-b18b-78858f0789fb", -- Fave color
 //                "b48d36ce-2512-4ee0-a9b9-b743d72e95e9",
@@ -324,25 +324,34 @@ public class ScriptInterpreter {
         };
         var properties = ConfigLoader.readConfig("chttr.properties"); // Assuming a config file
         var ppm = PostgresPersistenceManager.createPersistenceManager(properties);
-        for (var nodeId : nodeIds) {
-            UUID nodeUuid = UUID.fromString(nodeId);
+//        for (var nodeId : nodeIds) {
+            UUID nodeUuid = UUID.fromString(/*nodeId*/nodeIds[0]);
             Node dbNode = ppm.getNodeGraph(nodeUuid);
             Set<String> nodeList = new LinkedHashSet<String>();
             Set<String> edgeList = new LinkedHashSet<>();
             nodeList.add(dbNode.id().toString());
             collectGraphIds(dbNode, dbNode,  nodeList, edgeList);
+            println("-------- Nodes --------");
             nodeList.forEach( node -> {println(String.format("'%s'", node));});
             println("\n");
+            println("-------- Edges --------");
             edgeList.forEach( edge -> {println(String.format("'%s'", edge));});
-//            IO.println(nodeList);
-//            IO.println(edgeList);
+//        }
+        var interpreter = new ScriptInterpreter(ppm);
+
+        String fileName = "./data/testMultiNodeGraph.ser";
+        var ok = interpreter.writeNodeGraphToFile(dbNode, fileName);
+        if (!ok) {
+            println("Error writing node graph to " + fileName);
         }
-        //var interpreter = new ScriptInterpreter(ppm);
-
-
-//        Node.printGraph(dbNode, dbNode, 2);
-//        String fileName = "./data/simpleThreeNodeGraph.ser";
-//        interpreter.writeNodeGraphToFile(dbNode, fileName);
-//        var diskNode = interpreter.readNodeGraphFromFile(fileName);
+        var deserializedNode = interpreter.readNodeGraphFromFile(fileName);
+        final var chttrScriptList = interpreter.translateNodeGraphToChttrScripts(nodeUuid);
+        if (chttrScriptList != null) {
+            for (ChttrScript chttrScript : chttrScriptList) {
+                println(chttrScript.toString());
+            }
+        } else {
+            println("Error translating node graph to scripts.");
+        }
     }
 }
