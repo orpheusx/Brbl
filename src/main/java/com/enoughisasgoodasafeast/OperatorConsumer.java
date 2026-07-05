@@ -37,24 +37,37 @@ public class OperatorConsumer extends BrblConsumer {
                                byte[] body)
             throws IOException {
 
+        long deliveryTag = envelope.getDeliveryTag();
         // Should be able to deserialize directly assuming Rcvr enqueued a Message
         try {
-            long deliveryTag = envelope.getDeliveryTag();
             final Message message = Message.fromBytes(body);
-            BooleanSession ack = processor.process(message);
-            LOG.info("Processed message: {}", message);
-            if(ack.ok()) {
-                getChannel().basicAck(deliveryTag, false);
-                if (!processor.log(ack.session(), message)) {
-                    LOG.error("Failed to log {}", message);
+            ProcessStateSession stateAndSession = processor.process(message);
+            LOG.info("Processed {}", message);
+            switch (stateAndSession.processState()) {
+                case OK -> {
+                    getChannel().basicAck(deliveryTag, false);
+                    if (!processor.log(stateAndSession.session(), message)) {
+                        LOG.error("Failed to log {}", message);
+                    }
                 }
-
-            } else {
-                LOG.warn("Rejecting {}", message);
-                getChannel().basicReject(deliveryTag, true);
+                case ERROR -> {
+                    LOG.error("Rejected {}", message);
+                    getChannel().basicReject(deliveryTag, false);
+                    // Write to table of error messages? Or just a special file?
+                }
+                case RETRY ->  {
+                    LOG.warn("Queuing for retry {}", message);
+                    // TODO ...
+                }
+                case NOOP -> {
+                    LOG.info("No processing or logging required for message: {}", message);
+                    getChannel().basicAck(deliveryTag, false);
+                }
             }
 
         } catch (ClassNotFoundException e) {
+            LOG.error("Failed to deserialize message in {}", envelope);
+            getChannel().basicAck(deliveryTag, false);
             throw new IOException("Deserialization error: " + e.getMessage(), e);
         }
     }

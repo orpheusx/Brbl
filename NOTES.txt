@@ -6014,6 +6014,7 @@ Appears to be working as intended now.
 
 TODO
   _ Unit tests for copyGraphAppending that prove its correctness for graphs that are deeper than a single Node with a single Edge.
+  _ Unit tests for testing OPT_IN/OUT.
   _ Have a think about our record-replay feature (Chttr) because regression testing the cases above manually is a nightmare.
   _ Now that we have a fair number of conversation patterns/edge cases have a think about the queue configuration for retries and failures (as is we explode the queue consumer if we return an error for process()).
 
@@ -6050,3 +6051,73 @@ This appears to have due to some residual session state. Clearing all sessions a
 If I rerun without first clearing the sessions after a successful run...fails for all users but that's because the script is cyclic and leaves off where it began while the script starts with an unregistered keyword that assumes an empty session.
 
 Glad it all still works.
+
+==== 2026/07/03 ====
+
+Reading up on DST (deterministic simulation testing.) Involves "fuzzing" inputs, and other techniques to reproducibly find what are sometimes termed "Heisenbugs."
+
+Google actually found a lot of good material on fuzzing:
+    ScyllaDB's video https://www.youtube.com/watch?v=Bx4xnYjMb74&vl=en&t=573.
+    For HTTP API fuzzing take a peek at Schemathesis: https://github.com/schemathesis/schemathesis. Requires we have an OpenAPI schema available.
+    For in-process code fuzzing (testing internal Java parsers and business logic), it recommends Jazzer:
+        https://github.com/CodeIntelligenceTesting/jazzer, "the de-facto standard coverage-guided, in-process fuzzer for the JVM. Built on top of libFuzzer, it hooks directly into JVM bytecode to track execution paths."
+        It addresses "insecure deserialization, infinite loops, denial of service (DoS), logic flaws, and NullPointerException errors triggered by faulty payloads."
+        The Workflow: You write a @FuzzTest method (which integrates cleanly with JUnit 5) that passes fuzzed byte arrays straight into your HTTP controller methods or request-parsing handlers.
+
+Byte arrays? Hmm...
+
+    "DST works by moving your software off real hardware and into a virtualized, simulated environment.
+    "The simulator takes complete control over how the system executes, turning typically uncontrollable variables into structured, replayable events.
+    "1. Controlled Randomness - Rather than completely removing random behavior, DST uses a single, global random number generator (RNG) seed to drive the system. If the simulation encounters a bug, a developer can use the identical seed to perfectly recreate the failure down to the microsecond.
+    "2. Virtualized Time - Simulators control the concept of time. If a function requires waiting or executing a timeout, the simulator jumps directly to the next scheduled event rather than waiting in "wall-clock" time. This allows engineering teams to compress years of stress testing into a few hours.
+    "3. Aggressive Fault Injection - The virtual environment randomly and systematically injects real-world failures. This includes network delays, packet reordering, thread pauses, garbage collection slowdowns, or entire machine crashes."
+
+Sounds really complicated and a ton of work. As well, it notes "DST generally cannot be easily retrofitted onto an existing codebase. To use it effectively, the software usually needs to be written with an abstracted I/O interface from the ground up." Our project doesn't fit that description exactly though we're still at the scale where we could consider retrofitting.
+
+Of the three features, I can see a reasonable path to part of the third. The processed graph produced by Chttr could be the basis for randomly injecting bad inputs from a fuzzer along with more manual modifications designed to trigger expected "normal" bad input and verify error handling.
+
+Just looking at the Jazzer library README I can see it being (more) useful for the brbl_admin web interfaces.
+
+Note: I added the -ea flag to the command line in Dockerfile.dev.jvm file and rebuilt the image (just the related metadata changes.)
+Running the full suite of unit/integration tests still pass (with <enableAssertions>true</enableAssertions> added to maven-surefire plugin config) and running ChttrClient against the docker-compose cluster work fine.
+
+
+==== 2026/07/04 ====
+
+TODO
+  _ Unit tests for copyGraphAppending that prove its correctness for graphs that are deeper than a single Node with a single Edge.
+  _ Unit tests for testing OPT_IN/OUT. (Need an API defined on Operator to clear in-memory sessions and users from cache.)
+  X Have a think about our record-replay feature (Chttr) because regression testing the cases above manually is a nightmare.
+        Chttr is working with minimal changes.
+  _ Now that we have a fair number of conversation patterns/edge cases have a think about the queue configuration for retries and failures (as is we explode the queue consumer if we return an error for process()).
+  _ Chttr: add pseudo-random unexpected input (for PROCESS_MULTI nodes), change topic, and possibly OPT_OUTs. These don't need to be dynamic; the logic that creates the permutations could generate them using a random seed.
+  _ Add CHANGE_TOPIC ScriptType to allow customization of the message.
+
+
+Queue Policy Thoughts:
+    Opr8r currently reads from "test.mo" (defined in consumer.queue.name) with routingKey "us.test.mo" and writes MTs to "test.mt"
+    (Probably time to rename these to rcvr-mo and sndr-mt)
+    Define two additional queues (following recommendations here https://tigerstyle.dev/#nouns-and-verbs):
+        - opr8r-mo-retry
+        - opr8r-mo-fail
+    Sndr reads from test.mt.
+    Define additional queues:
+        - sndr-mt-retry
+        - sndr-mt-fail
+
+    (NOTE: rabbitmq_delayed_message_exchange provided a simplified way of implementing retry functionality (with some reasonable tradeoffs) but has been archived/deprecated. Apparently, DLQ is now the only method recommended for this purpose.)
+
+    Transient/retryable errors:
+        - Database availability including connection pool timeouts
+        - For Sndr, 3rd party gateway outages. Retry needs a threshold property to avoid sending wildly out of date messages when outage ends. Logic that notices the delta and prepends messages with an apology/explanation might be a cool feature. Ditto sending the delayed message to a different platform (where users are opted-in on each.)
+
+    Permanent errors:
+        - Configuration errors. These shouldn't happen if we really have a robust set of constraints but if we lacked the info needed to reply or handle processing on an incoming message it can't be sent until the config data is fixed. At most, a long retry delay might make be workable.
+
+    To start, we should replace BooleanSession with ProcessStateSession (akin to ProcessStateNode) so that the queue consumer impl can make the right decision. DONE.
+
+
+Google provided example looks like a reasonable answer to my questions.
+It proposes two useful followup questions:
+1) Do you want to route messages to a separate Dead Letter Queue (Parking Lot) instead of silently discarding them after the third failure?
+2) Do you require an exponentially increasing delay (e.g., 5 seconds, then 30 seconds, then 5 minutes)?

@@ -100,7 +100,7 @@ public class Operator implements SessionAwareMessageProcessor {
      * @param message the message being processed.
      * @return BooleanSession indicating the success of the processing and the current stateful Session object.
      */
-    public BooleanSession process(Message message) {
+    public ProcessStateSession process(Message message) {
         LOG.info("Process message: {}", message);
         var processStart = now();
 
@@ -108,7 +108,7 @@ public class Operator implements SessionAwareMessageProcessor {
         Session session = sessionCache.get(sessionKey);
         if (null == session) {
             LOG.error("Failed to find or create session for {}", sessionKey);
-            return new BooleanSession(false, null);
+            return new ProcessStateSession(ProcessState.ERROR, null);
         }
 
         // If sessionUser is brand-new and the session's initial Node of the session was not of type OPT_OUT
@@ -127,15 +127,18 @@ public class Operator implements SessionAwareMessageProcessor {
             LOG.info("Removed user from cache for {}", sessionKey);
             sessionCache.invalidate(sessionKey);
             LOG.info("Removed session from cache for {}", sessionKey);
-            return new BooleanSession(true, session);
+            return new ProcessStateSession(ProcessState.OK, session);
         }
 
         if(isUserBrandNew) {
             var user = session.getUser();
             boolean isInserted = persistenceManager.insertNewUser(user);
             if (!isInserted) {
-                LOG.error("Process failed to insert new user: {}", user);
-                return new BooleanSession(false, null);
+                LOG.error("Process failed to insert new user: {}.", user);
+                LOG.error("Clearing user and session caches due to new user persistence failure: {}", session.getId());
+                userCache.invalidate(sessionKey);
+                sessionCache.invalidate(sessionKey);
+                return new ProcessStateSession(ProcessState.ERROR, null);
             } else {
                 LOG.info("New User created: {}", user);
             }
@@ -169,10 +172,11 @@ public class Operator implements SessionAwareMessageProcessor {
             LOG.info("Session status needs update to {}", updatedUserStatus);
             if(persistenceManager.updateUserStatus(sessionUser, sessionKey.platform(), updatedUserStatus)) {
                 sessionUser.platformStatus().put(sessionKey.platform(), UserStatus.IN);
-                LOG.info("Updated platform status for user: {}", sessionUser.platformStatus().get(sessionKey.platform()));
+                LOG.info("process: Updated platform status for user {}", sessionUser.platformStatus().get(sessionKey.platform()));
             } else {
+                // Not being able to update the UserStatus is serious and all the worse because we may have already queued
                 LOG.error("process: failed to update user status to updatedUserStatus for {}", sessionUser);
-                return new BooleanSession(false, session);
+                return new ProcessStateSession(ProcessState.ERROR, session);
             }
         }
 
@@ -182,7 +186,7 @@ public class Operator implements SessionAwareMessageProcessor {
         }
 
         // FIXME Consider returning the ProcessStateNode (with RETRY value added) instead?
-        return new BooleanSession(processStateNode.processState()!=ProcessState.ERROR, session);
+        return new ProcessStateSession(processStateNode.processState(), session);
     }
 
     // A helper to standardize how message text is evaluated.

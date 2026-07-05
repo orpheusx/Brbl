@@ -50,7 +50,7 @@ public class FakeOperator implements SessionAwareMessageProcessor {
     }
 
     @Override
-    public BooleanSession process(Message message) {
+    public ProcessStateSession process(Message message) {
         LOG.info("Processed {}", message);
         boolean ok = producerMTHandler.handle(message);
         var session = new Session(
@@ -73,7 +73,7 @@ public class FakeOperator implements SessionAwareMessageProcessor {
                 ),
                 new InMemoryQueueProducer(),
                 null);
-        return new BooleanSession(ok, session);
+        return new ProcessStateSession((ok) ? ProcessState.OK : ProcessState.ERROR, session);
     }
 
     @Override

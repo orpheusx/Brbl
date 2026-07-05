@@ -16,7 +16,7 @@ RUN mkdir $DEST_DIR
 # This avoids having to rebuild the container everytime a small change is made to the application.
 # COPY target/$JAR_FILE $DEST_DIR
 
-ENTRYPOINT ["java", "--enable-preview", "-jar", "/opt/app/sndrRcvr-1.0-SNAPSHOT-jar-with-dependencies.jar"]
+ENTRYPOINT ["java", "-ea", "--enable-preview", "-jar", "/opt/app/sndrRcvr-1.0-SNAPSHOT-jar-with-dependencies.jar"]
 # TODO change this and Brbl to use the actual Operator command/class
 CMD ["FakeOperator"]
 

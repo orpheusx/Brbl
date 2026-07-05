@@ -13,7 +13,7 @@ public interface SessionAwareMessageProcessor extends MessageProcessor {
      * If false, the Session may be null.
      * The latter can be used to call log(session, message).
      */
-    BooleanSession process(Message message);
+    ProcessStateSession process(Message message);
 
     /**
      * Log the processed Message using the Session context.

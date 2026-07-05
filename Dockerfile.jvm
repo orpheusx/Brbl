@@ -14,7 +14,7 @@ RUN mkdir $DEST_DIR
 COPY target/$JAR_FILE $DEST_DIR
 
 #ENTRYPOINT ["ls /opt/app"]
-ENTRYPOINT ["java", "-jar", "/opt/app/sndrRcvr-1.0-SNAPSHOT-jar-with-dependencies.jar"]
+ENTRYPOINT ["java", "-ea", "-jar", "/opt/app/sndrRcvr-1.0-SNAPSHOT-jar-with-dependencies.jar"]
 #CMD ["FakeOperator"]
 
 # Any heap sizing or JVM params needed? ECS has its settings, as well...xs
