@@ -39,10 +39,10 @@ public class Rcvr extends WebService {
 
         WebServer.builder()
                 .port(webServerPort)
-                // FIXME replace deprecated connectionConfig method
-                .connectionConfig(config -> {
+                .connectionOptions(config -> {
                             config.connectTimeout(Duration.of(CONNECTION_TIMEOUT_SECONDS, ChronoUnit.SECONDS));
-                            config.keepAlive(true);
+                            config.socketKeepAlive(true);
+                            // add network options useful for interacting w/3rd party platforms here
                         }
                 )
                 .routing(router -> {

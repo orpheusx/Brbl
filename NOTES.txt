@@ -6119,5 +6119,74 @@ Queue Policy Thoughts:
 
 Google provided example looks like a reasonable answer to my questions.
 It proposes two useful followup questions:
-1) Do you want to route messages to a separate Dead Letter Queue (Parking Lot) instead of silently discarding them after the third failure?
-2) Do you require an exponentially increasing delay (e.g., 5 seconds, then 30 seconds, then 5 minutes)?
+1) "Do you want to route messages to a separate Dead Letter Queue (Parking Lot) instead of silently discarding them after the third failure?"
+2) "Do you require an exponentially increasing delay (e.g., 5 seconds, then 30 seconds, then 5 minutes)?"
+
+rcvr-mo
+opr8r-mo-retry
+    opr8r-mo-retry.005s
+    opr8r-mo-retry.060s
+    opr8r-mo-retry.300s
+opr8r-mo-fail (akin to example's "parking lot")
+sndr-mt
+sndr-mt-retry
+sndr-mt-fail (akin to example's "parking lot")
+
+The example code uses the DIRECT type of BuiltinExchangeType instead of our current use of TOPIC. The docs suggest the latter is used when there are multiple subscribers. I think our original choice was a guess and a hedge against not really knowing where we were going.
+Thinking that we'll switch to direct but will follow naming conventions useful for topics. That is, dot-separated and hierachically organized.
+
+Note: If I don't name the exchange the same as the queue Rabbit gets unhappy and can't find it.
+
+==== 2026/07/05 ====
+
+The container setup we're using def remembers the exchange names; trying to change their type from TOPIC to DIRECT yields
+
+Channel error on connection <0.673.0> (172.18.0.1:61654 -> 172.18.0.2:5672, vhost: '/', user: 'guest'), channel 1:
+operation exchange.declare caused a channel exception precondition_failed: inequivalent arg 'type' for exchange 'opr8r.mo' in vhost '/': received 'direct' but current is 'topic'
+
+Same for sndr.mt.
+
+Tried deleting the existing queues by running
+    docker run -it --rm --name brkr-1 -p 5672:5672 -p 15672:15672 rabbitmq:4.0-management-alpine
+
+    docker exec -it brkr-1 sh
+
+to connect to the running container. Then run:
+
+    rabbitmqadmin delete exchange --name sndr.mt
+
+yields a 404 Not found.
+
+I think the problem is due to the missing docker-compose scope (sndrrcvr) when I started the rabbit containers. This had the effect of creating new instances instead of the one that had the exchanges we wanted to delete.
+For future reference, the exchange type errors only affect the Java code. I can still connect to the rabbit container and run the admin commands.
+
+Okay, with the conflicting topics deleted we can start the rabbit container (via compose) and the
+
+NOTE:  At some point, sooner than later, we should set the following in rabbit's config:
+
+    deprecated_features.permit.management_metrics_collection = false
+
+The prometheus plugin is a complete replacement and we should start using it.
+
+==== 2026/07/06 ====
+
+re: TOPIC vs DIRECT. What does a TOPIC offer in terms of scalability? Could it be a way to have multiple consumers using a hash function to deciding which instance is responsible for consuming a given message? Seems better to apply the hash function *before* enqueing and keeping the content of each queue unambiguous.
+
+rabbitmqadmin delete exchange --name x.sndr.mt
+rabbitmqadmin delete exchange --name x.opr8r.mo
+rabbitmqadmin delete exchange --name rtx.sndr.mt
+rabbitmqadmin delete exchange --name rtx.opr8r.mo
+
+rabbitmqadmin delete queue --name opr8r.mo
+rabbitmqadmin delete queue --name sndr.mt
+rabbitmqadmin delete queue --name sndr.mt.failed
+rabbitmqadmin delete queue --name sndr.mt.retry
+
+Some refactoring on RabbitQueueConsumer, OperatorConsumer, and BrblConsumer to support retries and failure exchange/queueus.
+
+==== 2026/07/07 ====
+
+To simplify and share code between OperatorConsumer and SndrConsumer, I defined an enum class--RetryDelayRoutingKey. These values act as time coded routing keys; the OperatorConsumer and SndrConsumer can define their own computeDelayRoutingKey method to control the number of retries and which exchanges are used to delay each attempt.
+
+Verified normal (i.e. no errors) behavior with new impl using the ChttrClient.
+

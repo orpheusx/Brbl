@@ -101,13 +101,13 @@ public class Operator implements SessionAwareMessageProcessor {
      * @return BooleanSession indicating the success of the processing and the current stateful Session object.
      */
     public ProcessStateSession process(Message message) {
-        LOG.info("Process message: {}", message);
+        LOG.info("process: incoming message: {}", message);
         var processStart = now();
 
         final SessionKey sessionKey = SessionKey.newSessionKey(message);
         Session session = sessionCache.get(sessionKey);
         if (null == session) {
-            LOG.error("Failed to find or create session for {}", sessionKey);
+            LOG.error("process: Failed to find or create session for {}", sessionKey);
             return new ProcessStateSession(ProcessState.ERROR, null);
         }
 
@@ -118,15 +118,15 @@ public class Operator implements SessionAwareMessageProcessor {
         var isSkipProcessing = (NodeType.OPT_OUT == session.getCurrentNode().type())
                                     && (isUserBrandNew || UserStatus.OUT == session.getUser().platformStatus().get(message.platform()));
 
-        LOG.info("isSkipProcessing: {} for user status {}", isSkipProcessing, session.getUser().platformStatus().get(message.platform()));
-        LOG.info("currentNode type: {}", session.getCurrentNode().type());
+        LOG.info("process: isSkipProcessing: {} for user status {}", isSkipProcessing, session.getUser().platformStatus().get(message.platform()));
+        LOG.info("process: currentNode type: {}", session.getCurrentNode().type());
 
         if (isSkipProcessing) {
             // Send no response and return immediately.
             userCache.invalidate(sessionKey); // Clear the user from the cache. We expect it will never have been written to database.
-            LOG.info("Removed user from cache for {}", sessionKey);
+            LOG.info("process: Removed user from cache for {}", sessionKey);
             sessionCache.invalidate(sessionKey);
-            LOG.info("Removed session from cache for {}", sessionKey);
+            LOG.info("process: Removed session from cache for {}", sessionKey);
             return new ProcessStateSession(ProcessState.OK, session);
         }
 
@@ -134,13 +134,13 @@ public class Operator implements SessionAwareMessageProcessor {
             var user = session.getUser();
             boolean isInserted = persistenceManager.insertNewUser(user);
             if (!isInserted) {
-                LOG.error("Process failed to insert new user: {}.", user);
-                LOG.error("Clearing user and session caches due to new user persistence failure: {}", session.getId());
+                LOG.error("process: Process failed to insert new user: {}.", user);
+                LOG.error("process: Clearing user and session caches due to new user persistence failure: {}", session.getId());
                 userCache.invalidate(sessionKey);
                 sessionCache.invalidate(sessionKey);
                 return new ProcessStateSession(ProcessState.ERROR, null);
             } else {
-                LOG.info("New User created: {}", user);
+                LOG.info("process: New User created: {}", user);
             }
         }
 
@@ -169,19 +169,19 @@ public class Operator implements SessionAwareMessageProcessor {
         var statusNeedsUpdate = updatedUserStatus != sessionUser.platformStatus().get(sessionKey.platform());
 
         if (statusNeedsUpdate) {
-            LOG.info("Session status needs update to {}", updatedUserStatus);
+            LOG.info("process: Session status needs update to {}", updatedUserStatus);
             if(persistenceManager.updateUserStatus(sessionUser, sessionKey.platform(), updatedUserStatus)) {
                 sessionUser.platformStatus().put(sessionKey.platform(), UserStatus.IN);
                 LOG.info("process: Updated platform status for user {}", sessionUser.platformStatus().get(sessionKey.platform()));
             } else {
-                // Not being able to update the UserStatus is serious and all the worse because we may have already queued
+                // Not being able to update the UserStatus is serious and all the worse because we may have already queued some output
                 LOG.error("process: failed to update user status to updatedUserStatus for {}", sessionUser);
                 return new ProcessStateSession(ProcessState.ERROR, session);
             }
         }
 
         if (session.getCurrentNode() == null) {
-            LOG.info("Clearing completed session from cache: {}", session);
+            LOG.info("process: Clearing completed session from cache: {}", session);
             sessionCache.invalidate(sessionKey);
         }
 

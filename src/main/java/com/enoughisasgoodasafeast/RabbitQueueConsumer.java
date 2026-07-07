@@ -8,21 +8,31 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import java.io.IOException;
+import java.util.Map;
 import java.util.Properties;
 import java.util.concurrent.TimeoutException;
 
 import static com.enoughisasgoodasafeast.RabbitQueueFunctions.exchangeForQueueName;
+import static com.enoughisasgoodasafeast.RabbitQueueFunctions.retryForExchangeName;
+import static com.enoughisasgoodasafeast.RetryDelayRoutingKey.*;
 
 public class RabbitQueueConsumer implements QueueConsumer {
 
     private static final Logger LOG = LoggerFactory.getLogger(RabbitQueueConsumer.class);
 
+    public static final boolean QUEUE_DURABILITY = true;
     public static final boolean QUEUE_EXCLUSIVE = false;
     public static final boolean QUEUE_AUTO_DELETE = false;
     public static final boolean QUEUE_CONSUME_AUTO_ACK = false;
+    public static final String X_DLX_HEADER = "x-dead-letter-exchange";
+    public static final String X_DL_RK_HEADER = "x-dead-letter-routing-key";
+    public static final String X_MESSAGE_TTL_HEADER = "x-message-ttl";
+    public static final String RETRY_QUEUE_SUFFIX = ".retry";
+    public static final String FAILED_QUEUE_SUFFIX = ".failed";
 
-    public Connection connection;
-    public Channel channel;
+    private final Connection connection;
+    private final Channel channel;
+    private final String failedQueueName;
 
     public static QueueConsumer createQueueConsumer(String configFileName, MessageProcessor processor) throws IOException, TimeoutException {
         Properties props = ConfigLoader.readConfig(configFileName);
@@ -69,27 +79,40 @@ public class RabbitQueueConsumer implements QueueConsumer {
 
         this.channel = connection.createChannel();
 
-        // The RabbitMQ docs use a bare string for the exchange type, despite the nice enum that's available.
-        // We use the enum because we're not animals.
-        // This creates topic only if it doesn't already exist.
-        // FIXME leave the durability to the topic producer?
-        final String matchingExchangeName = exchangeForQueueName(queueName);
-        final AMQP.Exchange.DeclareOk exchangeDeclare = channel.exchangeDeclare(matchingExchangeName, BuiltinExchangeType.TOPIC, durable);
-        LOG.info("AMQP.Exchange.DeclareOk: protocolClassId={} protocolMethodId={} protocolMethodName={}",
-                exchangeDeclare.protocolClassId(), exchangeDeclare.protocolMethodId(), exchangeDeclare.protocolMethodName());
+        // Create the exchanges.
+        String exchangeName = exchangeForQueueName(queueName); // e.g. x.opr8r.mo
+        channel.exchangeDeclare(exchangeName, BuiltinExchangeType.DIRECT, durable);
+        String retryExchangeName = retryForExchangeName(exchangeName); // e.g. rtx.opr8r.mo
+        channel.exchangeDeclare(retryExchangeName, BuiltinExchangeType.DIRECT, durable);
 
-        AMQP.Queue.DeclareOk declareOk = channel.queueDeclare(queueName, durable, QUEUE_EXCLUSIVE, QUEUE_AUTO_DELETE, null); // no args for now at least
-        LOG.info("AMQP.Queue.DeclareOk: queue={} consumerCount={} messageCount={}",
-                declareOk.getQueue(), declareOk.getConsumerCount(), declareOk.getMessageCount());
+        // Declare the input queue
+        channel.queueDeclare(queueName, QUEUE_DURABILITY, QUEUE_EXCLUSIVE, QUEUE_AUTO_DELETE, null);
 
-        // Now connect the exchange and queue
-        AMQP.Queue.BindOk bindOk = channel.queueBind(queueName, matchingExchangeName, routingKey);
-        LOG.info("AMQP.Queue.BindOk: protocolClassId={} protocolMethodId={} protocolMethodName={}",
-                bindOk.protocolClassId(), bindOk.protocolMethodId(), bindOk.protocolMethodName());
-        LOG.info("Bound exchange, {}, to queue, {}.", matchingExchangeName, queueName);
+        // ...and connect the primary exchange with its queue
+        channel.queueBind(queueName, exchangeName, routingKey);
+        LOG.info("Bound exchange, {}, to queue, {}.", exchangeName, queueName);
 
-        channel.basicQos(3); // An important number where retrying/re-queueing is concerned.
+        // Declare "final resting place" queue
+        failedQueueName = queueName + FAILED_QUEUE_SUFFIX;
+        channel.queueDeclare(failedQueueName, QUEUE_DURABILITY, QUEUE_EXCLUSIVE, QUEUE_AUTO_DELETE, null);
+
+        // 4. Declare 5-Second Delay Bucket Queue
+        String baseRetryQueueName = queueName + RETRY_QUEUE_SUFFIX;
+        String retryAfter5sQueueName = baseRetryQueueName + ".5s";
+        channel.queueDeclare(retryAfter5sQueueName, QUEUE_DURABILITY, QUEUE_EXCLUSIVE, QUEUE_AUTO_DELETE,
+                Map.of(X_DLX_HEADER, exchangeName,
+                        X_DL_RK_HEADER, routingKey,
+                        X_MESSAGE_TTL_HEADER, DELAY_5S.delayMs())
+                );
+        channel.queueBind(retryAfter5sQueueName, retryExchangeName, DELAY_5S.name());
+
+        // 5. Declare additional delay bucket queues with longer TTLs
+        // ...
+
+        // FIXME Convert prefetchCount to be a configuration property.
+        // This is an important number where retrying/re-queueing is concerned.
         // My guess is that this influences the number of threads in the driver
+        channel.basicQos(3);
 
         final BrblConsumer brblConsumer = getBrblConsumer(processor, consumerClassImpl);
 

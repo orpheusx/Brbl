@@ -16,7 +16,7 @@ import java.util.concurrent.TimeoutException;
 
 import static com.enoughisasgoodasafeast.RabbitQueueFunctions.exchangeForQueueName;
 import static com.enoughisasgoodasafeast.SharedConstants.STANDARD_RABBITMQ_PORT;
-import static com.rabbitmq.client.BuiltinExchangeType.TOPIC;
+import static com.rabbitmq.client.BuiltinExchangeType.DIRECT;
 
 public class RabbitQueueProducer implements QueueProducer {
 
@@ -25,10 +25,11 @@ public class RabbitQueueProducer implements QueueProducer {
     private final String queueHost;
     private final int queuePort;
     private final String queueName;
+    private final String exchangeName;
     private final String routingKey;
 
     private final Connection moConnection;
-    private final Channel channel;
+    private final Channel moChannel;
 
     private final ArrayBlockingQueue<Message> internalMessageBuffer
             = new ArrayBlockingQueue<>(100); // Parameterize the size here
@@ -74,15 +75,14 @@ public class RabbitQueueProducer implements QueueProducer {
         factory.setRequestedHeartbeat(requestedHeartbeatTimeout);
 
         moConnection = factory.newConnection();
-        channel = moConnection.createChannel();
-        /*AMQP.Exchange.DeclareOk declareOk = */
-        final String matchingExchangeName = exchangeForQueueName(queueName);
-        final AMQP.Exchange.DeclareOk exchangeDeclare = channel.exchangeDeclare(matchingExchangeName, TOPIC, isDurable);
-        LOG.info("Declared exchange, {}: {}", matchingExchangeName, exchangeDeclare);
+        moChannel = moConnection.createChannel();
 
-        channel.queueDeclare(this.queueName, true, false, false, null);
-        channel.queueBind(queueName, matchingExchangeName, routingKey);
-        LOG.info("Bound exchange, {}, to queue, {}.", matchingExchangeName, queueName);
+        exchangeName = exchangeForQueueName(queueName);
+        moChannel.exchangeDeclare(exchangeName, DIRECT, isDurable);
+
+        moChannel.queueDeclare(this.queueName, true, false, false, null);
+        moChannel.queueBind(queueName, exchangeName, routingKey);
+        LOG.info("Bound exchange, {}, to queue, {}.", exchangeName, queueName);
 
         // Heartbeat frames will be sent approx moConnection.getHeartbeat() / 2 seconds
         // After two missed heartbeats, the peer is considered to be unreachable.
@@ -95,7 +95,8 @@ public class RabbitQueueProducer implements QueueProducer {
         // We won't use this initially...
 
         // RabbitMQ's channel impl really isn't thread safe so write to it only via this thread.
-        Thread brokerPublisherThread = new Thread(new BrokerPublisher(channel, internalMessageBuffer));
+        // TODO/FIXME def need something more robust here. Small thread pool?
+        Thread brokerPublisherThread = new Thread(new BrokerPublisher(moChannel, internalMessageBuffer));
         brokerPublisherThread.start();
         LOG.info("Broker publisher thread running.");
         LOG.info("Start up complete.");
@@ -144,12 +145,12 @@ public class RabbitQueueProducer implements QueueProducer {
 
     private void enqueueToBroker(Channel channel, Message message) throws IOException {
         byte[] payload = message.toBytes();
-        channel.basicPublish(this.queueName, this.routingKey, /*deliveryModeProps*/null, payload);
+        channel.basicPublish(this.exchangeName, this.routingKey, /*deliveryModeProps*/null, payload);
         LOG.info(" [x] Enqueued msg '{}'", message);
     }
 
     public void shutdown() throws IOException, TimeoutException {
-        this.channel.close();
+        this.moChannel.close();
         moConnection.close();
     }
 
