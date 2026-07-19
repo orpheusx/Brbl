@@ -72,6 +72,7 @@ public class ScriptEngine {
                     session.setCurrentNode(next);
                 }
 
+                // FIXME Move the flush call up into the Operator.process() ?
                 // FIXME For now, if we've advanced to the end of the graph then clear the session.
                 // FIXME ideally should be in a finally block but writing to db can throw. Hmm...
                 if(!session.flush(next==null)) {
