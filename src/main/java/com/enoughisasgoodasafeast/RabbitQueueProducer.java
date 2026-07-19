@@ -15,7 +15,7 @@ import java.util.concurrent.BlockingQueue;
 import java.util.concurrent.TimeoutException;
 
 import static com.enoughisasgoodasafeast.RabbitQueueFunctions.exchangeForQueueName;
-import static com.enoughisasgoodasafeast.SharedConstants.STANDARD_RABBITMQ_PORT;
+import static com.enoughisasgoodasafeast.SharedConstants.*;
 import static com.rabbitmq.client.BuiltinExchangeType.DIRECT;
 
 public class RabbitQueueProducer implements QueueProducer {
@@ -41,12 +41,12 @@ public class RabbitQueueProducer implements QueueProducer {
     }
 
     public static QueueProducer createQueueProducer(Properties props) throws IOException, TimeoutException {
-        String queueHost = props.getProperty("producer.queue.host");
-        int queuePort = Integer.parseInt(props.getProperty("producer.queue.port", STANDARD_RABBITMQ_PORT));
+        String queueHost = props.getProperty(PRODUCER_QUEUE_HOST);
+        int queuePort = Integer.parseInt(props.getProperty(PRODUCER_QUEUE_PORT, STANDARD_RABBITMQ_PORT));
         String queueName = props.getProperty("producer.queue.name");
-        String queueRoutingKey = props.getProperty("producer.queue.routingKey");
+        String queueRoutingKey = props.getProperty(PRODUCER_QUEUE_ROUTING_KEY);
 
-        boolean queueIsDurable = Boolean.parseBoolean(props.getProperty("producer.queue.durable"));
+        boolean queueIsDurable = Boolean.parseBoolean(props.getProperty(PRODUCER_QUEUE_DURABLE));
         int heartbeatTimeoutSeconds = SharedConstants.STANDARD_HEARTBEAT_TIMEOUT_SECONDS;
 
 
@@ -82,7 +82,7 @@ public class RabbitQueueProducer implements QueueProducer {
 
         moChannel.queueDeclare(this.queueName, true, false, false, null);
         moChannel.queueBind(queueName, exchangeName, routingKey);
-        LOG.info("Bound exchange, {}, to queue, {}.", exchangeName, queueName);
+        LOG.info("Bound exchange, {}, to queue, {} with routing key, {}.", exchangeName, queueName, routingKey);
 
         // Heartbeat frames will be sent approx moConnection.getHeartbeat() / 2 seconds
         // After two missed heartbeats, the peer is considered to be unreachable.
@@ -146,7 +146,7 @@ public class RabbitQueueProducer implements QueueProducer {
     private void enqueueToBroker(Channel channel, Message message) throws IOException {
         byte[] payload = message.toBytes();
         channel.basicPublish(this.exchangeName, this.routingKey, /*deliveryModeProps*/null, payload);
-        LOG.info(" [x] Enqueued msg '{}'", message);
+        LOG.info(" [x] Exchange '{}' enqueued msg '{}'", this.exchangeName, message);
     }
 
     public void shutdown() throws IOException, TimeoutException {

@@ -33,7 +33,7 @@ public abstract class BrblConsumer extends DefaultConsumer {
      * @param consumerTag the <i>consumer tag</i> associated with the consumer
      */
     public void handleConsumeOk(String consumerTag) {
-        LOG.warn("handleConsumeOk called with consumerTag {}", consumerTag);
+        LOG.debug("handleConsumeOk called with consumerTag {}", consumerTag);
     }
 
     /**

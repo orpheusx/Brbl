@@ -81,9 +81,9 @@ public class BrblLogicTsvGenerator extends BrblUsersTsvGenerator {
 
         // keywords
         var keywordData = generator.generateKnownKeywords(
-                knownKeywordIdsAndPatterns1, knownScriptData[0][0], knownRouteIdsAndChannels[0][0]);
+                knownKeywordIdsAndPatterns, knownScriptData[0][0], knownRouteIdsAndChannels[0][0]);
         keywordData.addAll(generator.generateKnownKeywords(
-                getKnownKeywordIdsAndPatterns2, knownScriptData[1][0], knownRouteIdsAndChannels[2][0]
+                getKnownKeywordIdsAndPatterns, knownScriptData[1][0], knownRouteIdsAndChannels[2][0]
         ));
         // The food quiz graph remains un-referenced by either the keywords or routes (default_script_id) tables.
 

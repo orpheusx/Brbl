@@ -1,6 +1,7 @@
 package com.enoughisasgoodasafeast.operator;
 
 import com.enoughisasgoodasafeast.*;
+import com.enoughisasgoodasafeast.datagen.KnownData;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.slf4j.Logger;
@@ -15,7 +16,7 @@ import java.util.regex.Pattern;
 import static com.enoughisasgoodasafeast.Functions.randomUUID;
 import static com.enoughisasgoodasafeast.Message.newMO;
 import static com.enoughisasgoodasafeast.Message.newMT;
-import static java.io.IO.println;
+import static com.enoughisasgoodasafeast.datagen.KnownData.knownNumbersForUsers;
 import static java.util.Objects.requireNonNull;
 import static org.junit.jupiter.api.Assertions.*;
 
@@ -24,12 +25,12 @@ public class OperatorTest {
     private static final Logger LOG = LoggerFactory.getLogger(OperatorTest.class);
 
     public static final String MOBILE_CA = "14385551234";  // Quebec, CA
-    public static final String MOBILE_MX = "522005551234"; // Mexico City, MX
+    public static final String MOBILE_MX = knownNumbersForUsers[9]; // Mexico City, MX
     public static final String MOBILE_US = "7815551234";   // Fake US number.
     public static final String SHORT_CODE_1 = "1234";
     public static final String SHORT_CODE_2 = "2345";
     public static final String SHORT_CODE_3 = "3456";
-    public static final String SHORT_CODE_4 = "12124468003";
+    public static final String SHORT_CODE_4 = KnownData.knownRouteIdsAndChannels[2][1]; //--> "12124468003";
     public static final String MO_TEXT_1 = "Hello Brbl";
     public static final String MO_TEXT_2 = "Howdy Brbl";
     public static final String INITIAL_SCRIPT_RESPONSE = "The initial response to the user MO";
@@ -64,12 +65,20 @@ public class OperatorTest {
             MOBILE_MX, SHORT_CODE_4, "wolverine"
     );
 
+    public static final Keyword colorKeyword = new Keyword(
+            TestingPersistenceManager.KEYWORD_ID,
+            "(color|colour|colr).*(quiz|q|kwiz)",
+            Platform.SMS,
+            TestingPersistenceManager.SCRIPT_ID,
+            OperatorTest.SHORT_CODE_4); // channel
+
     private static final SessionKey SESSION_KEY_US_SHORT_CODE_1 = SessionKey.newSessionKey(mo1);
     private static final String WELCOME_OPT_IN_MESSAGE = "Welcome. You can opt out at any time by sending 'STOP'";
     private static final String CHINESE_OPT_IN_MESSAGE = "欢迎。您可以随时发送“STOP”以退订。";
 
     private InMemoryQueueProducer queueProducer;
     private Operator operator = null;
+    private TestingPersistenceManager persistenceManager;
 
     private Edge answerFlort = null;
     private Node endConversation;
@@ -79,9 +88,11 @@ public class OperatorTest {
     void setup() {
         queueProducer = new InMemoryQueueProducer();
         QueueConsumer fakeQueueConsumer = new FakeQueueConsumer();
-        PersistenceManager persistenceManager = new TestingPersistenceManager();
+        persistenceManager = new TestingPersistenceManager();
         operator = new Operator(fakeQueueConsumer, queueProducer, persistenceManager);
 
+        // Register a keyword to the map
+        persistenceManager.addKeyword(Pattern.compile(colorKeyword.wordPattern()), colorKeyword);
 
         // Construct a script for testing purposes
         Node presentQuestion = new Node(COLOR_QUIZ_START_TEXT, NodeType.PRESENT_MULTI, "ColorQuizStart");
@@ -99,7 +110,7 @@ public class OperatorTest {
         processAnswer.edges().addAll(List.of(answerRed, answerBlue, answerFlort));
 
         // Add the test script to the fixture's script "cache."
-        ((TestingPersistenceManager) persistenceManager).addScript(
+        persistenceManager.addNodeGraph(
                 TestingPersistenceManager.SCRIPT_ID, presentQuestion);
 
         Node confirmChangeTopic = new Node(
@@ -147,14 +158,13 @@ public class OperatorTest {
 
 
         // Remember the default routes only holds the script id. We still need to add the script itself to the main cache.
-        ((TestingPersistenceManager) persistenceManager).addScript(defaultNode.id(), defaultNode);
+        persistenceManager.addNodeGraph(defaultNode.id(), defaultNode);
 
-        ((TestingPersistenceManager) persistenceManager).addScript(
-                confirmChangeTopic.id(), confirmChangeTopic);
-        ((TestingPersistenceManager) persistenceManager).addScript(optInNode.id(), optInNode);
-        ((TestingPersistenceManager) persistenceManager).addScript(altOptInNode.id(), altOptInNode);
-        ((TestingPersistenceManager) persistenceManager).addScript(optInNode.id(), optInNode);
-        ((TestingPersistenceManager) persistenceManager).addScript(optOutNode.id(), optOutNode);
+        persistenceManager.addNodeGraph(confirmChangeTopic.id(), confirmChangeTopic);
+        persistenceManager.addNodeGraph(optInNode.id(), optInNode);
+        persistenceManager.addNodeGraph(altOptInNode.id(), altOptInNode);
+        persistenceManager.addNodeGraph(optInNode.id(), optInNode);
+        persistenceManager.addNodeGraph(optOutNode.id(), optOutNode);
 
         var onlyCompanyId = UUID.fromString("019d2055-922c-75f7-a80e-091f01382fa3");
         var allRoutes = new Route[]{
@@ -176,7 +186,7 @@ public class OperatorTest {
                 )
         };
 
-        ((TestingPersistenceManager) persistenceManager).setActiveRoutes(allRoutes);
+        persistenceManager.setActiveRoutes(allRoutes);
     }
 
 
@@ -215,8 +225,8 @@ public class OperatorTest {
         queueProducer.enqueued().clear(); // Need to manually clear the enqueued message list between process() calls.
 
         assertDoesNotThrow(() -> { operator.process(mo2); });
-        println("------ Messages queued for mo2 ------");
-        queueProducer.enqueued().forEach(System.out::println);
+        //println("------ Messages queued for mo2 ------");
+        //queueProducer.enqueued().forEach(System.out::println);
 
         assertEquals(2, queueProducer.enqueuedCount());
         assertEquals(mt2.to(), queueProducer.enqueued().get(1).to());
@@ -279,6 +289,7 @@ public class OperatorTest {
 
     @Test
     void findMatchForKeyword() {
+
         final Map<Pattern, Keyword> all = operator.allKeywordsByPatternCache.get(Operator.ALL);
         assertNotNull(all);
         assertFalse(all.isEmpty());
@@ -301,6 +312,7 @@ public class OperatorTest {
 
     @Test
     void stepThroughPresentProcessMulti() {
+
         // Preflight check: cache is empty.
         assertEquals(0, operator.scriptByKeywordCache.estimatedSize());
 
@@ -338,9 +350,9 @@ public class OperatorTest {
             operator.process(mo5); // answer given should select "flort"
         });
 
-        queuedMessages.forEach(message -> {
-            println("queued message: " + message.text());
-        });
+        //queuedMessages.forEach(message -> {
+        //    println("queued message: " + message.text());
+        //});
 
         // Check the rest of the MT responses.
         assertEquals(4, queuedMessages.size(), "Unexpected number of messages queued.");
@@ -379,7 +391,7 @@ public class OperatorTest {
 
         // Make sure we get the expected initial response.
         final List<Message> queuedMessages = queueProducer.enqueued();
-        queuedMessages.forEach((message -> {println("stepThroughPresentProcessMultiWithBadInput message:" + message.text());}));
+        //queuedMessages.forEach((message -> {println("stepThroughPresentProcessMultiWithBadInput message:" + message.text());}));
         assertEquals(2, queuedMessages.size(), "Unexpected number of messages queued.");
         // Expect the text from an OPT
         assertTrue(requireNonNull(queuedMessages.getFirst()).text().contains("STOP"), "Expected text not found in first queued message.");
@@ -428,6 +440,7 @@ public class OperatorTest {
 
     @Test
     void stepThroughWithUnexpectedInputAndChangeTopic() {
+
         // Preflight check: cache is empty.
         assertEquals(0, operator.scriptByKeywordCache.estimatedSize());
 
@@ -444,7 +457,7 @@ public class OperatorTest {
 
         // Make sure we get the expected initial response.
         final List<Message> queuedMessages = queueProducer.enqueued();
-        queuedMessages.forEach((message -> { println("stepThroughWithUnexpectedInputAndChangeTopic: " + message.text()); }));
+        //queuedMessages.forEach((message -> { println("stepThroughWithUnexpectedInputAndChangeTopic: " + message.text()); }));
         assertEquals(2, queuedMessages.size(), "Unexpected number of messages queued.");
         assertTrue(requireNonNull(queuedMessages.get(1)).text().contains("favorite color"),
                 "Unexpected text found in first queued message: " + queuedMessages.get(1).text());

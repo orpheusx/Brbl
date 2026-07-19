@@ -501,6 +501,12 @@ PostgresPersistenceManager implements PersistenceManager {
                         (?::UUID, ?::UUID, ?::brbl_logic.delivery_status);
                     """;
 
+    /**
+     * Acquires and returns a Connection object following the retry and delay-between-retry parameters set on
+     * the underlying PooledDataSource. By default, c3p0 tries 30 times, waiting 1 second between retries.
+     * @return a Connection to the configured database.
+     * @throws SQLException if the Connection could not be acquired.
+     */
     public @NonNull Connection fetchConnection() throws SQLException {
         //Instant before = Instant.now();
         return pds.getConnection();

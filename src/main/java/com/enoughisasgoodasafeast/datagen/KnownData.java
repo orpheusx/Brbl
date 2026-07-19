@@ -112,7 +112,7 @@ public class KnownData {
     };
 
     // Associate these with the favorite color script.
-    public static String[][] knownKeywordIdsAndPatterns1 = {
+    public static String[][] knownKeywordIdsAndPatterns = {
             // id, pattern
             {"3a99ca92-d24b-41f9-bca2-3c2375c88738", "(color|colour|colr).*(quiz|q|kwiz).*" },
             {"571741cf-20f2-456d-92d6-f7f1c9d2b319", "bar" },
@@ -121,7 +121,7 @@ public class KnownData {
     };
 
     // Associate with people are the worst script
-    public static String[][] getKnownKeywordIdsAndPatterns2 = {
+    public static String[][] getKnownKeywordIdsAndPatterns = {
             {"53578bea-7f9e-49b3-8412-948f072f75b6", "meh" }
     };
 

@@ -1,6 +1,7 @@
 package com.enoughisasgoodasafeast.operator;
 
 import com.enoughisasgoodasafeast.Message;
+import com.enoughisasgoodasafeast.datagen.KnownData;
 import org.jspecify.annotations.NonNull;
 import org.jspecify.annotations.Nullable;
 import org.slf4j.Logger;
@@ -20,7 +21,7 @@ public class TestingPersistenceManager implements PersistenceManager {
     private static final Logger LOG = LoggerFactory.getLogger(TestingPersistenceManager.class);
 
     public static final UUID KEYWORD_ID = randomUUID();
-    public static final UUID SCRIPT_ID = UUID.fromString("89eddcb8-7fe5-4cd1-b18b-78858f0789fb");
+    public static final UUID SCRIPT_ID = UUID.fromString(KnownData.knownRootNodeIds[0]); // "89eddcb8-7fe5-4cd1-b18b-78858f0789fb");
     public static final String USER_ID = OperatorTest.MOBILE_MX;
     public static final UUID CLAIMANT_ID = randomUUID();
 
@@ -28,53 +29,79 @@ public class TestingPersistenceManager implements PersistenceManager {
     private final Map<UUID, Node> nodesById = new HashMap<>();
 
     private Route[] routes;
+    private boolean isFailInsertNewUser;
 
     public TestingPersistenceManager() {
-        Keyword keyword = new Keyword(
-                KEYWORD_ID,
-                "(color|colour|colr).*(quiz|q|kwiz)",
-                Platform.SMS,
-                SCRIPT_ID,
-                OperatorTest.SHORT_CODE_4); // channel
-        keywordMap.put(Pattern.compile(keyword.wordPattern()), keyword);
+        LOG.info("no-arg constructor called");
+//        Keyword keyword = new Keyword(
+//                KEYWORD_ID,
+//                "(color|colour|colr).*(quiz|q|kwiz)",
+//                Platform.SMS,
+//                SCRIPT_ID,
+//                OperatorTest.SHORT_CODE_4); // channel
+//        keywordMap.put(Pattern.compile(keyword.wordPattern()), keyword);
     }
+
+    // TODO
+    // Add constructor that takes a list of Keywords?
+    // ...
 
     @Override
     public boolean insertMO(Message message) {
+        LOG.info("insertMO");
         return true;
     }
 
     @Override
     public boolean insertProcessedMO(Message message, Session session) {
+        LOG.info("insertProcessedMO");
         return true;
     }
 
     @Override
     public boolean insertMT(Message message, Session session) {
+        LOG.info("insertMT");
         return true;
     }
 
     @Override
     public boolean insertDeliveredMT(Message message) {
+        LOG.info("insertDeliveredMT");
         return true;
+    }
+
+    public void failInsertNewUser(boolean isFail) {
+        this.isFailInsertNewUser = isFail;
     }
 
     @Override
     public boolean insertNewUser(User user) {
+        if (this.isFailInsertNewUser) {
+            LOG.info("Failing insertNewUser");
+            return false;
+        }
+        LOG.info("insertNewUser");
         return true;
     }
 
     @Override
     public Map<Pattern, Keyword> getKeywords() {
+        LOG.info("getKeywords: size = {}", keywordMap.size());
         return keywordMap;
     }
 
-    void addScript(UUID scriptId, Node presentQuestion) {
+    public void addKeyword(Pattern pattern, Keyword keyword) {
+        keywordMap.put(pattern, keyword);
+    }
+
+    public void addNodeGraph(UUID scriptId, Node presentQuestion) {
+        LOG.info("addScript");
         nodesById.put(scriptId, presentQuestion);
     }
 
     @Override
     public Node getNodeGraph(UUID scriptId) {
+        LOG.info("getNodeGraph");
         return nodesById.get(scriptId);
     }
 
@@ -86,10 +113,12 @@ public class TestingPersistenceManager implements PersistenceManager {
 
     @Override
     public boolean updateUserStatus(User user, Platform platform, UserStatus status) {
+        LOG.info("updateUserStatus");
         return true;
     }
 
     public void setActiveRoutes(Route[] routes) {
+        LOG.info("setActiveRoutes");
         this.routes = routes;
     }
 
@@ -97,6 +126,7 @@ public class TestingPersistenceManager implements PersistenceManager {
 
     @Override
     public boolean saveSession(Session session) throws PersistenceManagerException {
+        LOG.info("saveSession");
         try {
             savedSessions.put(session.getId(), SessionSerde.sessionToBytes(session));
             return true;
@@ -108,8 +138,9 @@ public class TestingPersistenceManager implements PersistenceManager {
 
     @Override
     public @Nullable Session loadSession(UUID id) throws PersistenceManagerException {
+        LOG.info("loadSession");
         final byte[] bytes = savedSessions.get(id);
-        if(bytes == null) {
+        if (bytes == null) {
             LOG.error("Session {} not found.", id);
 //            throw new PersistenceManagerException("No session data for id: " + id.toString());
             return null;
@@ -124,12 +155,14 @@ public class TestingPersistenceManager implements PersistenceManager {
 
     @Override
     public boolean clearSession(@NonNull Session session) throws PersistenceManagerException {
+        LOG.info("clearSession");
         savedSessions.remove(session.getId());
         return true;
     }
 
     @Override
     public PushCampaign getPushCampaign(@NonNull UUID campaignId) {
+        LOG.info("getPushCampaign");
         return null; // FIXME implement!
     }
 
@@ -140,35 +173,43 @@ public class TestingPersistenceManager implements PersistenceManager {
 
     @Override
     public User getUser(SessionKey sessionKey) {
+        // FIXME seems like it would make more sense to create the User using the properties of the provided SessionKey, no?
+        LOG.info("getUser");
         Map<Platform, UUID> platformIds = Map.of(Platform.SMS, randomUUID());
         Map<Platform, String> platformNumbers = new HashMap<>();
-        platformNumbers.put(Platform.SMS, USER_ID);
+//        platformNumbers.put(Platform.SMS, USER_ID);
+        platformNumbers.put(sessionKey.platform(), sessionKey.from());
         Map<Platform, Instant> platformCreatedAt = new HashMap<>();
-        platformCreatedAt.put(Platform.SMS, Instant.now());
+        platformCreatedAt.put(sessionKey.platform(), Instant.now());
         Map<Platform, String> userNickNames = new LinkedHashMap<>();
         userNickNames.put(Platform.SMS, "Bozo");
         Map<Platform, UserStatus> userStatuses = new LinkedHashMap<>();
-        userStatuses.put(Platform.SMS, UserStatus.IN);
+        userStatuses.put(sessionKey.platform(), UserStatus.IN);
         return new User(platformIds, randomUUID(), platformNumbers, platformCreatedAt, "US", Set.of(LanguageCode.ENG), CLAIMANT_ID, null, userNickNames, null, userStatuses);
     }
 
     public Collection<CampaignUser> getPushCampaignUsers(@NonNull UUID campaignId, DeliveryStatus byStatus) {
+        LOG.info("getPushCampaignUsers");
         return new ArrayList<>();
     }
 
     public boolean updatePushCampaignUsersStatus(@NonNull PushReport report) throws SQLException {
+        LOG.info("updatePushCampaignUsersStatus");
         return true;
     }
 
     public UUID createPushCampaign(@NonNull UUID customerId, String description, @NonNull UUID scriptId, @NonNull UUID routeId) throws SQLException {
+        LOG.info("createPushCampaign");
         return null;
     }
 
     public boolean insertCampaignUserSegment(@NonNull UUID campaignId, @NonNull List<UUID> userIds) {
+        LOG.info("insertCampaignUserSegment");
         return true;
     }
 
     public boolean completePushCampaign(@NonNull UUID campaignId, Instant completionTime) throws SQLException {
+        LOG.info("completePushCampaign");
         return false;
     }
 

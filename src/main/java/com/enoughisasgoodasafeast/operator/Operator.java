@@ -97,8 +97,10 @@ public class Operator implements SessionAwareMessageProcessor {
 
     /**
      * Find/setup session and process message, tracking state changes in the session.
+     * NB: The logic appears to be correct but the method is such a tangled mess. Massive tech debt here...
+     *
      * @param message the message being processed.
-     * @return BooleanSession indicating the success of the processing and the current stateful Session object.
+     * @return ProcessStateSession indicating the variable status of the processing and the current stateful Session object.
      */
     public ProcessStateSession process(Message message) {
         LOG.info("process: incoming message: {}", message);
@@ -107,6 +109,7 @@ public class Operator implements SessionAwareMessageProcessor {
         final SessionKey sessionKey = SessionKey.newSessionKey(message);
         Session session = sessionCache.get(sessionKey);
         if (null == session) {
+            // Rely on findOrCreateSession to remove user from cache if session create fails
             LOG.error("process: Failed to find or create session for {}", sessionKey);
             return new ProcessStateSession(ProcessState.ERROR, null);
         }
@@ -116,7 +119,7 @@ public class Operator implements SessionAwareMessageProcessor {
         var userCreatedAt = session.getUser().platformCreationTimes().get(message.platform());
         var isUserBrandNew = processStart.isBefore(userCreatedAt) || processStart.equals(userCreatedAt);
         var isSkipProcessing = (NodeType.OPT_OUT == session.getCurrentNode().type())
-                                    && (isUserBrandNew || UserStatus.OUT == session.getUser().platformStatus().get(message.platform()));
+                && (isUserBrandNew || UserStatus.OUT == session.getUser().platformStatus().get(message.platform()));
 
         LOG.info("process: isSkipProcessing: {} for user status {}", isSkipProcessing, session.getUser().platformStatus().get(message.platform()));
         LOG.info("process: currentNode type: {}", session.getCurrentNode().type());
@@ -130,7 +133,7 @@ public class Operator implements SessionAwareMessageProcessor {
             return new ProcessStateSession(ProcessState.OK, session);
         }
 
-        if(isUserBrandNew) {
+        if (isUserBrandNew) { // FIXME can we safely move this block to after switch below?? Prefer to avoid writing as much as possible.
             var user = session.getUser();
             boolean isInserted = persistenceManager.insertNewUser(user);
             if (!isInserted) {
@@ -170,11 +173,11 @@ public class Operator implements SessionAwareMessageProcessor {
 
         if (statusNeedsUpdate) {
             LOG.info("process: Session status needs update to {}", updatedUserStatus);
-            if(persistenceManager.updateUserStatus(sessionUser, sessionKey.platform(), updatedUserStatus)) {
+            if (persistenceManager.updateUserStatus(sessionUser, sessionKey.platform(), updatedUserStatus)) {
                 sessionUser.platformStatus().put(sessionKey.platform(), UserStatus.IN);
                 LOG.info("process: Updated platform status for user {}", sessionUser.platformStatus().get(sessionKey.platform()));
             } else {
-                // Not being able to update the UserStatus is serious and all the worse because we may have already queued some output
+                // Not being able to update the UserStatus is serious and all the worse because we may have already queued some output which we should not
                 LOG.error("process: failed to update user status to updatedUserStatus for {}", sessionUser);
                 return new ProcessStateSession(ProcessState.ERROR, session);
             }
@@ -185,7 +188,6 @@ public class Operator implements SessionAwareMessageProcessor {
             sessionCache.invalidate(sessionKey);
         }
 
-        // FIXME Consider returning the ProcessStateNode (with RETRY value added) instead?
         return new ProcessStateSession(processStateNode.processState(), session);
     }
 
@@ -196,6 +198,7 @@ public class Operator implements SessionAwareMessageProcessor {
 
     /**
      * Returns true if the message text matches exactly the set of stop words.
+     *
      * @param txt a string that has been returned from normalizedMessageText
      * @return true if there's a match, false otherwise.
      */
@@ -217,6 +220,7 @@ public class Operator implements SessionAwareMessageProcessor {
         var platform = message.platform();
         var sessionUser = session.getUser();
         var status = sessionUser.platformStatus().get(platform);
+
         var isBrandNew = sessionUser.platformCreationTimes().get(platform).isAfter(processStart);
         LOG.info("handleOptOut: phone {} platform {} status {} isBrandNew {}", message.from(), platform, status, isBrandNew);
 
@@ -329,12 +333,13 @@ public class Operator implements SessionAwareMessageProcessor {
         var start = now();
 
         try (var scope = new StructuredTaskScope.ShutdownOnFailure()) {
-            Supplier<User> suppliedUser = scope.fork(()  -> userCache.get(sessionKey));
+            Supplier<User> suppliedUser = scope.fork(() -> userCache.get(sessionKey));
             Supplier<Node> keywordScript = scope.fork(() -> scriptByKeywordCache.get(KeywordCacheKey.newKey(sessionKey)));
             Supplier<Node> defaultScript = scope.fork(() -> findDefaultScriptByRoute(sessionKey));
 
             scope.join().throwIfFailed(); // TODO consider using joinUntil() to enforce a collective timeout.
 
+            var tmpKeywordDefinedNodeId = keywordScript.get();
             var selectedGraph = (keywordScript.get() != null) ? keywordScript.get() : defaultScript.get();
 
             if (selectedGraph == null) { // FIXME For now let's fail hard on configuration errors even if the user has an existing session that could be used instead.
@@ -363,7 +368,7 @@ public class Operator implements SessionAwareMessageProcessor {
                 boolean isExistingUserNeedsOptIn =
                         !isBrandNewUser
                                 &&
-                        UserStatus.OUT.equals(user.platformStatus().get(sessionKey.platform())); // true if returning user
+                                UserStatus.OUT.equals(user.platformStatus().get(sessionKey.platform())); // true if returning user
 
                 LOG.info("isExistingUserNeedsOptIn: {}", isExistingUserNeedsOptIn);
 
@@ -373,7 +378,7 @@ public class Operator implements SessionAwareMessageProcessor {
                     // The cached opt-in graph is shared between all processes so, since we need to customize it per user,
                     //  we must make a copy first.
                     final var originalOptInGraph = findOptInScriptIdByRoute(sessionKey);
-                    if(originalOptInGraph == null) { // The database constraints should make it impossible for a route to lack a script.
+                    if (originalOptInGraph == null) { // The database constraints should make it impossible for a route to lack a script.
                         throw new IllegalStateException("CRITICAL: Configuration error for opt_in_node_id in route table for " + sessionKey);
                     }
 
@@ -427,6 +432,7 @@ public class Operator implements SessionAwareMessageProcessor {
 
     /**
      * How do we denote a new user vs an existing one? Currently relying on the delta btw createdAt and a given instant.
+     *
      * @param sessionKey the record that encapsulates the message metadata.
      * @return a new or existing User matching the provided key.
      */
@@ -436,7 +442,7 @@ public class Operator implements SessionAwareMessageProcessor {
             LOG.info("Existing user not found.");
 
             var owningId = findOwningCompanyIdByRouteChannel(sessionKey);
-            if(owningId == null) {
+            if (owningId == null) {
                 // very bad
                 LOG.error("CRITICAL_CONFIG_ERROR: findOrCreateUser: No owning company found for route {}:{}. (User: {})",
                         sessionKey.platform(), sessionKey.to(), sessionKey.from());
@@ -457,17 +463,6 @@ public class Operator implements SessionAwareMessageProcessor {
                     null,                                                   // platformProfileIds
                     defaultPlatformStatusMap(UserStatus.IN)
             );
-
-//            boolean isInserted = persistenceManager.insertNewUser(user);
-//            if (!isInserted) {
-//                LOG.error("findOrCreateUser failed to insert new user: {}", user);
-//                return null;
-//                // LOG.error("findOrCreateUser failed to insert user. Caching it anyway: {}", user);
-//                // Queue or write it to a file so it can be loaded later (when the database is back up)?
-//            } else {
-//                LOG.info("New User created: {}", user);
-//            }
-
         } else {
             LOG.info("Retrieved User: {}", user);
         }
@@ -492,7 +487,7 @@ public class Operator implements SessionAwareMessageProcessor {
     private Node findScriptForKeywordChannel(KeywordCacheKey keywordCacheKey) {
         final Map<Pattern, Keyword> all = allKeywordsByPatternCache.get(ALL);
         if (all == null || all.isEmpty()) {
-            LOG.error("CRITICAL: No keywords available from system for new session!!!");
+            LOG.error("CRITICAL: No keywords available.");
             return null;
         }
         UUID nodeId = findMatch(all, keywordCacheKey);

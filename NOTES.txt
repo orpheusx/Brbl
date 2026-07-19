@@ -6081,6 +6081,13 @@ Just looking at the Jazzer library README I can see it being (more) useful for t
 Note: I added the -ea flag to the command line in Dockerfile.dev.jvm file and rebuilt the image (just the related metadata changes.)
 Running the full suite of unit/integration tests still pass (with <enableAssertions>true</enableAssertions> added to maven-surefire plugin config) and running ChttrClient against the docker-compose cluster work fine.
 
+A related term that relates to "fuzzing": Property-based testing.
+This also seeks to generate inputs to more fully verify code. Abstractly, a "property" generally follows the pattern:
+
+    FOR ALL inputs (x, y, z)
+    GIVEN THAT inputs match specific constraints (e.g., integers > 0)
+    THEN the property statement MUST hold true
+
 
 ==== 2026/07/04 ====
 
@@ -6105,7 +6112,7 @@ Queue Policy Thoughts:
         - sndr-mt-retry
         - sndr-mt-fail
 
-    (NOTE: rabbitmq_delayed_message_exchange provided a simplified way of implementing retry functionality (with some reasonable tradeoffs) but has been archived/deprecated. Apparently, DLQ is now the only method recommended for this purpose.)
+    (NOTE: rabbitmq_delayed_message_exchange provided a simplified way of implementing retry functionality (with some reasonable tradeoffs) but has been archived/deprecated. Apparently, DLQ is now the only method recommended for this purpose. This seems fine actually because we don't really need to define the delay per message; the cause is likely resource related, e.g. hitting a db pool limit, 3rd party gateway availability.)
 
     Transient/retryable errors:
         - Database availability including connection pool timeouts
@@ -6177,6 +6184,7 @@ rabbitmqadmin delete exchange --name x.opr8r.mo
 rabbitmqadmin delete exchange --name rtx.sndr.mt
 rabbitmqadmin delete exchange --name rtx.opr8r.mo
 
+
 rabbitmqadmin delete queue --name opr8r.mo
 rabbitmqadmin delete queue --name sndr.mt
 rabbitmqadmin delete queue --name sndr.mt.failed
@@ -6184,9 +6192,225 @@ rabbitmqadmin delete queue --name sndr.mt.retry
 
 Some refactoring on RabbitQueueConsumer, OperatorConsumer, and BrblConsumer to support retries and failure exchange/queueus.
 
+To help us remember why we decided on this design, here's Google's summary of the multiple delay specific exchanges:
+    Zero Thread-Blocking: Your application code consumes a message, handles an exception, publishes it to the retry ecosystem instantly, and moves straight onto the next message. The actual waiting happens completely within RabbitMQ Broker Memory.
+    Preserving Header Context: Notice inside routeToDelayBucket that we copy the existing properties.getHeaders(). This is critical. It allows the x-death block to persist across multiple queue hops so the consumer can accurately track whether it's on attempt #1, #2, or #3.
+    No Head-of-Line Blocking: Because messages awaiting a 5-second retry reside in an entirely separate hardware data stream from messages waiting 5 minutes, fast messages will never get stranded behind slow ones. (To elaborate on this problem: "RabbitMQ queues evaluate message expiration strictly at the head of the queue. If you publish Message A with a 20-minute delay, and immediately after publish Message B with a 5-second delay, Message B will get stuck behind Message A. Message B will not expire or move until Message A's 20 minutes are entirely up."
+
 ==== 2026/07/07 ====
 
 To simplify and share code between OperatorConsumer and SndrConsumer, I defined an enum class--RetryDelayRoutingKey. These values act as time coded routing keys; the OperatorConsumer and SndrConsumer can define their own computeDelayRoutingKey method to control the number of retries and which exchanges are used to delay each attempt.
 
 Verified normal (i.e. no errors) behavior with new impl using the ChttrClient.
+
+Next...determining our path to testing retries and fails.
+
+TODO
+  _ Unit tests for copyGraphAppending that prove its correctness for graphs that are deeper than a single Node with a single Edge.
+  _ Unit tests for testing OPT_IN/OUT. (Need an API defined on Operator to clear in-memory sessions and users from cache.)
+  _ Add CHANGE_TOPIC ScriptType to allow customization of the message.
+  _ Chttr: add pseudo-random unexpected input (for PROCESS_MULTI nodes), change topic, and possibly OPT_OUTs. These don't need to be dynamic; the logic that creates the permutations could generate them using a random seed.
+  _ Unit tests that excercise the retry/fail conditions returned by Operator et al. and
+
+
+==== 2026/07/08 ====
+
+When retrying a message will we get screwed up by session state that advanced partially in the first attempt?
+
+Happened to discover a new feature in the latest version of Rabbit, 4.3, that provides more flexibility, reliability and efficiency: Quorum Queues. To get all the benefits, we'd need to run more than a single node--ideally 3 (it's Raft based) but no more than 7--though it is possible to run it with just one.
+
+Also of interest: https://www.rabbitmq.com/blog/2026/04/23/rabbitmq-4.3-release#message-scheduler
+
+Probably a good idea to upgrade to the new version in any case...DONE. Tests including the ChttrClient all run fine without modification.
+Reminder, We should do likewise to upgrade from Java 23 to 26. May require changes to the Structured Concurrency API we're using.
+
+
+==== 2026/07/09 ====
+Useful note in the RabbitMQ docs:
+    "If a consumer cannot process any messages — for example, due to an entire downstream database being offline — it is better to temporarily pause the consumer rather than delaying every message. Once the database is restored, you can resume the consumer."
+
+    Consider exposing a JMX accessible boolean that controls pausing? What's the mechanism to pause a consumer?
+
+Not suprised: Quorum Queues have significantly higher memory requirements (512 mb of RAM strictly for the Write-Ahead Log (WAL)) though that is a function of higher througphput systems.
+
+Asked about the memory footprint of a 3 node cluster using quorum queues, Google talks a lot about setting x-max-in-memory-length to zero as a way of reducing RAM usage but elsewhere human beings note that in version 3.10, both x-max-in-memory-length and x-max-in-memory-bytes are ignored and messages are automatically moved to disk as quickly as possible making throughput and latency less variable. Classic LLM hallucination. :-P
+
+Let's think through the testing setup and maybe get that working before we implement yet another queueing setup...
+
+Queues:
+    opr8r.mo
+    opr8r.mo.failed
+    opr8r.mo.retry.5s (more to come.)
+    sndr.mt
+    sndr.mt.failed
+    sndr.mt.retry.5s (more to come.)
+
+Exchanges:
+    x.opr8r.mo
+    x.sndr.mt
+    rtx.opr8r.mo
+    rtx.sndr.mt
+
+Relevant commands:
+    rabbitmqadmin exchanges delete --name <name-of-exchange>
+    rabbitmqadmin queues delete --name <name-of-exchange>
+
+I want to update the naming conventions for queues and exchange to distinguish them from routing keys where wildcards may be useful.
+
+
+${environment}-${service_name}-${queue_intent}
+    where service_name is that of the consuming service, not the producer.
+
+opr8r.mo            --> dev-opr8r-mo_sms            (configured)
+opr8r.mo.failed     --> dev-opr8r-mo_sms_fail       (derived)
+opr8r.mo.retry.5s   --> dev-opr8r-mo_sms_retry_5s   (derived)
+sndr.mt             --> dev-sndr-mt_sms             (configured)
+sndr.mt.failed      --> dev-sndr-mt_sms_fail        (derived)
+sndr.mt.retry.5s    --> dev-sndr-mt_sms_retry_5s    (derived)
+
+Changed all the routing keys for primary queues (ie. not the fail or retry queues) to "us.dev.mo" or "us.dev.mt"
+
+Following (mostly) the same convention for exchanges. The exchange is the same as the queue it manages appended with "-x" and the corresponding retry exchange us appended with "-xr":
+
+x.opr8r.mo      --> dev-opr8r-mo_sms-x
+rtx.opr8r.mo    --> dev-opr8r-mo_sms-xr
+x.sndr.mt       --> dev-sndr-mt_sms-x
+rtx.sndr.mt     --> dev-sndr-mt_sms-xr
+
+
+
+==== 2026/07/10 ====
+
+While debugging some queue naming issues, I noticed we're using user 'guest' when creating queues and such. Likewise the vhost is "/"
+    rabbitmqadmin users list >> indicates the guest user is tagged with 'administrator' which seems like a bad idea.
+Should we be not using these defaults? Define our own user with auth setup? Define our own sub vhost path?
+
+Ok, so with the above set of name changes to queues and exchanges in place, I can run ChttrClient against the compose setup perfectly.
+
+Let's classify the non-success cases.
+
+Looking for uses of ProcessStateSession where the ProcessState is ERROR:
+    Operator.process(Message) line 111 when session lookup/creation returns null. This is probably worth retrying actually since only database problems (which may be transient) could account for it. We might want to implement query/insert retry at the PostgresPersistenceManager.
+
+    On line 141 we've just failed to insert a new user record into Postgres and, for consistency, we've cleared both the user and session caches to keep. We haven't processed the message yet. This is another place where it might make sense to introduce a simple retry mechanism into PostgresPersistenceManager. The public interface of all our db functions already accommodates the acquisition of a Connection. Could we design a generic function that could handle the retry with delays? For now we'll keep this an error.
+
+    On line 180 we needed to update the user's status but were unable to do so. The pm.updateUserStatus() method really really needs to be able to retry aggresively because, at this point, we may have flushed 1+ MTs to the output queue (possibly with OPT_IN messages which could end up repeated in response to subsequent MOs.
+
+NOTE: We need to add some fields to the Message format to capture the time the end-user sent the message and/or the time the SMSc thinks it was sent. The latter could supercede the former if they're trying to be accurate and don't trust the phone client software.
+
+Testing setup...
+
+Idea: Standard OperatorConsumer with a custom SessionAwareMessageProcessor impl that uses RNG with known seed to simulate certain failures?
+
+Might be time to get our integration tests (the ones using testcontainers) working again...
+
+Q: What are we trying to test? A: that the retry and fail queues are receiving messages appropriately (and thus configured correctly.)
+Requires:
+    - A testcontainer managed instance of RMQ: org.testcontainers.containers.RabbitMQContainer.
+        (So RabbitQueueConsumer (RQC) is required because it handles the queue/exchange configuration.)
+    - A queue producer.
+    - A queue consumer (BrblConsumer impl as required by RQC.)
+
+Fucking Google. Took four tries for it to give the right command for listing queues and the current message counts in each.
+
+    rabbitmqadmin queues list --columns name,message_count,unacknowledged_message_count,consumer_count
+
+Trying to get DLQLogger to drain the dev-opr8r-mo_sms_fail queue in OperatorMessageFlowIT.
+ # rabbitmqadmin queues list --columns name,message_count,unacknowledged_message_count,consumer_count
+╭───────────────────────────┬───────────────┬──────────────────────────────┬────────────────╮
+│ name                      │ message_count │ unacknowledged_message_count │ consumer_count │
+├───────────────────────────┼───────────────┼──────────────────────────────┼────────────────┤
+│ dev-opr8r-mo_sms          │ 0             │ 0                            │ 1              │
+│ dev-opr8r-mo_sms_fail     │ 0             │ 0                            │ 1              │
+│ dev-opr8r-mo_sms_retry_5s │ 0             │ 0                            │ 0              │
+╰───────────────────────────┴───────────────┴──────────────────────────────┴────────────────╯
+This seems to suggest that DLQLogger is setup to consume from dev-opr8r-mo_sms_fail.
+
+Ok, got it working. Failed messages (e.g. ones sent to unconfigured route) are getting pushed into dev-opr8r-mo_sms_fail and then drained by DLQLogger.
+
+Moved onto to fixing the long busted simpleMessageFlow test...
+Started replacing some of the fixures with KnownData which got very confusing. Combined with the boredom of a unit test, I couldn't seem to get past a configuration error. Finally decied I'd give Google's Gemini replacement, Antigravity, a chance to impress me. I gave it the following prompt:
+    > @src/test/java/com/enoughisasgoodasafeast/integration/OperatorMessageFlowIT.java
+      Why isn't the simpleMessage test method passing? An IllegalStateException is getting thrown from line 378 of the Operator class
+      (@src/main/java/com/enoughisasgoodasafeast/operator/Operator.java.)
+
+Here's the summary after it got it working:
+
+    "The  simpleMessageFlow  test in  OperatorMessageFlowIT.java  was failing due to a channel mismatch between the sent message and the registered route in the test environment, causing an  IllegalStateException  in the  Operator .
+
+      Here is the step-by-step reason for the failure and how it has been resolved:
+
+      ### 1. The Route Channel Mismatch
+
+      In  simpleMessageFlow , the test registered the active route in  persistenceManager  with:
+
+        Route[] routes = {
+                new Route(
+                        routableMessage.platform(),
+                        KnownData.knownRouteIdsAndChannels[0][1], // <-- channel "17814567890" (index 0)
+                        defaultNodeId,
+                        UUID.fromString(KnownData.knownCompanyId),
+                        /*interruptNodeId*/null,
+                        optInNodeId,
+                        /*optOutNodeId*/null)
+        };
+
+      However, the test sends  routableMessage  which is configured with recipient channel:
+
+        public static final Message routableMessage = newMO(
+                KnownData.knownNumbersForUsers[0], KnownData.knownRouteIdsAndChannels[2][1] /* "12124468003" */, "Color quiz"
+        );
+
+      ### 2. The Resulting  IllegalStateException
+
+      When the operator processed the incoming message  routableMessage  (addressed to  "12124468003" ):
+
+      1. In Operator.java, it tried to load the route corresponding to the session key.
+      2. Because the active routes list in the test's persistence manager only contained a route for  "17814567890" ,  findRoute(sessionKey)  returned  null .
+      3. Since this was a new user,  isBrandNewUser  evaluated to  true , prompting the operator to retrieve the opt-in graph via
+      findOptInScriptIdByRoute(sessionKey) .
+      4. Due to the missing route mapping,  findOptInScriptIdByRoute(sessionKey)  returned  null .
+      5. This triggered the safety check on line 378:
+        final var originalOptInGraph = findOptInScriptIdByRoute(sessionKey);
+        if(originalOptInGraph == null) {
+            throw new IllegalStateException("CRITICAL: Configuration error for opt_in_node_id in route table for " + sessionKey);
+        }
+
+
+      ### 3. The Resolution
+
+      We modified the route registration in OperatorMessageFlowIT.java to use  routableMessage.to()  instead of  KnownData.knownRouteIdsAndChannels[0][1] . This is
+    consistent
+      with how the other test method  processMessageBypassingQueue  maps the route.
+
+      ### 4. Secondary Assertion Fix (Opt-In Messages)
+
+      After fixing the route mapping, the operator successfully processed the message without throwing an exception. However, because the user is brand new, the
+      operator sends two messages back:
+
+      1. The opt-in message ( "Welcome!" ).
+      2. The initial script response ( "What is your favorite color? ..." ).
+
+      The test's assertion previously checked  getFirst()  (which was the  "Welcome!"  opt-in message) and asserted it contained the word  "color" . We updated the test to expect 2 messages, asserting the first is the opt-in message and the second is the quiz question containing  "color" .
+
+      The test now builds and passes successfully!"
+
+The system is impressively faster than Gemini, as well. It also didn't seem to have any troubles finding files as Gemini occasionally did.
+
+
+==== 2026/07/16 ====
+
+OperatorMessageFlowIT.failedMessage works by queuing a message for a route that hasn't been registered in the database. Operator will return a ProcessState.ERROR in that case. As a guard against this, it seems reasonable for Rcvr to have knowledge of legit/configured Routes and reject (or drop messages) that attempt to use them, rather than just blindly queueing them up to be failed later. A Caffeine cache like the one Operator uses seems like the way to go for this but it occurs to me that we'd need to be certain that, when changes occur that Rcvr and Operator need to be in agreement. So we may need an **explicit reload signal for these caches** rather than the current timer expiration.
+
+==== 2026/07/17 ====
+Thought about the present lack of situations in which a retry would be appropriate...If the public methods of PersistenceManager are unable to acquire a database connection we could consider this a temporary situation that could be reasonbly retried. The connection pool we use, c3p0, sets the following defaults: acquireRetryAttempts -> 30, acquireRetryDelay -> 1000. We don't override these currently so we will wait up to a little over 30 seconds each time try to fetchConnection. If there's no other situation where we think a retry is appropriate then our starting delay for the queue level retries should start at 30 seconds.
+
+The different use cases for a "failed" database operation...
+    PostgresPersistenceManager.getUser() presently returns null if a SQLException is thrown for whatever reason. We consume the exception and return null which is interpreted by the caller  as 'the user is new and doesn't already exist in the database.' But if null was returned for lack of a Connection we actually don't know if the user didn't exist. If it did then our assumption that we have a new user will lead to a constraint violation when we go to insert them into the table.
+
+We can abort and throw the message back into the queue up until we write data from the session that can't be easily reverted. Gemini (via Antigravity) generated a useful outline of the code path starting from OperatorConsumer.handleDelivery.
+Perhaps, if all the writes happen at the end of the process, we can have them share a transaction?
+> operator.process
+    > scriptengine.flush
+        > session.flush (move this up one level?)
 

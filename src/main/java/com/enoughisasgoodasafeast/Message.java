@@ -43,7 +43,7 @@ public record Message(UUID id, Instant receivedAt, MessageType type, Platform pl
         return bos.toByteArray();
     }
 
-    static Message fromBytes(byte[] bytes) throws IOException, ClassNotFoundException {
+    public static Message fromBytes(byte[] bytes) throws IOException, ClassNotFoundException {
         return (Message) new ObjectInputStream(new ByteArrayInputStream(bytes)).readObject();
     }
 

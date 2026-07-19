@@ -12,9 +12,9 @@ import java.util.Map;
 import java.util.Properties;
 import java.util.concurrent.TimeoutException;
 
-import static com.enoughisasgoodasafeast.RabbitQueueFunctions.exchangeForQueueName;
-import static com.enoughisasgoodasafeast.RabbitQueueFunctions.retryForExchangeName;
+import static com.enoughisasgoodasafeast.RabbitQueueFunctions.*;
 import static com.enoughisasgoodasafeast.RetryDelayRoutingKey.*;
+import static com.enoughisasgoodasafeast.SharedConstants.*;
 
 public class RabbitQueueConsumer implements QueueConsumer {
 
@@ -24,15 +24,22 @@ public class RabbitQueueConsumer implements QueueConsumer {
     public static final boolean QUEUE_EXCLUSIVE = false;
     public static final boolean QUEUE_AUTO_DELETE = false;
     public static final boolean QUEUE_CONSUME_AUTO_ACK = false;
+
+    // These keys are defined by RabbitMQ
     public static final String X_DLX_HEADER = "x-dead-letter-exchange";
     public static final String X_DL_RK_HEADER = "x-dead-letter-routing-key";
     public static final String X_MESSAGE_TTL_HEADER = "x-message-ttl";
-    public static final String RETRY_QUEUE_SUFFIX = ".retry";
-    public static final String FAILED_QUEUE_SUFFIX = ".failed";
+
+    // Maintain clear associations between primary and supporting queues
+    public static final String RETRY_QUEUE_SUFFIX = "_retry";
+    public static final String FAILED_QUEUE_SUFFIX = "_fail";
 
     private final Connection connection;
     private final Channel channel;
     private final String failedQueueName;
+
+    private final AMQP.Queue.DeclareOk primaryQueueInfo;
+    private final AMQP.Queue.DeclareOk failedQueueInfo;
 
     public static QueueConsumer createQueueConsumer(String configFileName, MessageProcessor processor) throws IOException, TimeoutException {
         Properties props = ConfigLoader.readConfig(configFileName);
@@ -40,16 +47,15 @@ public class RabbitQueueConsumer implements QueueConsumer {
     }
 
     public static QueueConsumer createQueueConsumer(Properties props, MessageProcessor processor) throws IOException, TimeoutException {
-        String queueHost = props.getProperty("consumer.queue.host");
-        int queuePort = Integer.parseInt(props.getProperty("consumer.queue.port"));
+        String queueHost = props.getProperty(CONSUMER_QUEUE_HOST);
+        int queuePort = Integer.parseInt(props.getProperty(CONSUMER_QUEUE_PORT));
         String queueName = props.getProperty("consumer.queue.name");
         String queueRoutingKey = props.getProperty("consumer.queue.routingKey");
-        boolean isQueueDurable = Boolean.parseBoolean(props.getProperty("consumer.queue.durable"));
+        boolean isQueueDurable = Boolean.parseBoolean(props.getProperty(CONSUMER_QUEUE_DURABLE));
         String consumerClassImpl = props.getProperty("consumerClass");
-        int heartbeatTimeoutSeconds = SharedConstants.STANDARD_HEARTBEAT_TIMEOUT_SECONDS;
 
         return new RabbitQueueConsumer(queueHost, queuePort, queueName, queueRoutingKey, isQueueDurable,
-                processor, consumerClassImpl, heartbeatTimeoutSeconds);
+                processor, consumerClassImpl, SharedConstants.STANDARD_HEARTBEAT_TIMEOUT_SECONDS);
     }
 
     private RabbitQueueConsumer(String queueHost,
@@ -62,11 +68,12 @@ public class RabbitQueueConsumer implements QueueConsumer {
                                 int requestedHeartbeatTimeout)
             throws IOException, TimeoutException {
 
-        LOG.info("Creating RabbitQueueConsumer: queueHost: '{}', queueName: '{}', routingKey: '{}'",
-                queueHost, queueName, routingKey);
+        LOG.info("Creating RabbitQueueConsumer: queueHost: '{}', queuePort: {}, queueName: '{}', routingKey: '{}', processor: '{}', consumerClass: '{}', heartBeatTimeout: {}",
+                queueHost, queuePort, queueName, routingKey, processor.getClass(), consumerClassImpl, requestedHeartbeatTimeout);
 
-        if (queueHost == null || queueName == null || routingKey == null || processor == null || consumerClassImpl == null) {
-            throw new IllegalArgumentException("RabbitQueueConsumer missing required configuration.");
+        if (queueHost == null || queuePort < 1024 || queueName == null || routingKey == null || processor == null ||
+                consumerClassImpl == null || requestedHeartbeatTimeout <= 0) {
+            throw new IllegalArgumentException("RabbitQueueConsumer missing required configuration (or bad numeric value).");
         }
 
         ConnectionFactory factory = new ConnectionFactory(); // automaticRecoveryEnabled is true by default.
@@ -79,31 +86,32 @@ public class RabbitQueueConsumer implements QueueConsumer {
 
         this.channel = connection.createChannel();
 
-        // Create the exchanges.
+        // Create the exchanges, the primary and the retry.
         String exchangeName = exchangeForQueueName(queueName); // e.g. x.opr8r.mo
         channel.exchangeDeclare(exchangeName, BuiltinExchangeType.DIRECT, durable);
         String retryExchangeName = retryForExchangeName(exchangeName); // e.g. rtx.opr8r.mo
         channel.exchangeDeclare(retryExchangeName, BuiltinExchangeType.DIRECT, durable);
 
-        // Declare the input queue
-        channel.queueDeclare(queueName, QUEUE_DURABILITY, QUEUE_EXCLUSIVE, QUEUE_AUTO_DELETE, null);
-
+        // Declare the primary input queue
+        primaryQueueInfo = channel.queueDeclare(queueName, QUEUE_DURABILITY, QUEUE_EXCLUSIVE, QUEUE_AUTO_DELETE, null);
         // ...and connect the primary exchange with its queue
         channel.queueBind(queueName, exchangeName, routingKey);
-        LOG.info("Bound exchange, {}, to queue, {}.", exchangeName, queueName);
+        LOG.info("Bound exchange, {}, to queue, {} with routing key, {}.", exchangeName, queueName, routingKey);
 
         // Declare "final resting place" queue
-        failedQueueName = queueName + FAILED_QUEUE_SUFFIX;
-        channel.queueDeclare(failedQueueName, QUEUE_DURABILITY, QUEUE_EXCLUSIVE, QUEUE_AUTO_DELETE, null);
+        failedQueueName = failQueueForQueue(queueName);
+        failedQueueInfo = channel.queueDeclare(failedQueueName, QUEUE_DURABILITY, QUEUE_EXCLUSIVE, QUEUE_AUTO_DELETE, null);
+
+        String baseRetryQueueName = queueName + RETRY_QUEUE_SUFFIX;
 
         // 4. Declare 5-Second Delay Bucket Queue
-        String baseRetryQueueName = queueName + RETRY_QUEUE_SUFFIX;
-        String retryAfter5sQueueName = baseRetryQueueName + ".5s";
+        String retryAfter5sQueueName = delayQueueForRoutingKey(baseRetryQueueName, DELAY_5S);
         channel.queueDeclare(retryAfter5sQueueName, QUEUE_DURABILITY, QUEUE_EXCLUSIVE, QUEUE_AUTO_DELETE,
                 Map.of(X_DLX_HEADER, exchangeName,
                         X_DL_RK_HEADER, routingKey,
                         X_MESSAGE_TTL_HEADER, DELAY_5S.delayMs())
                 );
+        // ...and connect the retry exchange with its delay specific queue
         channel.queueBind(retryAfter5sQueueName, retryExchangeName, DELAY_5S.name());
 
         // 5. Declare additional delay bucket queues with longer TTLs
@@ -125,7 +133,7 @@ public class RabbitQueueConsumer implements QueueConsumer {
     private @NonNull BrblConsumer getBrblConsumer(MessageProcessor processor, String consumerClassImpl) {
         return switch (consumerClassImpl) {
             case "com.enoughisasgoodasafeast.SndrConsumer" -> new SndrConsumer((SndrMessageProcessor) processor, channel);
-            case "com.enoughisasgoodasafeast.OperatorConsumer" -> new OperatorConsumer((SessionAwareMessageProcessor) processor, channel);
+            case "com.enoughisasgoodasafeast.OperatorConsumer" -> new OperatorConsumer((SessionAwareMessageProcessor) processor, channel, failedQueueName);
             default -> throw new IllegalArgumentException(
                     "RabbitQueueConsumer cannot use unsupported consumerClass: " + consumerClassImpl);
         };

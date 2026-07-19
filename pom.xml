@@ -51,6 +51,14 @@
             <version>5.23.0</version>
         </dependency>
 
+        <!-- Source: https://mvnrepository.com/artifact/com.rabbitmq/http-client -->
+        <dependency>
+            <groupId>com.rabbitmq</groupId>
+            <artifactId>http-client</artifactId>
+            <version>5.6.0</version>
+            <scope>compile</scope>
+        </dependency>
+
         <!-- https://mvnrepository.com/artifact/com.fasterxml.uuid/java-uuid-generator -->
         <dependency>
             <groupId>com.fasterxml.uuid</groupId>

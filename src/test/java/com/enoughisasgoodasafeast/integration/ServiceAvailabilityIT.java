@@ -18,7 +18,7 @@ import java.util.*;
 import java.util.concurrent.Callable;
 import java.util.stream.Stream;
 
-import static com.enoughisasgoodasafeast.SharedConstants.BRBL_ENQUEUE_ENDPOINT;
+import static com.enoughisasgoodasafeast.SharedConstants.*;
 import static com.enoughisasgoodasafeast.integration.IntegrationTestFunctions.loadPropertiesWithContainerOverrides;
 import static com.enoughisasgoodasafeast.operator.Functions.waitSeconds;
 import static java.util.concurrent.TimeUnit.SECONDS;
@@ -427,10 +427,10 @@ public class ServiceAvailabilityIT {
         Map<String, String> envOverrides = new HashMap<>();
         final String actualBrokerHost = brokerContainer.getHost();
         final String actualBrokerPort = String.valueOf(brokerContainer.getAmqpPort());
-        envOverrides.put("producer.queue.port", actualBrokerPort);
-        envOverrides.put("producer.queue.host", actualBrokerHost);
-        envOverrides.put("consumer.queue.port", actualBrokerPort);
-        envOverrides.put("consumer.queue.host", actualBrokerHost);
+        envOverrides.put(PRODUCER_QUEUE_PORT, actualBrokerPort);
+        envOverrides.put(PRODUCER_QUEUE_HOST, actualBrokerHost);
+        envOverrides.put(CONSUMER_QUEUE_PORT, actualBrokerPort);
+        envOverrides.put(CONSUMER_QUEUE_HOST, actualBrokerHost);
         LOG.info("Config overrides: {}", envOverrides);
         return envOverrides;
     }

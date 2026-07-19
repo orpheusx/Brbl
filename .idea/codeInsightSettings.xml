@@ -3,6 +3,7 @@
   <component name="JavaProjectCodeInsightSettings">
     <included-static-names>
       <name>com.enoughisasgoodasafeast.Functions.randomUUID</name>
+      <name>org.junit.Assert.assertSame</name>
     </included-static-names>
   </component>
 </project>

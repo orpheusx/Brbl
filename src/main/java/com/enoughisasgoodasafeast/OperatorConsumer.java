@@ -3,6 +3,7 @@ package com.enoughisasgoodasafeast;
 import com.rabbitmq.client.AMQP;
 import com.rabbitmq.client.Channel;
 import com.rabbitmq.client.Envelope;
+import com.rabbitmq.client.MessageProperties;
 import org.jspecify.annotations.NonNull;
 import org.jspecify.annotations.Nullable;
 import org.slf4j.Logger;
@@ -18,10 +19,12 @@ public class OperatorConsumer extends BrblConsumer {
     private static final Logger LOG = LoggerFactory.getLogger(OperatorConsumer.class);
 
     SessionAwareMessageProcessor processor;
+    String failedQueueName;
 
-    public OperatorConsumer(SessionAwareMessageProcessor processor, Channel channel) {
+    public OperatorConsumer(SessionAwareMessageProcessor processor, Channel channel, String failedQueueName) {
         super(channel);
         this.processor = processor;
+        this.failedQueueName = failedQueueName;
     }
 
     /**
@@ -38,7 +41,7 @@ public class OperatorConsumer extends BrblConsumer {
                                AMQP.BasicProperties properties,
                                @NonNull byte[] body)
             throws IOException {
-
+        LOG.info("handleDelivery: called");
         long deliveryTag = envelope.getDeliveryTag();
         // Should be able to deserialize directly assuming Rcvr enqueued a Message
         try {
@@ -49,21 +52,24 @@ public class OperatorConsumer extends BrblConsumer {
                 case OK -> {
                     getChannel().basicAck(deliveryTag, false);
                     if (!processor.log(stateAndSession.session(), message)) {
-                        LOG.error("Failed to log {}", message);
+                        LOG.error("Failed to log to database {}", message);
                     } else {
                         LOG.info("Message processed, acked and logged: {}",
                                 message.id()); // FIXME change to debug
                     }
                 }
                 case ERROR -> {
-                    getChannel().basicReject(deliveryTag, false);
-                    LOG.error("Rejected {}", message);
-                    // Write to table or file of error messages?
+                    LOG.info("Failed {}", message);
+                    // Put it on the failed message queue
+                    getChannel().basicPublish("", failedQueueName, MessageProperties.PERSISTENT_TEXT_PLAIN, body);
+                    // Ack the original once its safely in the failed queue.
+                    getChannel().basicAck(deliveryTag, false);
+                    // Also write to table or file of error messages?
                 }
                 case RETRY ->  {
                     long numFailed = getRetriedCount(properties);
+                    assert numFailed < 50; // Even this seems pathological...
                     LOG.warn("Queueing for retry {}: {}", numFailed, message);
-                    assert numFailed < 50; // Can't imagine doing anything this many times...
                     String delayByKey = computeDelayRoutingKey(numFailed);
                     if(delayByKey != null) {
                         LOG.info("Routing to delay queue with key {}", delayByKey);
@@ -84,7 +90,7 @@ public class OperatorConsumer extends BrblConsumer {
         } catch (ClassNotFoundException e) {
             LOG.error("Failed to deserialize message in {}", envelope);
             getChannel().basicAck(deliveryTag, false);
-            throw new IOException("Deserialization error: " + e.getMessage(), e);
+            //throw new IOException("Deserialization error: " + e.getMessage(), e); // ClassNotFoundException != IOException
         }
     }
 
@@ -92,8 +98,8 @@ public class OperatorConsumer extends BrblConsumer {
     private @Nullable String computeDelayRoutingKey(@NonNull long numFailed) {
         return switch (numFailed) {
             case 0L -> RetryDelayRoutingKey.DELAY_5S.name();
-            case 1L -> RetryDelayRoutingKey.DELAY_10S.name();
-            case 3L -> RetryDelayRoutingKey.DELAY_30S.name();
+            case 1L -> RetryDelayRoutingKey.DELAY_5S.name(); //FIX -> RetryDelayRoutingKey.DELAY_10S.name();
+            case 3L -> RetryDelayRoutingKey.DELAY_5S.name(); //FIX -> RetryDelayRoutingKey.DELAY_30S.name();
             default -> {
                 LOG.error("Unsupported number of retries");
                 yield null;
