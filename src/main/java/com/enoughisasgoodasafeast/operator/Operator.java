@@ -114,81 +114,84 @@ public class Operator implements SessionAwareMessageProcessor {
             return new ProcessStateSession(ProcessState.ERROR, null);
         }
 
-        // If sessionUser is brand-new and the session's initial Node of the session was not of type OPT_OUT
-        // then persist the user.
-        var userCreatedAt = session.getUser().platformCreationTimes().get(message.platform());
-        var isUserBrandNew = processStart.isBefore(userCreatedAt) || processStart.equals(userCreatedAt);
-        var isSkipProcessing = (NodeType.OPT_OUT == session.getCurrentNode().type())
-                && (isUserBrandNew || UserStatus.OUT == session.getUser().platformStatus().get(message.platform()));
+        synchronized (session) {
 
-        LOG.info("process: isSkipProcessing: {} for user status {}", isSkipProcessing, session.getUser().platformStatus().get(message.platform()));
-        LOG.info("process: currentNode type: {}", session.getCurrentNode().type());
+            // If sessionUser is brand-new and the session's initial Node of the session was not of type OPT_OUT
+            // then persist the user.
+            var userCreatedAt = session.getUser().platformCreationTimes().get(message.platform());
+            var isUserBrandNew = processStart.isBefore(userCreatedAt) || processStart.equals(userCreatedAt);
+            var isSkipProcessing = (NodeType.OPT_OUT == session.getCurrentNode().type())
+                    && (isUserBrandNew || UserStatus.OUT == session.getUser().platformStatus().get(message.platform()));
 
-        if (isSkipProcessing) {
-            // Send no response and return immediately.
-            userCache.invalidate(sessionKey); // Clear the user from the cache. We expect it will never have been written to database.
-            LOG.info("process: Removed user from cache for {}", sessionKey);
-            sessionCache.invalidate(sessionKey);
-            LOG.info("process: Removed session from cache for {}", sessionKey);
-            return new ProcessStateSession(ProcessState.OK, session);
-        }
+            LOG.info("process: isSkipProcessing: {} for user status {}", isSkipProcessing, session.getUser().platformStatus().get(message.platform()));
+            LOG.info("process: currentNode type: {}", session.getCurrentNode().type());
 
-        if (isUserBrandNew) { // FIXME can we safely move this block to after switch below?? Prefer to avoid writing as much as possible.
-            var user = session.getUser();
-            boolean isInserted = persistenceManager.insertNewUser(user);
-            if (!isInserted) {
-                LOG.error("process: Process failed to insert new user: {}.", user);
-                LOG.error("process: Clearing user and session caches due to new user persistence failure: {}", session.getId());
-                userCache.invalidate(sessionKey);
+            if (isSkipProcessing) {
+                // Send no response and return immediately.
+                userCache.invalidate(sessionKey); // Clear the user from the cache. We expect it will never have been written to database.
+                LOG.info("process: Removed user from cache for {}", sessionKey);
                 sessionCache.invalidate(sessionKey);
-                return new ProcessStateSession(ProcessState.ERROR, null);
-            } else {
-                LOG.info("process: New User created: {}", user);
+                LOG.info("process: Removed session from cache for {}", sessionKey);
+                return new ProcessStateSession(ProcessState.OK, session);
             }
+
+            if (isUserBrandNew) { // FIXME can we safely move this block to after switch below?? Prefer to avoid writing as much as possible.
+                var user = session.getUser();
+                boolean isInserted = persistenceManager.insertNewUser(user);
+                if (!isInserted) {
+                    LOG.error("process: Process failed to insert new user: {}.", user);
+                    LOG.error("process: Clearing user and session caches due to new user persistence failure: {}", session.getId());
+                    userCache.invalidate(sessionKey);
+                    sessionCache.invalidate(sessionKey);
+                    return new ProcessStateSession(ProcessState.ERROR, null);
+                } else {
+                    LOG.info("process: New User created: {}", user);
+                }
+            }
+
+            UserStatus updatedUserStatus = null;
+
+            var processStateNode = switch (normalizedMessageText(message)) {
+
+                case String txt when isOptOutRequest(txt) -> {
+                    updatedUserStatus = UserStatus.OUT;
+                    yield handleOptOut(session, message, processStart);
+                }
+
+                case String txt when isChangeTopicRequest(txt) -> {
+                    updatedUserStatus = UserStatus.IN;
+                    yield handleChangeTopic(session, message, sessionKey);
+                }
+
+                default -> {
+                    updatedUserStatus = UserStatus.IN;
+                    yield ScriptEngine.process(session, message);
+                }
+            };
+
+            var sessionUser = session.getUser();
+
+            var statusNeedsUpdate = updatedUserStatus != sessionUser.platformStatus().get(sessionKey.platform());
+
+            if (statusNeedsUpdate) {
+                LOG.info("process: Session status needs update to {}", updatedUserStatus);
+                if (persistenceManager.updateUserStatus(sessionUser, sessionKey.platform(), updatedUserStatus)) {
+                    sessionUser.platformStatus().put(sessionKey.platform(), UserStatus.IN);
+                    LOG.info("process: Updated platform status for user {}", sessionUser.platformStatus().get(sessionKey.platform()));
+                } else {
+                    // Not being able to update the UserStatus is serious and all the worse because we may have already queued some output which we should not
+                    LOG.error("process: failed to update user status to updatedUserStatus for {}", sessionUser);
+                    return new ProcessStateSession(ProcessState.ERROR, session);
+                }
+            }
+
+            if (session.getCurrentNode() == null) {
+                LOG.info("process: Clearing completed session from cache: {}", session);
+                sessionCache.invalidate(sessionKey);
+            }
+
+            return new ProcessStateSession(processStateNode.processState(), session);
         }
-
-        UserStatus updatedUserStatus = null;
-
-        var processStateNode = switch (normalizedMessageText(message)) {
-
-            case String txt when isOptOutRequest(txt) -> {
-                updatedUserStatus = UserStatus.OUT;
-                yield handleOptOut(session, message, processStart);
-            }
-
-            case String txt when isChangeTopicRequest(txt) -> {
-                updatedUserStatus = UserStatus.IN;
-                yield handleChangeTopic(session, message, sessionKey);
-            }
-
-            default -> {
-                updatedUserStatus = UserStatus.IN;
-                yield ScriptEngine.process(session, message);
-            }
-        };
-
-        var sessionUser = session.getUser();
-
-        var statusNeedsUpdate = updatedUserStatus != sessionUser.platformStatus().get(sessionKey.platform());
-
-        if (statusNeedsUpdate) {
-            LOG.info("process: Session status needs update to {}", updatedUserStatus);
-            if (persistenceManager.updateUserStatus(sessionUser, sessionKey.platform(), updatedUserStatus)) {
-                sessionUser.platformStatus().put(sessionKey.platform(), UserStatus.IN);
-                LOG.info("process: Updated platform status for user {}", sessionUser.platformStatus().get(sessionKey.platform()));
-            } else {
-                // Not being able to update the UserStatus is serious and all the worse because we may have already queued some output which we should not
-                LOG.error("process: failed to update user status to updatedUserStatus for {}", sessionUser);
-                return new ProcessStateSession(ProcessState.ERROR, session);
-            }
-        }
-
-        if (session.getCurrentNode() == null) {
-            LOG.info("process: Clearing completed session from cache: {}", session);
-            sessionCache.invalidate(sessionKey);
-        }
-
-        return new ProcessStateSession(processStateNode.processState(), session);
     }
 
     // A helper to standardize how message text is evaluated.

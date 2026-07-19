@@ -13,7 +13,7 @@ public class ScriptEngine {
 
     private static final int EXPECTED_INPUT_COUNT = 1;
 
-    private PersistenceManager persistenceManager;
+    private final PersistenceManager persistenceManager;
 
     public ScriptEngine(PersistenceManager persistenceManager) {
         this.persistenceManager = persistenceManager;
@@ -24,68 +24,66 @@ public class ScriptEngine {
      * FIXME this currently duplicates the logic in Operator.process().
      * @param session the state-bearing Session providing the context for the executing graph Node graph.
      * @param message the Message that initiates or continues the processing of the Session's Node graph.
-     * @return false if the processing of the Message fails or there were exceptions thrown.
+     * @return ProcessStateNode the resulting state of the applied process combined with the 'next' Node in the process.
      */
     public static ProcessStateNode process(Session session, Message message) {
-        synchronized (session) { // FIXME move the synchronization to caller where the session is created?
-            try {
-                session.registerInput(message);
-                int size = session.currentInputsCount();
-                if (size > EXPECTED_INPUT_COUNT) {
-                    LOG.error("Uh oh, there are more inputs ({}) than expected in session ({})", size, session);
-                    // NB: We've synchronized on the Session which seems like it should prevent the following:
-                    // Corner case: user sent multiple responses that arrived closely together (possibly due to delays/buffering in
-                    // the telco's SMSc) and, due to an unfortunate thread context switch, we've processed each in the same process call.
-                    // Likely this creates an unexpected situation. To handle it we should create a new Node of
-                    // NodeType.PivotScript and chain the remaining Scripts to it.
-                    // These scripts will explain the problem and ask what the user what they want to do.
-                    // We'll do the same in other cases as well.
-                    // TODO...fetch the PivotScript for the given shortcode
-                }
-
-                // Also check if the current Message was created prior to the previous Message in the session's history.
-                // This would signal out-of-order processing which Is Bad™
-                Message previousInputMessage = session.previousInput();
-                if (previousInputMessage != null) {
-                    if (previousInputMessage.receivedAt().isAfter(message.receivedAt())) {
-                        LOG.error("WTF, we processed an MO received later than this one: {} > {}",
-                                previousInputMessage.receivedAt(), message.receivedAt());
-                        // TODO fetch a special script to apologize to the user then replay the Node returned by Session.getScriptForProcessedMO()?
-                    }
-                }
-
-                assert session.getCurrentNode() != null;
-
-                // FIXME Session.evaluate handles appending the evaluated node to the evaluatedScript list
-                // NB Script processing functions are limited to getting the currentNode, never setting it.
-                // Setting it is only done here based on the function's return value but can be
-                var psn = evaluate(session, message);
-                Node next = psn.node();
-                session.setCurrentNode(psn.node());
-
-                // Continue to walk the graph until we reach the end (null) or a node that blocks for input
-                while (next != null && !next.type().isAwaitInput()) {
-                    LOG.info("Continuing playback...");
-                    psn = evaluate(session, message);
-                    next = psn.node();
-
-                    session.setCurrentNode(next);
-                }
-
-                // FIXME Move the flush call up into the Operator.process() ?
-                // FIXME For now, if we've advanced to the end of the graph then clear the session.
-                // FIXME ideally should be in a finally block but writing to db can throw. Hmm...
-                if(!session.flush(next==null)) {
-                    LOG.error("Errors flushing session: {}", session);
-                    psn = new ProcessStateNode(ProcessState.OK, session.getCurrentNode());
-                }
-
-                return psn;
-
-            } catch (IOException e) {
-                LOG.error("Processing error: {} for {}", session.getUser().groupId(), message, e); // TODO need to consider options for better handling of error scenarios.
-                return new ProcessStateNode(ProcessState.ERROR, session.getCurrentNode());
+        try {
+            session.registerInput(message);
+            int size = session.currentInputsCount();
+            if (size > EXPECTED_INPUT_COUNT) {
+                LOG.error("Uh oh, there are more inputs ({}) than expected in session ({})", size, session);
+                // NB: We've synchronized on the Session which seems like it should prevent the following:
+                // Corner case: user sent multiple responses that arrived closely together (possibly due to delays/buffering in
+                // the telco's SMSc) and, due to an unfortunate thread context switch, we've processed each in the same process call.
+                // Likely this creates an unexpected situation. To handle it we should create a new Node of
+                // NodeType.PivotScript and chain the remaining Scripts to it.
+                // These scripts will explain the problem and ask what the user what they want to do.
+                // We'll do the same in other cases as well.
+                // TODO...fetch the PivotScript for the given shortcode
             }
+
+            // Also check if the current Message was created prior to the previous Message in the session's history.
+            // This would signal out-of-order processing which Is Bad™
+            Message previousInputMessage = session.previousInput();
+            if (previousInputMessage != null) {
+                if (previousInputMessage.receivedAt().isAfter(message.receivedAt())) {
+                    LOG.error("WTF, we processed an MO received later than this one: {} > {}",
+                            previousInputMessage.receivedAt(), message.receivedAt());
+                    // TODO fetch a special script to apologize to the user then replay the Node returned by Session.getScriptForProcessedMO()?
+                }
+            }
+
+            assert session.getCurrentNode() != null;
+
+            // FIXME Session.evaluate handles appending the evaluated node to the evaluatedScript list
+            // NB Script processing functions are limited to getting the currentNode, never setting it.
+            // Setting it is only done here based on the function's return value but can be
+            var psn = evaluate(session, message);
+            Node next = psn.node();
+            session.setCurrentNode(psn.node());
+
+            // Continue to walk the graph until we reach the end (null) or a node that blocks for input
+            while (next != null && !next.type().isAwaitInput()) {
+                LOG.info("Continuing playback...");
+                psn = evaluate(session, message);
+                next = psn.node();
+
+                session.setCurrentNode(next);
+            }
+
+            // FIXME Move the flush call up into the Operator.process() ?
+            // FIXME For now, if we've advanced to the end of the graph then clear the session.
+            // FIXME ideally should be in a finally block but writing to db can throw. Hmm...
+            if (!session.flush(next == null)) {
+                LOG.error("Errors flushing session: {}", session);
+                psn = new ProcessStateNode(ProcessState.OK, session.getCurrentNode());
+            }
+
+            return psn;
+
+        } catch (IOException e) {
+            LOG.error("Processing error: {} for {}", session.getUser().groupId(), message, e); // TODO need to consider options for better handling of error scenarios.
+            return new ProcessStateNode(ProcessState.ERROR, session.getCurrentNode());
         }
     }
 
