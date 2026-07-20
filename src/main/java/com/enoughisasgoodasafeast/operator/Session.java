@@ -176,7 +176,17 @@ public class Session implements ScriptContext, Serializable {
         inputs.clear();
 
         try {
-            return (isClearSession ? persistenceManager.clearSession(this) : persistenceManager.saveSession(this));
+            // TODO Consolidating db writes here requires clearing the cached session here as well.
+//            if (this.getCurrentNode() == null) {
+//                LOG.info("process: Clearing completed session from cache: {}", this);
+//                persistenceManager.sessionCache.invalidate(sessionKey);
+//            }
+            if(this.getCurrentNode() == null/*isClearSession*/) {
+                LOG.info("Clearing persisted session {} for user {}.", this.getId(), this.getUser().groupId());
+            } else {
+                LOG.info("Saving persisted session {} for user {}.", this.getId(), this.getUser().groupId());
+            }
+            return (this.getCurrentNode() == null/*isClearSession*/ ? persistenceManager.clearSession(this) : persistenceManager.saveSession(this));
         } catch (PersistenceManager.PersistenceManagerException e) {
             LOG.error("flush: failed to {} session: {}", isClearSession ? "clear" : "save", this, e);
             return false;

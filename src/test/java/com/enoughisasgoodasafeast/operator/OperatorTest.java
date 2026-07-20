@@ -211,6 +211,7 @@ public class OperatorTest {
 
         assertDoesNotThrow(() -> {
             operator.process(mo1);
+            hackyForcedFlush(mo1);
         });
 
         //IO.println("------ Messages queued for mo1 ------");
@@ -224,7 +225,10 @@ public class OperatorTest {
         assertEquals(mt1.type(), queueProducer.enqueued().getFirst().type());
         queueProducer.enqueued().clear(); // Need to manually clear the enqueued message list between process() calls.
 
-        assertDoesNotThrow(() -> { operator.process(mo2); });
+        assertDoesNotThrow(() -> {
+            operator.process(mo2);
+            hackyForcedFlush(mo2);}
+        );
         //println("------ Messages queued for mo2 ------");
         //queueProducer.enqueued().forEach(System.out::println);
 
@@ -236,7 +240,10 @@ public class OperatorTest {
         queueProducer.enqueued().clear();
 
         // The opt-in message for the route specified by mo3 is different.
-        assertDoesNotThrow(() -> { operator.process(mo3); });
+        assertDoesNotThrow(() -> {
+            operator.process(mo3);
+            hackyForcedFlush(mo3); }
+        );
         //IO.println("------ Messages queued for mo3 ------");
         //queueProducer.enqueued().forEach(System.out::println);
 
@@ -252,6 +259,12 @@ public class OperatorTest {
         assertEquals(mt3.text(), queueProducer.enqueued().get(1).text());
         assertEquals(mt3.type(), queueProducer.enqueued().get(1).type());
         queueProducer.enqueued().clear();
+    }
+
+    private void hackyForcedFlush(Message mo) {
+        // OperatorConsumer typically calls flush on the Session, but we don't have one here so we need to simulate it.
+        var session = operator.sessionCache.get(SessionKey.newSessionKey(mo));
+        session.flush(false);
     }
 
 
@@ -319,6 +332,7 @@ public class OperatorTest {
         // Initiate the conversation
         assertDoesNotThrow(() -> {
             operator.process(mo4);
+            hackyForcedFlush(mo4);
         });
 
         // The lookup from scriptCache will have the effect of populating scriptByKeywordCache
@@ -348,6 +362,7 @@ public class OperatorTest {
         // Send a valid response
         assertDoesNotThrow(() -> {
             operator.process(mo5); // answer given should select "flort"
+            hackyForcedFlush(mo5);
         });
 
         //queuedMessages.forEach(message -> {
@@ -368,7 +383,8 @@ public class OperatorTest {
         // Check that the Session's currentNode is now the last node in the conversation
         assertNull(session.getCurrentNode(), "Session's currentNode is unexpectedly not null.");
 
-        assertEquals(0, operator.sessionCache.estimatedSize(), "Session wasn't cleared at end of conversation.");
+        // The following check isn't expected to work without going through an OperatorConsumer
+        //assertEquals(0, operator.sessionCache.estimatedSize(), "Session wasn't cleared at end of conversation.");
     }
 
 
@@ -381,6 +397,7 @@ public class OperatorTest {
         // Initiate the conversation
         assertDoesNotThrow(() -> {
             operator.process(mo4);
+            hackyForcedFlush(mo4);
         });
 
         // The lookup from scriptCache will have the effect of populating scriptByKeywordCache
@@ -404,7 +421,10 @@ public class OperatorTest {
 
         // Now provide bad input to the question posed
         for (int i = 0; i < 3; i++) { // TODO At some point we should add handling for repeated failures. Until then we continue to handle bad input the same way.
-            assertDoesNotThrow(() -> { operator.process(unexpected); });
+            assertDoesNotThrow(() -> {
+                operator.process(unexpected);
+                hackyForcedFlush(unexpected);
+            });
             final Message errorMessage = queuedMessages.get(i);
             LOG.info("Bad input response: {}", errorMessage.text());
             assertTrue(errorMessage.text().contains(processAnswer.text()), "Expected error response not found.");
@@ -413,7 +433,10 @@ public class OperatorTest {
         }
 
         // Now provide good input to the question posed and check that we advance to the end of the conversation.
-        assertDoesNotThrow(() -> { operator.process(mo5); });
+        assertDoesNotThrow(() -> {
+            operator.process(mo5);
+            hackyForcedFlush(mo5);
+        });
         //producer.enqueued().forEach(message -> LOG.info(message.text()));
         assertEquals(5, queuedMessages.size(), "Unexpected number of messages queued.");
         assertEquals(processAnswer.text(), queuedMessages.get(1).text(), "Expected text not found in 1st queued message.");
@@ -447,6 +470,7 @@ public class OperatorTest {
         // Initiate the conversation
         assertDoesNotThrow(() -> {
             operator.process(mo4);
+            hackyForcedFlush(mo4);
         });
 
         var session = operator.sessionCache.get(SessionKey.newSessionKey(mo4));
@@ -468,7 +492,10 @@ public class OperatorTest {
         // Now provide bad input to the question posed
 
         for (int i = 0; i < 3; i++) { // TODO At some point we should add handling for repeated failures. Until then we continue to handle bad input the same way.
-            assertDoesNotThrow(() -> { operator.process(unexpected); });
+            assertDoesNotThrow(() -> {
+                operator.process(unexpected);
+                hackyForcedFlush(unexpected);
+            });
             final Message errorMessage = queuedMessages.get(i);
             assertTrue(errorMessage.text().contains(processAnswer.text()), "Wrong error: " + errorMessage.text());
             // Since we don't advance when there's an error we should still be on the ProcessMulti
@@ -480,7 +507,10 @@ public class OperatorTest {
         LOG.info("Session label prior to interrupt: {}", session.getCurrentNode().label());
 
         // Now request a change of topic
-        assertDoesNotThrow(() -> { operator.process(changeTopic); });
+        assertDoesNotThrow(() -> {
+            operator.process(changeTopic);
+            hackyForcedFlush(changeTopic);
+        });
         queueProducer.enqueued().forEach(message -> LOG.info("Enqueued: {}", message.text()));
 
         assertEquals(4, queuedMessages.size(), "Unexpected number of messages queued.");

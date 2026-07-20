@@ -10,6 +10,7 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import java.io.IOException;
+import java.sql.SQLException;
 import java.time.Instant;
 import java.util.*;
 import java.util.concurrent.ExecutionException;
@@ -185,10 +186,10 @@ public class Operator implements SessionAwareMessageProcessor {
                 }
             }
 
-            if (session.getCurrentNode() == null) {
-                LOG.info("process: Clearing completed session from cache: {}", session);
-                sessionCache.invalidate(sessionKey);
-            }
+//            if (session.getCurrentNode() == null) {
+//                LOG.info("process: Clearing completed session from cache: {}", session);
+//                sessionCache.invalidate(sessionKey);
+//            }
 
             return new ProcessStateSession(processStateNode.processState(), session);
         }
@@ -321,6 +322,31 @@ public class Operator implements SessionAwareMessageProcessor {
     @Override
     public boolean log(Session session, Message message) {
         return persistenceManager.insertProcessedMO(message, session);
+    }
+
+    public void withTransaction() throws SQLException {
+        try (var connection = persistenceManager.fetchConnection()) {
+            //...
+        }
+    }
+
+    @Override
+    public void complete(Message message, Session session) { // FIXME rename to flushSession
+        LOG.info("complete: {} for Session {}", session.getUser(), session.getId());
+        var sessionKey = SessionKey.newSessionKey(message);
+        if (!log(session, message)) { // TODO move the log into the processor.complete method
+            LOG.error("Failed to log to database {}", message);
+        } else {
+            LOG.info("Message processed, acked and logged: {}",
+                    message.id()); // FIXME change to debug
+        }
+
+        session.flush(session.getCurrentNode() == null); // what do we do if this returns false?
+        if(session.getCurrentNode() == null) {
+            LOG.info("Clearing cached Session {} for user {}", session.getId(), session.getUser().groupId());
+            sessionCache.invalidate(sessionKey);
+        }
+
     }
 
     /**

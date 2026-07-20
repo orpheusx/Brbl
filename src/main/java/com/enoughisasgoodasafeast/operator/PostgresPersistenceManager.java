@@ -702,6 +702,7 @@ PostgresPersistenceManager implements PersistenceManager {
     }
 
     private boolean clearSession(@NonNull Connection connection, @NonNull Session session) throws PersistenceManagerException {
+        LOG.info("clearSession: {}", session.getId());
         try (PreparedStatement ps = connection.prepareStatement(SESSION_DELETE)) {
             ps.setObject(1, session.getUser().groupId());
             ps.execute();
@@ -762,7 +763,7 @@ PostgresPersistenceManager implements PersistenceManager {
                 LOG.info("Loaded Session size in bytes = {}", data.length);
                 return bytesToSession(data);
             } else {
-                LOG.error("Session {} not found.", id); // FIXME make this info since it's not necessarily an error
+                LOG.error("Session not found: {}", id); // FIXME make this info since it's not necessarily an error
                 return null;
             }
         } catch (SQLException | IOException | ClassNotFoundException e) {

@@ -1,5 +1,6 @@
 package com.enoughisasgoodasafeast;
 
+import com.enoughisasgoodasafeast.operator.SessionKey;
 import com.rabbitmq.client.AMQP;
 import com.rabbitmq.client.Channel;
 import com.rabbitmq.client.Envelope;
@@ -51,12 +52,13 @@ public class OperatorConsumer extends BrblConsumer {
             switch (stateAndSession.processState()) {
                 case OK -> {
                     getChannel().basicAck(deliveryTag, false);
-                    if (!processor.log(stateAndSession.session(), message)) {
-                        LOG.error("Failed to log to database {}", message);
-                    } else {
-                        LOG.info("Message processed, acked and logged: {}",
-                                message.id()); // FIXME change to debug
-                    }
+                    processor.complete(message, stateAndSession.session());
+//                    if (!processor.log(stateAndSession.session(), message)) { // TODO move the log into the processor.complete method
+//                        LOG.error("Failed to log to database {}", message);
+//                    } else {
+//                        LOG.info("Message processed, acked and logged: {}",
+//                                message.id()); // FIXME change to debug
+//                    }
                 }
                 case ERROR -> {
                     LOG.info("Failed {}", message);
@@ -91,8 +93,17 @@ public class OperatorConsumer extends BrblConsumer {
             LOG.error("Failed to deserialize message in {}", envelope);
             getChannel().basicAck(deliveryTag, false);
             //throw new IOException("Deserialization error: " + e.getMessage(), e); // ClassNotFoundException != IOException
+//        } finally {
+//            processor.clearSession();
         }
     }
+
+//    void flushSession(Session session, Message message) {
+//        if (!session.flush(session.getCurrentNode() == null)) {
+//            LOG.error("Errors flushing session: {}", session);
+//        } // TODO Gotta clear the operator's session cache, too but Session doesn't have access to it.
+//        processor.clearSession(SessionKey.newSessionKey(message)); // we're going to need this for testing and, possibly, even production.
+//    }
 
     // Effectively determines the number of retries supported by the consumer.
     private @Nullable String computeDelayRoutingKey(@NonNull long numFailed) {

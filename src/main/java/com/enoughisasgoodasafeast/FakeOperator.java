@@ -82,6 +82,10 @@ public class FakeOperator implements SessionAwareMessageProcessor {
         return false;
     }
 
+    public void complete(Message message, Session session) {
+        LOG.info("complete: {} for Session {}", session.getUser(), session.getId());
+    }
+
     public static class QueueProducerMTHandler implements MTHandler {
 
         QueueProducer producer;

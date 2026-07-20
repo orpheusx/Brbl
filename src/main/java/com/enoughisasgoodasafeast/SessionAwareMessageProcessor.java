@@ -2,6 +2,7 @@ package com.enoughisasgoodasafeast;
 
 import com.enoughisasgoodasafeast.operator.MessageProcessor;
 import com.enoughisasgoodasafeast.operator.Session;
+import com.enoughisasgoodasafeast.operator.SessionKey;
 
 public interface SessionAwareMessageProcessor extends MessageProcessor {
 
@@ -19,4 +20,6 @@ public interface SessionAwareMessageProcessor extends MessageProcessor {
      * Log the processed Message using the Session context.
      */
     boolean log(Session session, Message message);
+
+    void complete(Message message, Session session);
 }

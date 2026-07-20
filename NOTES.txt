@@ -6414,3 +6414,37 @@ Perhaps, if all the writes happen at the end of the process, we can have them sh
     > scriptengine.flush
         > session.flush (move this up one level?)
 
+==== 2026/07/18 ====
+
+Took the day off.
+
+==== 2026/07/19 ====
+Fixed a long time, lurking synchronization issue.
+
+Goal:
+Move all the db writes to the end of message processing.
+By deferring the side-effects (new/updated/deleted artifacts in the database) till the end we improve our chances of being able to cleanly retry the processing using the queued retry mechanism.
+We also may have the option to better coordinate the queue operation with the database writes:
+    1) start transaction
+    2) execute all the necessary operations
+    3) try to enqueue the outbound messages
+    4) if the enqueues succeed the commit the tx, else rollback.
+
+Likewise, is it viable to share a single Connection/transaction?
+
+--> Operator.process:
+        insertNewUser(user) : Inserts new user profiles.
+--> Operator.process:
+        updateUserStatus(user, platform, status) : Sets a user's opt-in/opt-out status.
+--> Session.flush:
+        insertMT(message, session) : Inserts MT (Mobile Terminated) response logs into  brbl_logs.mt_messages .
+--> Session.flush:
+        saveSession(session) : Serializes and stores active session data.
+--> Session.flush:
+        clearSession(session) : Purges expired or completed sessions from  brbl_users.sessions .
+--> OperatorConsumer.handleDelivery:
+        Operator.log:
+            insertProcessedMO(message, session) : Updates the processing state of the incoming MO message.
+
+So the last database write happens in OperatorConsumer
+The Session has all the data we need to write and access to the persistence manager.
