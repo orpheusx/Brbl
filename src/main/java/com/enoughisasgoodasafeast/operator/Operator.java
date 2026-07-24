@@ -10,7 +10,6 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import java.io.IOException;
-import java.sql.SQLException;
 import java.time.Instant;
 import java.util.*;
 import java.util.concurrent.ExecutionException;
@@ -108,96 +107,135 @@ public class Operator implements SessionAwareMessageProcessor {
         var processStart = now();
 
         final SessionKey sessionKey = SessionKey.newSessionKey(message);
-        Session session = sessionCache.get(sessionKey);
-        if (null == session) {
-            // Rely on findOrCreateSession to remove user from cache if session create fails
-            LOG.error("process: Failed to find or create session for {}", sessionKey);
-            return new ProcessStateSession(ProcessState.ERROR, null);
-        }
 
-        synchronized (session) {
+        Session session = null;
 
-            // If sessionUser is brand-new and the session's initial Node of the session was not of type OPT_OUT
-            // then persist the user.
-            var userCreatedAt = session.getUser().platformCreationTimes().get(message.platform());
-            var isUserBrandNew = processStart.isBefore(userCreatedAt) || processStart.equals(userCreatedAt);
-            var isSkipProcessing = (NodeType.OPT_OUT == session.getCurrentNode().type())
-                    && (isUserBrandNew || UserStatus.OUT == session.getUser().platformStatus().get(message.platform()));
+        try {
 
-            LOG.info("process: isSkipProcessing: {} for user status {}", isSkipProcessing, session.getUser().platformStatus().get(message.platform()));
-            LOG.info("process: currentNode type: {}", session.getCurrentNode().type());
+            synchronized (session = sessionCache.get(sessionKey)) {
+                assert session != null; // As long as the .get() doesn't throw the session should never be null. Right?
 
-            if (isSkipProcessing) {
-                // Send no response and return immediately.
-                userCache.invalidate(sessionKey); // Clear the user from the cache. We expect it will never have been written to database.
-                LOG.info("process: Removed user from cache for {}", sessionKey);
-                sessionCache.invalidate(sessionKey);
-                LOG.info("process: Removed session from cache for {}", sessionKey);
-                return new ProcessStateSession(ProcessState.OK, session);
-            }
+                // if (null == session) { // NB: the cache load method *can* return null (likely signaling a database problem)
+                //     // Rely on findOrCreateSession to remove user from cache if session create fails
+                //     LOG.error("process: Failed to find or create session for {}", sessionKey);
+                //     return new ProcessStateSession(ProcessState.ERROR, null);
+                // }
 
-            if (isUserBrandNew) { // FIXME can we safely move this block to after switch below?? Prefer to avoid writing as much as possible.
-                var user = session.getUser();
-                boolean isInserted = persistenceManager.insertNewUser(user);
-                if (!isInserted) {
-                    LOG.error("process: Process failed to insert new user: {}.", user);
-                    LOG.error("process: Clearing user and session caches due to new user persistence failure: {}", session.getId());
-                    userCache.invalidate(sessionKey);
+                // If sessionUser is brand-new and the session's initial Node of the session was not of type OPT_OUT
+                // then persist the user.
+                var userCreatedAt = session.getUser().platformCreationTimes().get(message.platform());
+                var isUserBrandNew = processStart.isBefore(userCreatedAt) || processStart.equals(userCreatedAt);
+                var isSkipProcessing = (NodeType.OPT_OUT == session.getCurrentNode().type())
+                        && (isUserBrandNew || UserStatus.OUT == session.getUser().platformStatus().get(message.platform()));
+
+                LOG.info("process: isSkipProcessing: {} for user status {}", isSkipProcessing, session.getUser().platformStatus().get(message.platform()));
+                LOG.info("process: currentNode type: {}", session.getCurrentNode().type());
+
+                if (isSkipProcessing) {
+                    // Send no response and return immediately.
+                    userCache.invalidate(sessionKey); // Clear the user from the cache. We expect it will never have been written to database.
+                    LOG.info("process: Removed user from cache for {}", sessionKey);
                     sessionCache.invalidate(sessionKey);
-                    return new ProcessStateSession(ProcessState.ERROR, null);
-                } else {
-                    LOG.info("process: New User created: {}", user);
-                }
-            }
-
-            UserStatus updatedUserStatus = null;
-
-            var processStateNode = switch (normalizedMessageText(message)) {
-
-                case String txt when isOptOutRequest(txt) -> {
-                    updatedUserStatus = UserStatus.OUT;
-                    yield handleOptOut(session, message, processStart);
+                    LOG.info("process: Removed session from cache for {}", sessionKey);
+                    return new ProcessStateSession(ProcessState.OK, session);
                 }
 
-                case String txt when isChangeTopicRequest(txt) -> {
-                    updatedUserStatus = UserStatus.IN;
-                    yield handleChangeTopic(session, message, sessionKey);
+                if (isUserBrandNew) { // FIXME can we safely move this block to after switch below?? Prefer to avoid writing as much as possible.
+                    var user = session.getUser();
+                    boolean isInserted = persistenceManager.insertNewUser(user);
+                    if (!isInserted) {
+                        LOG.error("process: Process failed to insert new user: {}.", user);
+                        LOG.error("process: Clearing user and session caches due to new user persistence failure: {}", session.getId());
+                        userCache.invalidate(sessionKey);
+                        sessionCache.invalidate(sessionKey);
+                        return new ProcessStateSession(ProcessState.ERROR, null);
+                    } else {
+                        LOG.info("process: New User created: {}", user);
+                    }
                 }
 
-                default -> {
-                    updatedUserStatus = UserStatus.IN;
-                    yield ScriptEngine.process(session, message);
+                UserStatus updatedUserStatus = null;
+
+                var processStateNode = switch (normalizedMessageText(message)) {
+
+                    case String txt when isOptOutRequest(txt) -> {
+                        updatedUserStatus = UserStatus.OUT;
+                        yield handleOptOut(session, message, processStart);
+                    }
+
+                    case String txt when isChangeTopicRequest(txt) -> {
+                        updatedUserStatus = UserStatus.IN;
+                        yield handleChangeTopic(session, message, sessionKey);
+                    }
+
+                    default -> {
+                        updatedUserStatus = UserStatus.IN;
+                        yield ScriptEngine.process(session, message);
+                    }
+                };
+
+                var sessionUser = session.getUser();
+
+                var statusNeedsUpdate = updatedUserStatus != sessionUser.platformStatus().get(sessionKey.platform());
+
+                if (statusNeedsUpdate) {
+                    LOG.info("process: Session status needs update to {}", updatedUserStatus);
+                    if (persistenceManager.updateUserStatus(sessionUser, sessionKey.platform(), updatedUserStatus)) {
+                        sessionUser.platformStatus().put(sessionKey.platform(), UserStatus.IN);
+                        LOG.info("process: Updated platform status for user {}", sessionUser.platformStatus().get(sessionKey.platform()));
+                    } else {
+                        // Not being able to update the UserStatus is serious and all the worse because we may have already queued some output which we should not
+                        LOG.error("process: failed to update user status to updatedUserStatus for {}", sessionUser);
+                        return new ProcessStateSession(ProcessState.ERROR, session);
+                    }
                 }
-            };
-
-            var sessionUser = session.getUser();
-
-            var statusNeedsUpdate = updatedUserStatus != sessionUser.platformStatus().get(sessionKey.platform());
-
-            if (statusNeedsUpdate) {
-                LOG.info("process: Session status needs update to {}", updatedUserStatus);
-                if (persistenceManager.updateUserStatus(sessionUser, sessionKey.platform(), updatedUserStatus)) {
-                    sessionUser.platformStatus().put(sessionKey.platform(), UserStatus.IN);
-                    LOG.info("process: Updated platform status for user {}", sessionUser.platformStatus().get(sessionKey.platform()));
-                } else {
-                    // Not being able to update the UserStatus is serious and all the worse because we may have already queued some output which we should not
-                    LOG.error("process: failed to update user status to updatedUserStatus for {}", sessionUser);
-                    return new ProcessStateSession(ProcessState.ERROR, session);
-                }
-            }
 
 //            if (session.getCurrentNode() == null) {
 //                LOG.info("process: Clearing completed session from cache: {}", session);
 //                sessionCache.invalidate(sessionKey);
 //            }
 
-            return new ProcessStateSession(processStateNode.processState(), session);
+                return new ProcessStateSession(processStateNode.processState(), session);
+            }
+
+        } catch (Exception e) {
+            // The Caffeine sessionCache wraps exceptions thrown by its loading method in CompletionException but passes RuntimeExceptions through.
+            // The possible wrapped exceptions include InterruptedException and ExecutionException (courtesy of Structured Concurrency).
+            // Also, a failed loadSession may throw PersistenceManagerException. We use its isRetriable flag to determine the retriability.
+            // e.g. java.util.concurrent.CompletionException wrapping java.util.concurrent.ExecutionException wrapping java.lang.IllegalStateException
+            var cause = innermost(e);
+            // TODO Convert to case-switch
+            if (cause instanceof PersistenceManagerException pme && !pme.isRetriable) {
+                // The root cause is likely a ClassNotFound or unknown IOException
+                LOG.error("process: Permanent failure to find or create session for {}", sessionKey, cause);
+                return new ProcessStateSession(ProcessState.ERROR, null);
+            }
+            if (cause instanceof IllegalStateException) {
+                // Used when we detect an unresolvable inconsistency in the customer's routing/script configuration. Ideally this would never occur.
+                LOG.error("process: Configuration failure to find or create session for {}", sessionKey, cause);
+                return new ProcessStateSession(ProcessState.ERROR, null);
+            } else {
+                LOG.info("process: Retriable failure to find or create session for {}", sessionKey);
+                return new ProcessStateSession(ProcessState.RETRY, null);
+            }
         }
+
     }
 
     // A helper to standardize how message text is evaluated.
     private String normalizedMessageText(Message message) {
         return message.text().trim().toLowerCase();
+    }
+
+    // A recursive helper to return the last element of a nested set of exceptions.
+    // We stop recursing at the end or if the cause is a PersistenceManagerException.
+    private Throwable innermost(Throwable e) {
+        var t = e.getCause();
+        if (t == null || t instanceof PersistenceManagerException) {
+            return e;
+        } else {
+            return innermost(t);
+        }
     }
 
     /**
@@ -324,29 +362,30 @@ public class Operator implements SessionAwareMessageProcessor {
         return persistenceManager.insertProcessedMO(message, session);
     }
 
-    public void withTransaction() throws SQLException {
-        try (var connection = persistenceManager.fetchConnection()) {
-            //...
-        }
-    }
+//    public void withTransaction() throws SQLException {
+//        try (var connection = persistenceManager.fetchConnection()) {
+//            //...
+//        }
+//    }
 
     @Override
-    public void complete(Message message, Session session) { // FIXME rename to flushSession
-        LOG.info("complete: {} for Session {}", session.getUser(), session.getId());
+    public void complete(Message message, Session session) {
         var sessionKey = SessionKey.newSessionKey(message);
+
+        // 1. Log MO
         if (!log(session, message)) { // TODO move the log into the processor.complete method
-            LOG.error("Failed to log to database {}", message);
+            LOG.error("complete: Failed to log Message {}, User {}, Session {}", message.id(), session.getUser().platformNumbers().get(message.platform()), session.getId());
         } else {
-            LOG.info("Message processed, acked and logged: {}",
+            LOG.info("complete: Message processed, acked and logged: {}",
                     message.id()); // FIXME change to debug
         }
 
+        // 2. Tell the Session to emit all artifacts
         session.flush(session.getCurrentNode() == null); // what do we do if this returns false?
-        if(session.getCurrentNode() == null) {
+        if (session.getCurrentNode() == null) {
             LOG.info("Clearing cached Session {} for user {}", session.getId(), session.getUser().groupId());
             sessionCache.invalidate(sessionKey);
         }
-
     }
 
     /**
@@ -357,7 +396,7 @@ public class Operator implements SessionAwareMessageProcessor {
      * @throws InterruptedException if any of the involved threads was interrupted
      * @throws ExecutionException   if any of the subtasks threw an exception
      */
-    private @Nullable Session findOrCreateSession(SessionKey sessionKey) throws InterruptedException, ExecutionException {
+    private @Nullable Session findOrCreateSession(@NonNull SessionKey sessionKey) throws InterruptedException, ExecutionException, PersistenceManagerException {
 
         var start = now();
 
@@ -366,15 +405,18 @@ public class Operator implements SessionAwareMessageProcessor {
             Supplier<Node> keywordScript = scope.fork(() -> scriptByKeywordCache.get(KeywordCacheKey.newKey(sessionKey)));
             Supplier<Node> defaultScript = scope.fork(() -> findDefaultScriptByRoute(sessionKey));
 
+            // If userCache loading method throws the join will re-throw it wrapped in an ExecutionException
             scope.join().throwIfFailed(); // TODO consider using joinUntil() to enforce a collective timeout.
 
-            var tmpKeywordDefinedNodeId = keywordScript.get();
             var selectedGraph = (keywordScript.get() != null) ? keywordScript.get() : defaultScript.get();
 
-            if (selectedGraph == null) { // FIXME For now let's fail hard on configuration errors even if the user has an existing session that could be used instead.
-                LOG.error("CRITICAL: No script available by keyword match or route default. Configuration error in route table for {}:{} ",
+            if (selectedGraph == null) { // FIXME For now let's fail hard on configuration errors
+                LOG.error("CRITICAL_CONFIG_ERROR: process: No script available by keyword match or route default. Configuration error in route table for {}:{} ",
                         sessionKey.platform(), sessionKey.to());
-                return null;
+                throw new IllegalStateException(String.format(
+                        "CRITICAL_CONFIG_ERROR: No script available by keyword match or route default. Configuration error in route table for %s:%s ",
+                        sessionKey.platform(), sessionKey.to())
+                );
             }
 
             // FIXME change these to debug or remove.
@@ -382,12 +424,7 @@ public class Operator implements SessionAwareMessageProcessor {
 
             Session session;
 
-            var user = suppliedUser.get();
-            if (user == null) {
-                // We should have logged a critical error in the userCache's provider method, findOrCreateUser.
-                LOG.error("CRITICAL: findOrCreateSession: no user provided for {}", sessionKey);
-                return null;
-            }
+            var user = suppliedUser.get(); // throws IllegalStateException if we can't find/create a user
 
             final Instant userCreatedAt = user.platformCreationTimes().get(sessionKey.platform());
             try {
@@ -408,7 +445,8 @@ public class Operator implements SessionAwareMessageProcessor {
                     //  we must make a copy first.
                     final var originalOptInGraph = findOptInScriptIdByRoute(sessionKey);
                     if (originalOptInGraph == null) { // The database constraints should make it impossible for a route to lack a script.
-                        throw new IllegalStateException("CRITICAL: Configuration error for opt_in_node_id in route table for " + sessionKey);
+                        userCache.invalidate(sessionKey); // FIXME possible to combine the places this needs to get called?
+                        throw new IllegalStateException("CRITICAL_CONFIG_ERROR: process: Configuration error for opt_in_node_id in route table for " + sessionKey);
                     }
 
                     // We don't want to modify the cached opt-in graph, so we create a copy of it that we can modify.
@@ -445,7 +483,8 @@ public class Operator implements SessionAwareMessageProcessor {
 
             } catch (PersistenceManagerException e) {
                 LOG.error("Error loading session for user {}", user.groupId(), e);
-                return null;
+                userCache.invalidate(sessionKey); // FIXME DRY dammit!
+                throw e;
             }
         }
     }
@@ -464,18 +503,23 @@ public class Operator implements SessionAwareMessageProcessor {
      *
      * @param sessionKey the record that encapsulates the message metadata.
      * @return a new or existing User matching the provided key.
+     * @throws IllegalStateException if the route for the provided key isn't found as the prevents the creation of a new user
+     * @throws PersistenceManagerException if the PersistenceManager couldn't execute the query
      */
-    @Nullable User findOrCreateUser(@NonNull SessionKey sessionKey) {
+    @Nullable User findOrCreateUser(@NonNull SessionKey sessionKey) throws PersistenceManagerException {
         User user = persistenceManager.getUser(sessionKey);
         if (user == null) {
             LOG.info("Existing user not found.");
 
             var owningId = findOwningCompanyIdByRouteChannel(sessionKey);
             if (owningId == null) {
-                // very bad
-                LOG.error("CRITICAL_CONFIG_ERROR: findOrCreateUser: No owning company found for route {}:{}. (User: {})",
-                        sessionKey.platform(), sessionKey.to(), sessionKey.from());
-                return null;
+                // The route doesn't exist. *Very* bad.
+                // LOG.error("CRITICAL_CONFIG_ERROR: findOrCreateUser: No owning company found for route {}:{}. (User: {})",
+                //         sessionKey.platform(), sessionKey.to(), sessionKey.from());
+                throw new IllegalStateException(String.format(
+                        "CRITICAL_CONFIG_ERROR: findOrCreateUser: No owning company found for route %s:%s. (User number: %s)",
+                        sessionKey.platform(), sessionKey.to(), sessionKey.from())
+                );
             }
 
             user = new User(
@@ -516,8 +560,8 @@ public class Operator implements SessionAwareMessageProcessor {
     private Node findScriptForKeywordChannel(KeywordCacheKey keywordCacheKey) {
         final Map<Pattern, Keyword> all = allKeywordsByPatternCache.get(ALL);
         if (all == null || all.isEmpty()) {
-            LOG.error("CRITICAL: No keywords available.");
-            return null;
+            LOG.error("CRITICAL_CONFIG_ERROR: findScriptForKeywordChannel: No keywords available.");
+            throw new IllegalStateException("CRITICAL_CONFIG_ERROR: findScriptForKeywordChannel: No keywords available.");
         }
         UUID nodeId = findMatch(all, keywordCacheKey);
         if (nodeId != null) {
@@ -550,8 +594,20 @@ public class Operator implements SessionAwareMessageProcessor {
         return null;
     }
 
+    /**
+     * Return the node with the provided id along with the graph of Nodes and Edges chained to it.
+     * Called by LoadingCache impl which doesn't allow null values.
+     *
+     * @param nodeId
+     * @return the Node that starts the graph.
+     * @throws IllegalStateException if no errors occurred but no Node was found.
+     */
     @Nullable Node getNode(UUID nodeId) {
-        return persistenceManager.getNodeGraph(nodeId);
+        var node = persistenceManager.getNodeGraph(nodeId);
+        if (null == node) {
+            throw new IllegalStateException(String.format("CRITICAL_CONFIG_ERROR: getNode: No node found for %s", nodeId));
+        }
+        return node;
     }
 
 
@@ -617,6 +673,9 @@ public class Operator implements SessionAwareMessageProcessor {
 
     @Nullable Route findRoute(SessionKey sessionKey) {
         final var routes = activeRoutesCache.get(ALL);
+        if (routes == null || routes.length == 0) {
+            throw new IllegalStateException("CRITICAL_CONFIG_ERROR: findRoute: No routes found.");
+        }
         if (routes != null) {
             for (Route route : routes) {
                 if (route.platform() == sessionKey.platform() && route.channel().equals(sessionKey.to())) {

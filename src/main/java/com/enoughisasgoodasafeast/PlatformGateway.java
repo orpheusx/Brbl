@@ -76,9 +76,9 @@ public class PlatformGateway extends WebService {
     private WebServer buildNewWebServer(RecordingHandler recordingHandler) {
         return WebServer.builder()
                 .port(this.port)
-                .connectionConfig(config -> {
+                .connectionOptions(config -> {
                             config.connectTimeout(Duration.of(CONNECTION_TIMEOUT_SECONDS, SECONDS));
-                            config.keepAlive(true);
+                            config.socketKeepAlive(true);
                         }
                 )
                 .routing(router -> {

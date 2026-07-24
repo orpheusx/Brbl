@@ -172,7 +172,7 @@ public class TestingPersistenceManager implements PersistenceManager {
 //    }
 
     @Override
-    public User getUser(SessionKey sessionKey) {
+    public User getUser(SessionKey sessionKey) throws PersistenceManagerException {
         // FIXME seems like it would make more sense to create the User using the properties of the provided SessionKey, no?
         LOG.info("getUser");
         Map<Platform, UUID> platformIds = Map.of(Platform.SMS, randomUUID());

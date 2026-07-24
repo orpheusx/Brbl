@@ -17,6 +17,7 @@ import static com.enoughisasgoodasafeast.Functions.randomUUID;
 import static com.enoughisasgoodasafeast.Message.newMO;
 import static com.enoughisasgoodasafeast.Message.newMT;
 import static com.enoughisasgoodasafeast.datagen.KnownData.knownNumbersForUsers;
+import static com.enoughisasgoodasafeast.operator.TestingPersistenceManager.*;
 import static java.util.Objects.requireNonNull;
 import static org.junit.jupiter.api.Assertions.*;
 
@@ -66,10 +67,10 @@ public class OperatorTest {
     );
 
     public static final Keyword colorKeyword = new Keyword(
-            TestingPersistenceManager.KEYWORD_ID,
+            KEYWORD_ID,
             "(color|colour|colr).*(quiz|q|kwiz)",
             Platform.SMS,
-            TestingPersistenceManager.SCRIPT_ID,
+            SCRIPT_ID,
             OperatorTest.SHORT_CODE_4); // channel
 
     private static final SessionKey SESSION_KEY_US_SHORT_CODE_1 = SessionKey.newSessionKey(mo1);
@@ -95,7 +96,7 @@ public class OperatorTest {
         persistenceManager.addKeyword(Pattern.compile(colorKeyword.wordPattern()), colorKeyword);
 
         // Construct a script for testing purposes
-        Node presentQuestion = new Node(COLOR_QUIZ_START_TEXT, NodeType.PRESENT_MULTI, "ColorQuizStart");
+        Node presentQuestion = new Node(SCRIPT_ID, COLOR_QUIZ_START_TEXT, NodeType.PRESENT_MULTI, null, "ColorQuizStart");
         processAnswer = new Node(COLOR_QUIZ_UNEXPECTED_INPUT, NodeType.PROCESS_MULTI, "ColorQuizProcessResponse");
         presentQuestion.edges().add(
                 new Edge(List.of("n/a"), "n/a", processAnswer)
@@ -111,7 +112,7 @@ public class OperatorTest {
 
         // Add the test script to the fixture's script "cache."
         persistenceManager.addNodeGraph(
-                TestingPersistenceManager.SCRIPT_ID, presentQuestion);
+                SCRIPT_ID, presentQuestion);
 
         Node confirmChangeTopic = new Node(
                 "Oh, you want to talk about something else? 1) yes 2) no, let's continue with the current conversation.",
@@ -189,6 +190,11 @@ public class OperatorTest {
         persistenceManager.setActiveRoutes(allRoutes);
     }
 
+    @Test
+    void checkScriptCacheLoaderReturningNull() {
+        assertNotNull(operator.scriptCache.get(SCRIPT_ID));
+        assertThrows(IllegalStateException.class, () -> operator.scriptCache.get(randomUUID()));
+    }
 
     @Test
     void processAndCheckResponse() {
@@ -331,7 +337,8 @@ public class OperatorTest {
 
         // Initiate the conversation
         assertDoesNotThrow(() -> {
-            operator.process(mo4);
+            final var processStateSession = operator.process(mo4);
+            assertSame(ProcessState.OK, processStateSession.processState());
             hackyForcedFlush(mo4);
         });
 
@@ -347,7 +354,7 @@ public class OperatorTest {
         assertEquals(MOBILE_MX, userPhoneNumber);
 
         assertNotNull(session.getCurrentNode());
-        Node.printGraph(session.getCurrentNode(), session.getCurrentNode(), 2);
+        //Node.printGraph(session.getCurrentNode(), session.getCurrentNode(), 2);
 
         final List<Message> queuedMessages = queueProducer.enqueued();
 
@@ -491,7 +498,7 @@ public class OperatorTest {
         queuedMessages.clear();
         // Now provide bad input to the question posed
 
-        for (int i = 0; i < 3; i++) { // TODO At some point we should add handling for repeated failures. Until then we continue to handle bad input the same way.
+        for (int i = 0; i < 3; i++) {
             assertDoesNotThrow(() -> {
                 operator.process(unexpected);
                 hackyForcedFlush(unexpected);

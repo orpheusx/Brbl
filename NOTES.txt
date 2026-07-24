@@ -6419,7 +6419,7 @@ Perhaps, if all the writes happen at the end of the process, we can have them sh
 Took the day off.
 
 ==== 2026/07/19 ====
-Fixed a long time, lurking synchronization issue.
+Fixed a long time, lurking synchronization issue by moving the lock on the session up into the process method of Operator.
 
 Goal:
 Move all the db writes to the end of message processing.
@@ -6437,14 +6437,80 @@ Likewise, is it viable to share a single Connection/transaction?
 --> Operator.process:
         updateUserStatus(user, platform, status) : Sets a user's opt-in/opt-out status.
 --> Session.flush:
-        insertMT(message, session) : Inserts MT (Mobile Terminated) response logs into  brbl_logs.mt_messages .
+        insertMT(message, session) : Inserts MT (Mobile Terminated) response as logs into brbl_logs.mt_messages.
 --> Session.flush:
         saveSession(session) : Serializes and stores active session data.
 --> Session.flush:
-        clearSession(session) : Purges expired or completed sessions from  brbl_users.sessions .
+        clearSession(session) : Purges expired or completed sessions from brbl_users.sessions.
 --> OperatorConsumer.handleDelivery:
         Operator.log:
             insertProcessedMO(message, session) : Updates the processing state of the incoming MO message.
 
 So the last database write happens in OperatorConsumer
 The Session has all the data we need to write and access to the persistence manager.
+
+==== 2026/07/22 ====
+
+A moment of temporary insanity yesterday led me to think that the load method used in a (Caffeine) LoadingCache would throw an error if a null value was returned. I immediately started replacing all the nulls with exceptions to signal the particular nature of the failed load but, fortunately, I whipped up a quick unit test to verify and realized that I and/or Google's interpretation of the cache behavior was mistaken. Null is fine. It doesn't get stored in the cache (which is good) but it doesn't blow up. That said, as I'm finally working on the details of our queue integration, it did make me consider how we could communicate the context of a failure and how we ought to handle it. Returning null or not null doesn't tell the caller much so determining if the message should be retried or failed is difficult.
+
+==== 2026/07/23 ====
+ Before arriving at a solution for grouping writes at the very end of process()...consider the way we signal errors in the whole method, including reads that don't return the required data.
+
+Operator.process:
+        try:
+        -- findOrCreateSession
+
+            -- userCache.get:findOrCreateUser
+                -- findOwningCompanyIdByRouteChannel
+                    -- activeRoutesCache.get:loadAllActiveRoutes
+                        --> throw IllegalStateException if zero routes.
+                    --> throw IllegalStateException if no company.
+
+            -- scriptByKeywordCache.get:findScriptForKeywordChannel
+                -- allKeywordsByPatternCache.get:loadAllKeywords
+                    --> throw IllegalStateException only if map is empty.
+                -- scriptCache.get:
+                    --> throw IllegalStateException if node doesn't exist.
+
+            -- findDefaultScriptByRoute:
+                -- activeRoutesCache.get:loadAllActiveRoutes
+                    --> throw IllegalStateException if zero routes.
+                -- scriptCache.get:
+                    --> throw IllegalStateException if node doesn't exist.
+
+            -- findOptInScriptByRoute: same as findDefaultScriptByRoute.
+
+            --> throw InterruptedException if StructuredTaskScope.join() interrupted.
+            --> throw ExecutionException wrapping task.get exception.
+            --> throw PersistenceManagerException wrapping pm.loadSession exception.
+        catch:
+        --> IllegalStateException: return ProcessState:.ERROR.
+        --> CompletionException: return ProcessState.RETRY.
+
+        -- insertNewUser(user) : Inserts new user profiles.
+
+        -- updateUserStatus(user, platform, status) : Sets a user's opt-in/opt-out status.
+
+
+Ran the unit tests and hit three failures in OperatorTest:
+
+java.util.concurrent.CompletionException: java.util.concurrent.ExecutionException: java.lang.IllegalStateException: CRITICAL_CONFIG_ERROR: getNode: No node found for 019f8f8d-9f6a-7306-b198-28192e976ba6
+
+Oof, even more exception chaining going on that I expected. Logback/SLF4J helpfully prints out the nesting by default.
+
+Looks like we find a matching keyword but the script its associated with doesn't exist according to the PersistenceManager.
+So PersistenceManager.getNodeGraph returns null,
+    Operator.getNode throws IllegalArgumentException,
+        the LoadingCache of Nodes rethrows it,
+            the StructuredConcurrency throwIfFailed() wraps it in an ExecutionException,
+                and the Session LoadingCache wraps it in CompletionException.
+
+
+==== 2026/07/24 ====
+
+TODO
+    _ Update Operator.findOrCreateUser/PersistenceManager.getUser to throw PME at least when fetchConnection fails.
+
+
+Fixing unit tests:
+in PM's nodesById the entry we're looking for exists (has same key) but the Node its paired to has a different id property.

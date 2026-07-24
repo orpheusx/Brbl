@@ -749,7 +749,7 @@ PostgresPersistenceManager implements PersistenceManager {
             return loadSession(connection, userGroupId);
         } catch (SQLException e) {
             LOG.error("loadSession: fetchConnection failed", e);
-            throw new PersistenceManagerException(e);
+            throw new PersistenceManagerException(e, true); // retriable
         }
     }
 
@@ -978,12 +978,12 @@ PostgresPersistenceManager implements PersistenceManager {
     }
 
     @Override
-    public @Nullable User getUser(@NonNull SessionKey sessionKey) {
+    public @Nullable User getUser(@NonNull SessionKey sessionKey) throws PersistenceManagerException {
         try (Connection connection = fetchConnection()) {
             return getUser(connection, sessionKey);
         } catch (SQLException e) {
-            LOG.error("getUser: fetchConnection failed", e);
-            return null;
+            // LOG.error("getUser: fetchConnection failed", e);
+            throw new PersistenceManagerException("getUser: fetchConnection failed.", e, true);
         }
     }
 
