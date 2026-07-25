@@ -270,7 +270,7 @@ public class OperatorTest {
     private void hackyForcedFlush(Message mo) {
         // OperatorConsumer typically calls flush on the Session, but we don't have one here so we need to simulate it.
         var session = operator.sessionCache.get(SessionKey.newSessionKey(mo));
-        session.flush(false);
+        session.flushMQ();
     }
 
 

@@ -104,6 +104,12 @@ public class Operator implements SessionAwareMessageProcessor {
      */
     public ProcessStateSession process(Message message) {
         LOG.info("process: incoming message: {}", message);
+        assert persistenceManager != null ;
+        if (persistenceManager.isMOProcessed(message.id())) {
+            LOG.info("process: Message {} has already been processed. Returning NOOP.", message.id());
+            return new ProcessStateSession(ProcessState.NOOP, null);
+        }
+
         var processStart = now();
 
         final SessionKey sessionKey = SessionKey.newSessionKey(message);
@@ -140,18 +146,8 @@ public class Operator implements SessionAwareMessageProcessor {
                     return new ProcessStateSession(ProcessState.OK, session);
                 }
 
-                if (isUserBrandNew) { // FIXME can we safely move this block to after switch below?? Prefer to avoid writing as much as possible.
-                    var user = session.getUser();
-                    boolean isInserted = persistenceManager.insertNewUser(user);
-                    if (!isInserted) {
-                        LOG.error("process: Process failed to insert new user: {}.", user);
-                        LOG.error("process: Clearing user and session caches due to new user persistence failure: {}", session.getId());
-                        userCache.invalidate(sessionKey);
-                        sessionCache.invalidate(sessionKey);
-                        return new ProcessStateSession(ProcessState.ERROR, null);
-                    } else {
-                        LOG.info("process: New User created: {}", user);
-                    }
+                if (isUserBrandNew) {
+                    LOG.info("process: Brand-new user detected for session: {}", session.getId());
                 }
 
                 UserStatus updatedUserStatus = null;
@@ -180,22 +176,10 @@ public class Operator implements SessionAwareMessageProcessor {
 
                 if (statusNeedsUpdate) {
                     LOG.info("process: Session status needs update to {}", updatedUserStatus);
-                    if (persistenceManager.updateUserStatus(sessionUser, sessionKey.platform(), updatedUserStatus)) {
-                        sessionUser.platformStatus().put(sessionKey.platform(), UserStatus.IN);
-                        LOG.info("process: Updated platform status for user {}", sessionUser.platformStatus().get(sessionKey.platform()));
-                    } else {
-                        // Not being able to update the UserStatus is serious and all the worse because we may have already queued some output which we should not
-                        LOG.error("process: failed to update user status to updatedUserStatus for {}", sessionUser);
-                        return new ProcessStateSession(ProcessState.ERROR, session);
-                    }
+                    sessionUser.platformStatus().put(sessionKey.platform(), updatedUserStatus);
                 }
 
-//            if (session.getCurrentNode() == null) {
-//                LOG.info("process: Clearing completed session from cache: {}", session);
-//                sessionCache.invalidate(sessionKey);
-//            }
-
-                return new ProcessStateSession(processStateNode.processState(), session);
+                return new ProcessStateSession(processStateNode.processState(), session, isUserBrandNew, statusNeedsUpdate ? updatedUserStatus : null);
             }
 
         } catch (Exception e) {
@@ -269,10 +253,6 @@ public class Operator implements SessionAwareMessageProcessor {
         // If the user is brand-new OR an existing user that has already opted out, don't process the message further.
         // Could we do this sooner (in the findOrCreateSession method)?
         if (isBrandNew || UserStatus.OUT == status) {
-
-            if (isBrandNew && !persistenceManager.updateUserStatus(sessionUser, platform, UserStatus.OUT)) {
-                LOG.error("handleOptOut: Failed to set OPT_OUT on brand-new user: {}", sessionUser); // FIXME suggests lurking issues
-            }
             return new ProcessStateNode(ProcessState.NOOP, null);
         }
 
@@ -286,20 +266,14 @@ public class Operator implements SessionAwareMessageProcessor {
         if (!processOk) {
             LOG.error("handleOptOut: Failed to process message: {}", message);
         }
-        // FIXME Not sure how to handle failures in the processing (above) and/or the status update (below)
 
-        // FIXME remove the direct setting of the user and instead remove the user from the cache.
         LOG.info("handleOptOut: user status was: {}", status);
-        var userStatus = sessionUser.platformStatus().put(platform, UserStatus.OUT);
+        sessionUser.platformStatus().put(platform, UserStatus.OUT);
         LOG.info("handleOptOut: user status changed to: {}", sessionUser.platformStatus().get(platform));
 
-        // Update the user record status to UserStatus.OUT.
-        boolean updateOk = persistenceManager.updateUserStatus(sessionUser, platform, UserStatus.OUT);
-        LOG.error("handleOptOut: updateUserStatus result: {}", updateOk);
-
-
-        return new ProcessStateNode((processOk && updateOk) ? ProcessState.OK : ProcessState.ERROR, processStateNode.node());
+        return new ProcessStateNode(processOk ? ProcessState.OK : ProcessState.ERROR, processStateNode.node());
     }
+
 
     ProcessStateNode handleChangeTopic(Session session, Message message, SessionKey sessionKey) {
         // Grab the conversation that is configured for the route.
@@ -370,23 +344,41 @@ public class Operator implements SessionAwareMessageProcessor {
 
     @Override
     public void complete(Message message, Session session) {
+        complete(message, session, false, null);
+    }
+
+    @Override
+    public void complete(Message message, Session session, boolean isNewUser, UserStatus updatedUserStatus) {
         var sessionKey = SessionKey.newSessionKey(message);
 
-        // 1. Log MO
-        if (!log(session, message)) { // TODO move the log into the processor.complete method
-            LOG.error("complete: Failed to log Message {}, User {}, Session {}", message.id(), session.getUser().platformNumbers().get(message.platform()), session.getId());
-        } else {
-            LOG.info("complete: Message processed, acked and logged: {}",
-                    message.id()); // FIXME change to debug
+        try {
+            boolean ok = persistenceManager.commitSessionState(message, session, isNewUser, updatedUserStatus);
+            if (!ok) {
+                LOG.error("complete: Transaction failed in commitSessionState for message {}", message.id());
+                userCache.invalidate(sessionKey);
+                sessionCache.invalidate(sessionKey);
+                throw new RuntimeException("commitSessionState failed for message " + message.id());
+            }
+            LOG.info("complete: Message processed, committed and logged: {}", message.id());
+        } catch (PersistenceManagerException e) {
+            LOG.error("complete: Transaction exception for message {}", message.id(), e);
+            userCache.invalidate(sessionKey);
+            sessionCache.invalidate(sessionKey);
+            throw new RuntimeException("commitSessionState failed for message " + message.id(), e);
         }
 
-        // 2. Tell the Session to emit all artifacts
-        session.flush(session.getCurrentNode() == null); // what do we do if this returns false?
+        // 2. Publish MT messages to RabbitMQ AFTER DB commit succeeds
+        if (!session.flushMQ()) {
+            LOG.error("complete: Failed to flush MT messages to queue for message {}", message.id());
+        }
+
+        // 3. Clear cached session if finished
         if (session.getCurrentNode() == null) {
             LOG.info("Clearing cached Session {} for user {}", session.getId(), session.getUser().groupId());
             sessionCache.invalidate(sessionKey);
         }
     }
+
 
     /**
      * Builder method used with the LoadingCache.

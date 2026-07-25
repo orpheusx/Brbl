@@ -154,44 +154,58 @@ public class Session implements ScriptContext, Serializable {
         return evaluatedNodes.getFirst();
     }
 
-    public boolean flush(boolean isClearSession) {
-        LOG.info("flush: outputBuffer size = {}", outputBuffer.size());
+    public Queue<Message> getOutputBuffer() {
+        return outputBuffer;
+    }
+
+    public boolean flushMQ() {
+        LOG.info("flushMQ: outputBuffer size = {}", outputBuffer.size());
         Message mtMessage;
         while ((mtMessage = outputBuffer.poll()) != null) {
             if (!producer.enqueue(mtMessage)) {
-                LOG.error("flush: failed to enqueue: {}", mtMessage);
+                LOG.error("flushMQ: failed to enqueue: {}", mtMessage);
                 return false;
             }
-            if (!persistenceManager.insertMT(mtMessage, this)) {
-                LOG.error("flush: MT write failed for: {}", mtMessage);
-            }
         }
-
         this.sessionUpdated();
-
-        outputBuffer.clear();
-
         inputs.forEach(inputHistory::addLast);
-
         inputs.clear();
-
-        try {
-            // TODO Consolidating db writes here requires clearing the cached session here as well.
-//            if (this.getCurrentNode() == null) {
-//                LOG.info("process: Clearing completed session from cache: {}", this);
-//                persistenceManager.sessionCache.invalidate(sessionKey);
-//            }
-            if(this.getCurrentNode() == null/*isClearSession*/) {
-                LOG.info("Clearing persisted session {} for user {}.", this.getId(), this.getUser().groupId());
-            } else {
-                LOG.info("Saving persisted session {} for user {}.", this.getId(), this.getUser().groupId());
-            }
-            return (this.getCurrentNode() == null/*isClearSession*/ ? persistenceManager.clearSession(this) : persistenceManager.saveSession(this));
-        } catch (PersistenceManager.PersistenceManagerException e) {
-            LOG.error("flush: failed to {} session: {}", isClearSession ? "clear" : "save", this, e);
-            return false;
-        }
+        return true;
     }
+
+    //    public boolean flush(boolean isClearSession) {
+    //        LOG.info("flush: outputBuffer size = {}", outputBuffer.size());
+    //        Message mtMessage;
+    //        while ((mtMessage = outputBuffer.poll()) != null) {
+    //            if (!producer.enqueue(mtMessage)) {
+    //                LOG.error("flush: failed to enqueue: {}", mtMessage);
+    //                return false;
+    //            }
+    //            if (!persistenceManager.insertMT(mtMessage, this)) {
+    //                LOG.error("flush: MT write failed for: {}", mtMessage);
+    //            }
+    //        }
+    //
+    //        this.sessionUpdated();
+    //
+    //        outputBuffer.clear();
+    //
+    //        inputs.forEach(inputHistory::addLast);
+    //
+    //        inputs.clear();
+    //
+    //        try {
+    //            if(this.getCurrentNode() == null /*isClearSession*/) {
+    //                LOG.info("Clearing persisted session {} for user {}.", this.getId(), this.getUser().groupId());
+    //            } else {
+    //                LOG.info("Saving persisted session {} for user {}.", this.getId(), this.getUser().groupId());
+    //            }
+    //            return (this.getCurrentNode() == null /*isClearSession*/ ? persistenceManager.clearSession(this) : persistenceManager.saveSession(this));
+    //        } catch (PersistenceManager.PersistenceManagerException e) {
+    //            LOG.error("flush: failed to {} session: {}", isClearSession ? "clear" : "save", this, e);
+    //            return false;
+    //        }
+    //    }
 
     public UUID getId() {
         return id;

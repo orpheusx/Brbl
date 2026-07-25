@@ -50,9 +50,16 @@ public class OperatorConsumer extends BrblConsumer {
             LOG.info("Processed {}", message);
             switch (stateAndSession.processState()) {
                 case OK -> {
-                    getChannel().basicAck(deliveryTag, false);
-                    processor.complete(message, stateAndSession.session());
+                    try {
+                        processor.complete(message, stateAndSession.session(), stateAndSession.isNewUser(), stateAndSession.updatedUserStatus());
+                        getChannel().basicAck(deliveryTag, false);
+                    } catch (Exception e) {
+                        LOG.error("Failed to commit processing for message: {}. Routing to failed queue.", message.id(), e);
+                        getChannel().basicPublish("", failedQueueName, MessageProperties.PERSISTENT_TEXT_PLAIN, body);
+                        getChannel().basicAck(deliveryTag, false);
+                    }
                 }
+
                 case ERROR -> {
                     LOG.info("Failed {}", message);
                     // Put it on the failed message queue

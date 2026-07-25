@@ -46,6 +46,36 @@ public class TestingPersistenceManager implements PersistenceManager {
     // Add constructor that takes a list of Keywords?
     // ...
 
+    private final Set<UUID> processedMoIds = new HashSet<>();
+
+    @Override
+    public boolean isMOProcessed(UUID moId) {
+        LOG.info("isMOProcessed check for {}", moId);
+        return processedMoIds.contains(moId);
+    }
+
+    @Override
+    public boolean commitSessionState(Message moMessage, Session session, boolean isNewUser, UserStatus updatedUserStatus) throws PersistenceManagerException {
+        LOG.info("commitSessionState for MO {}", moMessage.id());
+        processedMoIds.add(moMessage.id());
+        if (isNewUser) {
+            insertNewUser(session.getUser());
+        }
+        if (updatedUserStatus != null) {
+            updateUserStatus(session.getUser(), moMessage.platform(), updatedUserStatus);
+        }
+        insertProcessedMO(moMessage, session);
+        for (Message mtMessage : session.getOutputBuffer()) {
+            insertMT(mtMessage, session);
+        }
+        if (session.getCurrentNode() == null) {
+            clearSession(session);
+        } else {
+            saveSession(session);
+        }
+        return true;
+    }
+
     @Override
     public boolean insertMO(Message message) {
         LOG.info("insertMO");

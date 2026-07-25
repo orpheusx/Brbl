@@ -72,6 +72,12 @@ PostgresPersistenceManager implements PersistenceManager {
                         (?, ?, ?, ?);
                     """;
 
+    public static final String MO_MESSAGE_PRCD_CHECK =
+            """
+                    SELECT 1 FROM messages_mo_prcd WHERE id = ?::UUID;
+                    """;
+
+
     public static final String MT_MESSAGE_INSERT =
             """
                     INSERT INTO messages_mt
@@ -576,7 +582,77 @@ PostgresPersistenceManager implements PersistenceManager {
     //---------------------------------- MO metadata -----------------------------
 
     @Override
+    public boolean isMOProcessed(@NonNull UUID moId) {
+        try (Connection connection = fetchConnection();
+             PreparedStatement ps = connection.prepareStatement(MO_MESSAGE_PRCD_CHECK)) {
+            ps.setObject(1, moId);
+            try (ResultSet rs = ps.executeQuery()) {
+                return rs.next();
+            }
+        } catch (SQLException e) {
+            LOG.error("isMOProcessed check failed for {}", moId, e);
+            return false;
+        }
+    }
+
+    @Override
+    public boolean commitSessionState(@NonNull Message moMessage,
+                                       @NonNull Session session,
+                                       boolean isNewUser,
+                                       @Nullable UserStatus updatedUserStatus) throws PersistenceManagerException {
+        try (Connection connection = fetchConnection()) {
+            connection.setAutoCommit(false);
+            try {
+                if (isNewUser) {
+                    if (!insertNewUserAmalgam(connection, session.getUser())) {
+                        throw new SQLException("Failed to insert new user: " + session.getUser().groupId());
+                    }
+                }
+
+                if (updatedUserStatus != null) {
+                    if (!updateUserStatus(connection, session.getUser(), moMessage.platform(), updatedUserStatus)) {
+                        throw new SQLException("Failed to update user status to " + updatedUserStatus);
+                    }
+                }
+
+                if (!insertProcessedMO(connection, moMessage, session)) {
+                    throw new SQLException("Failed to insert processed MO message: " + moMessage.id());
+                }
+
+                for (Message mtMessage : session.getOutputBuffer()) {
+                    if (!insertMT(connection, mtMessage, session)) {
+                        throw new SQLException("Failed to insert MT message: " + mtMessage.id());
+                    }
+                }
+
+                if (session.getCurrentNode() == null) {
+                    clearSession(connection, session);
+                } else {
+                    saveSession(connection, session);
+                }
+
+                connection.commit();
+                return true;
+            } catch (Exception e) {
+                try {
+                    connection.rollback();
+                } catch (SQLException rollbackEx) {
+                    LOG.error("Failed to rollback transaction after error", rollbackEx);
+                }
+                LOG.error("commitSessionState failed and rolled back for message {}", moMessage.id(), e);
+                if (e instanceof PersistenceManagerException pme) {
+                    throw pme;
+                }
+                throw new PersistenceManagerException("commitSessionState failed for message " + moMessage.id(), e);
+            }
+        } catch (SQLException e) {
+            throw new PersistenceManagerException("fetchConnection failed in commitSessionState", e);
+        }
+    }
+
+    @Override
     public boolean insertProcessedMO(Message message, Session session) {
+
         try (Connection connection = fetchConnection()) {
             return insertProcessedMO(connection, message, session);
         } catch (SQLException e) {

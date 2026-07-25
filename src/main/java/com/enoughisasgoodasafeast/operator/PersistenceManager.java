@@ -18,8 +18,15 @@ public interface PersistenceManager {
     // Called by Rcvr
     boolean insertMO(Message message);
 
+    // Called by Operator to check idempotency
+    boolean isMOProcessed(UUID moId);
+
+    // Called by Operator to commit session state atomically
+    boolean commitSessionState(Message moMessage, Session session, boolean isNewUser, @Nullable UserStatus updatedUserStatus) throws PersistenceManagerException;
+
     // Called by Operator
     boolean insertProcessedMO(Message message, Session session);
+
 
     // Called by Session
     boolean insertMT(Message message, Session session);
