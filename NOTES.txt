@@ -6536,81 +6536,80 @@ So, from the outline  the operations we need to combine are:
              insertProcessedMO(message, session) : Updates the processing state of the incoming MO message.
 
 Prompt to Antigravity:
-Consider the code path starting from the handleDelivery method of @src/main/java/com/enoughisasgoodasafeast/OperatorConsumer.java where the implementation the SessionAwareMessageProcessor member, "processor", is an instance of @src/main/java/com/enoughisasgoodasafeast/operator/Operator.java that uses an instance of
-  @src/main/java/com/enoughisasgoodasafeast/operator/PostgresPersistenceManager.java as its "persistenceManager" member.
-  My goal is to modify handleDelivery() so that all the SQL operations are performed in a single transaction, committing them only after Operator.process() returns ProcessState.OK and the Message has been successfully acked. If process() returns any other ProcessState value the transaction should be rolled back.
-  Analyze the idea of creating the java.sql.Connection (via PostgresPersistenceManager.fetchConnection()) at the beginning of handleDelivery() and adding it to the SessionAwareMessageProcessor.process() method signature. This would allow the Operator to pass it to any of the PostgresPersistenceManager database methods it uses. Of course, those existing methods of PostgresPersistenceManager that take a Connection would have to change their access level from private to protected.
-  What would need to be done? What problems have I missed? (Do not write any code yet.)
+    Consider the code path starting from the handleDelivery method of @src/main/java/com/enoughisasgoodasafeast/OperatorConsumer.java where the implementation the SessionAwareMessageProcessor member, "processor", is an instance of @src/main/java/com/enoughisasgoodasafeast/operator/Operator.java that uses an instance of @src/main/java/com/enoughisasgoodasafeast/operator/PostgresPersistenceManager.java as its "persistenceManager" member.
+    My goal is to modify handleDelivery() so that all the SQL operations are performed in a single transaction, committing them only after Operator.process() returns ProcessState.OK and the Message has been successfully acked. If process() returns any other ProcessState value the transaction should be rolled back.
+    Analyze the idea of creating the java.sql.Connection (via PostgresPersistenceManager.fetchConnection()) at the beginning of handleDelivery() and adding it to the SessionAwareMessageProcessor.process() method signature. This would allow the Operator to pass it to any of the PostgresPersistenceManager database methods it uses. Of course, those existing methods of PostgresPersistenceManager that take a Connection would have to change their access level from private to protected.
+    What would need to be done? What problems have I missed? (Do not write any code yet.)
 
 Gemini via Antigravity response:
-Here is an analysis of your proposed architectural change to perform all SQL operations in a single transaction managed within [OperatorConsumer.handleDelivery()](file:///Users/mark/Development/sndrRcvr/src/main/java/com/enoughisasgoodasafeast/OperatorConsumer.java#L39).
+    Here is an analysis of your proposed architectural change to perform all SQL operations in a single transaction managed within [OperatorConsumer.handleDelivery()](file:///Users/mark/Development/sndrRcvr/src/main/java/com/enoughisasgoodasafeast/OperatorConsumer.java#L39).
 
----
+    ---
 
-### What Would Need to Be Done
+    ### What Would Need to Be Done
 
-To implement this idea as described, the following changes would be necessary across the call stack:
+    To implement this idea as described, the following changes would be necessary across the call stack:
 
-1. **Interface and Signature Updates:**
-   - Update [SessionAwareMessageProcessor](file:///Users/mark/Development/sndrRcvr/src/main/java/com/enoughisasgoodasafeast/SessionAwareMessageProcessor.java) to include `java.sql.Connection` in `process()`, `complete()`, and `log()` methods (or introduce overloaded versions).
-   - Update [PersistenceManager](file:///Users/mark/Development/sndrRcvr/src/main/java/com/enoughisasgoodasafeast/operator/PersistenceManager.java) interface to accept `Connection` parameters for transactional methods: `insertNewUser()`, `updateUserStatus()`, `insertProcessedMO()`, `insertMT()`, `saveSession()`, `clearSession()`, `getUser()`, and `loadSession()`.
-   - Update all implementations of these interfaces, including [Operator](file:///Users/mark/Development/sndrRcvr/src/main/java/com/enoughisasgoodasafeast/operator/Operator.java), [FakeOperator](file:///Users/mark/Development/sndrRcvr/src/main/java/com/enoughisasgoodasafeast/FakeOperator.java), and [PostgresPersistenceManager](file:///Users/mark/Development/sndrRcvr/src/main/java/com/enoughisasgoodasafeast/operator/PostgresPersistenceManager.java).
+    1. **Interface and Signature Updates:**
+       - Update [SessionAwareMessageProcessor](file:///Users/mark/Development/sndrRcvr/src/main/java/com/enoughisasgoodasafeast/SessionAwareMessageProcessor.java) to include `java.sql.Connection` in `process()`, `complete()`, and `log()` methods (or introduce overloaded versions).
+       - Update [PersistenceManager](file:///Users/mark/Development/sndrRcvr/src/main/java/com/enoughisasgoodasafeast/operator/PersistenceManager.java) interface to accept `Connection` parameters for transactional methods: `insertNewUser()`, `updateUserStatus()`, `insertProcessedMO()`, `insertMT()`, `saveSession()`, `clearSession()`, `getUser()`, and `loadSession()`.
+       - Update all implementations of these interfaces, including [Operator](file:///Users/mark/Development/sndrRcvr/src/main/java/com/enoughisasgoodasafeast/operator/Operator.java), [FakeOperator](file:///Users/mark/Development/sndrRcvr/src/main/java/com/enoughisasgoodasafeast/FakeOperator.java), and [PostgresPersistenceManager](file:///Users/mark/Development/sndrRcvr/src/main/java/com/enoughisasgoodasafeast/operator/PostgresPersistenceManager.java).
 
-2. **OperatorConsumer Updates:**
-   - Give [OperatorConsumer](file:///Users/mark/Development/sndrRcvr/src/main/java/com/enoughisasgoodasafeast/OperatorConsumer.java) access to a connection source (either via `PersistenceManager` or an abstraction on `SessionAwareMessageProcessor`).
-   - Acquire a `Connection` at the start of `handleDelivery()`, set `connection.setAutoCommit(false)`, and wrap execution in a `try-catch-finally` block.
-   - Pass the `Connection` to `processor.process(message, connection)` and `processor.complete(message, session, connection)`.
-   - Execute `connection.commit()` only when `ProcessState.OK` is returned and message acknowledgment succeeds; call `connection.rollback()` on non-OK states or exceptions.
+    2. **OperatorConsumer Updates:**
+       - Give [OperatorConsumer](file:///Users/mark/Development/sndrRcvr/src/main/java/com/enoughisasgoodasafeast/OperatorConsumer.java) access to a connection source (either via `PersistenceManager` or an abstraction on `SessionAwareMessageProcessor`).
+       - Acquire a `Connection` at the start of `handleDelivery()`, set `connection.setAutoCommit(false)`, and wrap execution in a `try-catch-finally` block.
+       - Pass the `Connection` to `processor.process(message, connection)` and `processor.complete(message, session, connection)`.
+       - Execute `connection.commit()` only when `ProcessState.OK` is returned and message acknowledgment succeeds; call `connection.rollback()` on non-OK states or exceptions.
 
-3. **PostgresPersistenceManager Visibility:**
-   - Change access levels of internal connection-aware helpers in [PostgresPersistenceManager](file:///Users/mark/Development/sndrRcvr/src/main/java/com/enoughisasgoodasafeast/operator/PostgresPersistenceManager.java) (e.g., `insertProcessedMO`, `insertMT`, `saveSession`, `clearSession`) to `public` (or `protected` if in package) and declare them in the `PersistenceManager` interface.
+    3. **PostgresPersistenceManager Visibility:**
+       - Change access levels of internal connection-aware helpers in [PostgresPersistenceManager](file:///Users/mark/Development/sndrRcvr/src/main/java/com/enoughisasgoodasafeast/operator/PostgresPersistenceManager.java) (e.g., `insertProcessedMO`, `insertMT`, `saveSession`, `clearSession`) to `public` (or `protected` if in package) and declare them in the `PersistenceManager` interface.
 
----
+    ---
 
-### Critical Problems and Missed Issues
+    ### Critical Problems and Missed Issues
 
-While consolidating transactions is a solid goal, passing a single `java.sql.Connection` through the current architecture introduces several significant issues:
+    While consolidating transactions is a solid goal, passing a single `java.sql.Connection` through the current architecture introduces several significant issues:
 
-#### 1. Concurrency Violation with `StructuredTaskScope` (Virtual Threads)
-In [Operator.findOrCreateSession()](file:///Users/mark/Development/sndrRcvr/src/main/java/com/enoughisasgoodasafeast/operator/Operator.java#L399), Java 23 `StructuredTaskScope.ShutdownOnFailure` forks multiple concurrent subtasks (loading user, loading script by keyword, loading default script) onto separate virtual threads.
-- A JDBC `Connection` is **not thread-safe**.
-- Sharing a single `Connection` concurrently across threads in `StructuredTaskScope` will result in race conditions, corrupted JDBC driver state, or SQL exceptions.
+    #### 1. Concurrency Violation with `StructuredTaskScope` (Virtual Threads)
+    In [Operator.findOrCreateSession()](file:///Users/mark/Development/sndrRcvr/src/main/java/com/enoughisasgoodasafeast/operator/Operator.java#L399), Java 23 `StructuredTaskScope.ShutdownOnFailure` forks multiple concurrent subtasks (loading user, loading script by keyword, loading default script) onto separate virtual threads.
+    - A JDBC `Connection` is **not thread-safe**.
+    - Sharing a single `Connection` concurrently across threads in `StructuredTaskScope` will result in race conditions, corrupted JDBC driver state, or SQL exceptions.
 
-#### 2. Incompatibility with Caffeine `LoadingCache`
-[Operator](file:///Users/mark/Development/sndrRcvr/src/main/java/com/enoughisasgoodasafeast/operator/Operator.java#L38) relies heavily on Caffeine loading caches (`sessionCache`, `userCache`, `scriptCache`, `scriptByKeywordCache`, `activeRoutesCache`).
-- Caffeine cache loaders (e.g. `sessionKey -> findOrCreateSession(sessionKey)`) only accept the key, not arbitrary runtime parameters like `Connection`.
-- When `sessionCache.get(sessionKey)` is called inside `process()`, there is no clean way to pass the `Connection` down to `findOrCreateSession` or `findOrCreateUser` without using `ThreadLocal` hacks or completely dismantling the Caffeine loader mechanism.
+    #### 2. Incompatibility with Caffeine `LoadingCache`
+    [Operator](file:///Users/mark/Development/sndrRcvr/src/main/java/com/enoughisasgoodasafeast/operator/Operator.java#L38) relies heavily on Caffeine loading caches (`sessionCache`, `userCache`, `scriptCache`, `scriptByKeywordCache`, `activeRoutesCache`).
+    - Caffeine cache loaders (e.g. `sessionKey -> findOrCreateSession(sessionKey)`) only accept the key, not arbitrary runtime parameters like `Connection`.
+    - When `sessionCache.get(sessionKey)` is called inside `process()`, there is no clean way to pass the `Connection` down to `findOrCreateSession` or `findOrCreateUser` without using `ThreadLocal` hacks or completely dismantling the Caffeine loader mechanism.
 
-#### 3. In-Memory Cache Pollution on Transaction Rollback
-If `Operator.process()` reads or mutates state (e.g. `userCache.get()`, `sessionUser.platformStatus().put(...)`, `session.setCurrentNode(...)`) and the SQL transaction is subsequently rolled back:
-- PostgreSQL will revert database changes.
-- **However, Caffeine's in-memory caches will still hold the modified `User` and `Session` objects.**
-- Subsequent incoming messages for that user will hit the stale/corrupted in-memory cache, causing inconsistency between memory and database.
+    #### 3. In-Memory Cache Pollution on Transaction Rollback
+    If `Operator.process()` reads or mutates state (e.g. `userCache.get()`, `sessionUser.platformStatus().put(...)`, `session.setCurrentNode(...)`) and the SQL transaction is subsequently rolled back:
+    - PostgreSQL will revert database changes.
+    - **However, Caffeine's in-memory caches will still hold the modified `User` and `Session` objects.**
+    - Subsequent incoming messages for that user will hit the stale/corrupted in-memory cache, causing inconsistency between memory and database.
 
-#### 4. Transaction Scoping vs. Outbound Side Effects (RabbitMQ MT Messages)
-Currently in [OperatorConsumer](file:///Users/mark/Development/sndrRcvr/src/main/java/com/enoughisasgoodasafeast/OperatorConsumer.java#L52-L55):
-- `processor.complete()` is called under `ProcessState.OK`, which triggers `session.flush()`.
-- Inside [Session.flush()](file:///Users/mark/Development/sndrRcvr/src/main/java/com/enoughisasgoodasafeast/operator/Session.java#L157), response messages (MTs) are enqueued to RabbitMQ via `producer.enqueue(mtMessage)`.
-- If the database transaction is committed *after* `complete()` and `basicAck`:
-  - MT messages are **already sent to RabbitMQ** before the DB transaction commits.
-  - If `connection.commit()` fails (e.g., lock timeout, network glitch), the DB transaction rolls back, but outbound messages have already been sent to external gateways and the incoming MO was already acked.
+    #### 4. Transaction Scoping vs. Outbound Side Effects (RabbitMQ MT Messages)
+    Currently in [OperatorConsumer](file:///Users/mark/Development/sndrRcvr/src/main/java/com/enoughisasgoodasafeast/OperatorConsumer.java#L52-L55):
+    - `processor.complete()` is called under `ProcessState.OK`, which triggers `session.flush()`.
+    - Inside [Session.flush()](file:///Users/mark/Development/sndrRcvr/src/main/java/com/enoughisasgoodasafeast/operator/Session.java#L157), response messages (MTs) are enqueued to RabbitMQ via `producer.enqueue(mtMessage)`.
+    - If the database transaction is committed *after* `complete()` and `basicAck`:
+      - MT messages are **already sent to RabbitMQ** before the DB transaction commits.
+      - If `connection.commit()` fails (e.g., lock timeout, network glitch), the DB transaction rolls back, but outbound messages have already been sent to external gateways and the incoming MO was already acked.
 
-#### 5. Interface Leakage and Abstraction Violation
-- `SessionAwareMessageProcessor` is a high-level messaging abstraction. Adding `java.sql.Connection` directly to its method signatures tightly couples the messaging layer to JDBC.
-- This breaks implementations that do not use JDBC directly, such as [FakeOperator](file:///Users/mark/Development/sndrRcvr/src/main/java/com/enoughisasgoodasafeast/FakeOperator.java).
+    #### 5. Interface Leakage and Abstraction Violation
+    - `SessionAwareMessageProcessor` is a high-level messaging abstraction. Adding `java.sql.Connection` directly to its method signatures tightly couples the messaging layer to JDBC.
+    - This breaks implementations that do not use JDBC directly, such as [FakeOperator](file:///Users/mark/Development/sndrRcvr/src/main/java/com/enoughisasgoodasafeast/FakeOperator.java).
 
-#### 6. Resource Leakage Risk
-- If `fetchConnection()` is invoked at the entry of `handleDelivery()`, any unhandled exception (such as deserialization errors on line 48 or unexpected runtime exceptions) must be strictly managed with `try-with-resources` or `finally` blocks to guarantee connection release, avoiding pool exhaustion in `c3p0`.
+    #### 6. Resource Leakage Risk
+    - If `fetchConnection()` is invoked at the entry of `handleDelivery()`, any unhandled exception (such as deserialization errors on line 48 or unexpected runtime exceptions) must be strictly managed with `try-with-resources` or `finally` blocks to guarantee connection release, avoiding pool exhaustion in `c3p0`.
 
----
+    ---
 
-### Summary Recommendation
+    ### Summary Recommendation
 
-Before writing code, the design will need to address:
-1. How cache loading works when database calls require an external `Connection` (or moving read-only cache loads out of the transaction).
-2. Ensuring virtual threads in `StructuredTaskScope` do not share a single JDBC connection.
-3. Flushing/invalidating in-memory cache state if a transaction rolls back.
-4. Ordering DB commits **before** publishing outbound RabbitMQ MT messages and sending `basicAck`.
+    Before writing code, the design will need to address:
+    1. How cache loading works when database calls require an external `Connection` (or moving read-only cache loads out of the transaction).
+    2. Ensuring virtual threads in `StructuredTaskScope` do not share a single JDBC connection.
+    3. Flushing/invalidating in-memory cache state if a transaction rolls back.
+    4. Ordering DB commits **before** publishing outbound RabbitMQ MT messages and sending `basicAck`.
 
 My response:
 Regarding item #4 of "Critical Problems and Missed Issues," we should delay calling commit or rollback until after Operator.
@@ -6619,167 +6618,301 @@ Regarding item #6 of "Critical Problems and Missed Issues," the OperatorConsumer
 But ultimately, the idea is unworkable as noted by items 1, 2, and (partially) 3.
 So I asked for an alternative...
 
-Here is a clean, robust alternative architecture that achieves single-transaction atomicity for all database mutations while preserving Caffeine caching, `StructuredTaskScope` concurrency, and RabbitMQ message reliability.
+    Here is a clean, robust alternative architecture that achieves single-transaction atomicity for all database mutations while preserving Caffeine caching, `StructuredTaskScope` concurrency, and RabbitMQ message reliability.
 
----
+    ---
 
-### Core Architectural Insight: Decouple Reads from Writes
+    ### Core Architectural Insight: Decouple Reads from Writes
 
-The key to solving the compatibility issues is recognizing that SQL operations fall into two distinct categories:
+    The key to solving the compatibility issues is recognizing that SQL operations fall into two distinct categories:
 
-1. **Read-Only Lookups (Safe for Caches & Virtual Threads):**
-   Fetching reference data (Routes, Keywords, Node Graphs) and performing initial User/Session lookups are read-only `SELECT` queries. These do **not** need to be part of the write transaction and can continue using Caffeine caches and `StructuredTaskScope` with standard connection pooling.
-2. **State Mutations (Must Be Atomic):**
-   `insertNewUser`, `updateUserStatus`, `insertProcessedMO`, `insertMT`, and `saveSession` / `clearSession` are all write operations. These are executed sequentially after script evaluation and **must occur within a single SQL transaction**.
+    1. **Read-Only Lookups (Safe for Caches & Virtual Threads):**
+       Fetching reference data (Routes, Keywords, Node Graphs) and performing initial User/Session lookups are read-only `SELECT` queries. These do **not** need to be part of the write transaction and can continue using Caffeine caches and `StructuredTaskScope` with standard connection pooling.
+    2. **State Mutations (Must Be Atomic):**
+       `insertNewUser`, `updateUserStatus`, `insertProcessedMO`, `insertMT`, and `saveSession` / `clearSession` are all write operations. These are executed sequentially after script evaluation and **must occur within a single SQL transaction**.
 
----
+    ---
 
-### Proposed Solution: Phase-Based "Unit of Work" Architecture
+    ### Proposed Solution: Phase-Based "Unit of Work" Architecture
 
-Instead of passing a low-level `java.sql.Connection` through all methods, structure message processing into three distinct phases:
+    Instead of passing a low-level `java.sql.Connection` through all methods, structure message processing into three distinct phases:
 
-```
-[Phase 1: Read & Evaluate]  ──>  [Phase 2: Atomic DB Transaction]  ──>  [Phase 3: MQ Publish & Ack]
- (In-Memory Script Engine)        (Single SQL Connection Commit)         (RabbitMQ MTs & BasicAck)
-```
+    ```
+    [Phase 1: Read & Evaluate]  ──>  [Phase 2: Atomic DB Transaction]  ──>  [Phase 3: MQ Publish & Ack]
+     (In-Memory Script Engine)        (Single SQL Connection Commit)         (RabbitMQ MTs & BasicAck)
+    ```
 
-#### **Phase 1: In-Memory Read & Script Evaluation**
-- [Operator.process()](file:///Users/mark/Development/sndrRcvr/src/main/java/com/enoughisasgoodasafeast/operator/Operator.java#L105) uses Caffeine loading caches and `StructuredTaskScope` to fetch the `Session` and `User` via read-only pooled connections as it does today.
-- [ScriptEngine](file:///Users/mark/Development/sndrRcvr/src/main/java/com/enoughisasgoodasafeast/operator/Operator.java#L173) evaluates the message in-memory:
-  - Generates outgoing MT messages into `session.outputBuffer`.
-  - Determines status updates (`UserStatus.IN` / `UserStatus.OUT`).
-  - Computes the updated session state (`currentNode`, `evaluatedNodes`).
-- **No SQL writes or RabbitMQ publishes take place in Phase 1.**
+    #### **Phase 1: In-Memory Read & Script Evaluation**
+    - [Operator.process()](file:///Users/mark/Development/sndrRcvr/src/main/java/com/enoughisasgoodasafeast/operator/Operator.java#L105) uses Caffeine loading caches and `StructuredTaskScope` to fetch the `Session` and `User` via read-only pooled connections as it does today.
+    - [ScriptEngine](file:///Users/mark/Development/sndrRcvr/src/main/java/com/enoughisasgoodasafeast/operator/Operator.java#L173) evaluates the message in-memory:
+      - Generates outgoing MT messages into `session.outputBuffer`.
+      - Determines status updates (`UserStatus.IN` / `UserStatus.OUT`).
+      - Computes the updated session state (`currentNode`, `evaluatedNodes`).
+    - **No SQL writes or RabbitMQ publishes take place in Phase 1.**
 
-#### **Phase 2: Single-Transaction Atomic DB Commit**
-- If `process()` returns `ProcessState.OK`, all pending SQL mutations are passed to a single transactional method on [PostgresPersistenceManager](file:///Users/mark/Development/sndrRcvr/src/main/java/com/enoughisasgoodasafeast/operator/PostgresPersistenceManager.java):
-  ```java
-  // Concept: Executed inside ONE Connection with autoCommit=false
-  persistenceManager.commitMessageBatch(connection -> {
-      if (isNewUser) insertNewUser(connection, user);
-      if (statusChanged) updateUserStatus(connection, user, platform, newStatus);
-      insertProcessedMO(connection, message, session);
-      for (Message mt : session.getOutputBuffer()) {
-          insertMT(connection, mt, session);
-      }
-      if (session.getCurrentNode() == null) {
-          clearSession(connection, session);
-      } else {
-          saveSession(connection, session);
-      }
-  });
-  ```
-- If any write fails or an exception occurs, `connection.rollback()` is executed, rolling back **all** SQL operations at once.
+    #### **Phase 2: Single-Transaction Atomic DB Commit**
+    - If `process()` returns `ProcessState.OK`, all pending SQL mutations are passed to a single transactional method on [PostgresPersistenceManager](file:///Users/mark/Development/sndrRcvr/src/main/java/com/enoughisasgoodasafeast/operator/PostgresPersistenceManager.java):
+      ```java
+      // Concept: Executed inside ONE Connection with autoCommit=false
+      persistenceManager.commitMessageBatch(connection -> {
+          if (isNewUser) insertNewUser(connection, user);
+          if (statusChanged) updateUserStatus(connection, user, platform, newStatus);
+          insertProcessedMO(connection, message, session);
+          for (Message mt : session.getOutputBuffer()) {
+              insertMT(connection, mt, session);
+          }
+          if (session.getCurrentNode() == null) {
+              clearSession(connection, session);
+          } else {
+              saveSession(connection, session);
+          }
+      });
+      ```
+    - If any write fails or an exception occurs, `connection.rollback()` is executed, rolling back **all** SQL operations at once.
 
-#### **Phase 3: External Side-Effects (RabbitMQ MT Enqueue & BasicAck)**
-- **Only after** the database transaction successfully commits:
-  1. Emit MT response messages to RabbitMQ (`queueProducer.enqueue(mt)`).
-  2. Send `basicAck` for the incoming MO message in [OperatorConsumer](file:///Users/mark/Development/sndrRcvr/src/main/java/com/enoughisasgoodasafeast/OperatorConsumer.java#L53).
-- If Phase 2 rolls back, Phase 3 is skipped. No MT messages are queued, and the incoming MO message is routed to the retry/failed queue instead of being acked.
+    #### **Phase 3: External Side-Effects (RabbitMQ MT Enqueue & BasicAck)**
+    - **Only after** the database transaction successfully commits:
+      1. Emit MT response messages to RabbitMQ (`queueProducer.enqueue(mt)`).
+      2. Send `basicAck` for the incoming MO message in [OperatorConsumer](file:///Users/mark/Development/sndrRcvr/src/main/java/com/enoughisasgoodasafeast/OperatorConsumer.java#L53).
+    - If Phase 2 rolls back, Phase 3 is skipped. No MT messages are queued, and the incoming MO message is routed to the retry/failed queue instead of being acked.
 
----
+    ---
 
-### How This Solves All Previous Problems
+    ### How This Solves All Previous Problems
 
-| Problem | How This Proposal Solves It |
-| :--- | :--- |
-| **`StructuredTaskScope` Thread Safety** | Reads in Phase 1 use standard pool connections. The single transactional `Connection` is only used in Phase 2 sequentially on a single thread. |
-| **Caffeine Cache Compatibility** | Caffeine loaders continue to work unchanged during Phase 1 without needing a `Connection` parameter. |
-| **Cache Pollution on Rollback** | If Phase 2 fails/rolls back, `userCache.invalidate(sessionKey)` and `sessionCache.invalidate(sessionKey)` are called to purge the transient in-memory objects. |
-| **RabbitMQ Side-Effect Ordering** | MT messages are enqueued to RabbitMQ **after** the DB transaction commits, eliminating ghost messages on DB failure. |
-| **Clean Interface Boundaries** | [SessionAwareMessageProcessor](file:///Users/mark/Development/sndrRcvr/src/main/java/com/enoughisasgoodasafeast/SessionAwareMessageProcessor.java) and [PersistenceManager](file:///Users/mark/Development/sndrRcvr/src/main/java/com/enoughisasgoodasafeast/operator/PersistenceManager.java) do not expose `java.sql.Connection` in public API signatures. |
+    | Problem                           | How This Proposal Solves It                                                               |
+    | ----------------------------------| ----------------------------------------------------------------------------------------- |
+    | StructuredTaskScope Thread Safety | Reads in Phase 1 use standard pool connections. The single transactional Connection       |
+    |                                   |   is only used in Phase 2 sequentially on a single thread.                                |
+    | Caffeine Cache Compatibility      | Caffeine loaders continue to work unchanged during Phase 1 without needing a              |
+    |                                   |  Connection parameter.                                                                    |
+    | Cache Pollution on Rollback       | If Phase 2 fails/rolls back, userCache.invalidate(sessionKey) and sessionCache.invalidate |
+                                        |   (sessionKey) are called to purge the transient in-memory objects.                       |
+    | RabbitMQ Side-Effect Ordering     | MT messages are enqueued to RabbitMQ after the DB transaction commits, eliminating ghost  |
+    |                                   |   messages on DB failure.                                                                 |
+    | Clean Interface Boundaries        | SessionAwareMessageProcessor and PersistenceManager do not expose java.sql.Connection in  |
+    |                                   |   public API signatures.                                                                  |
+    |-----------------------------------------------------------------------------------------------------------------------
+    ---
 
----
+    ### Implementation Patterns
 
-### Implementation Patterns
+    To achieve this, there are two primary implementation patterns to consider:
 
-To achieve this, there are two primary implementation patterns to consider:
+    #### **Option A: Consolidated `PersistenceManager.commitSessionState(...)` (Recommended)**
+    Keep transaction management entirely inside [PostgresPersistenceManager](file:///Users/mark/Development/sndrRcvr/src/main/java/com/enoughisasgoodasafeast/operator/PostgresPersistenceManager.java).
+    - Add a method `commitSessionState(Session session, Message moMessage, boolean isNewUser, UserStatus updatedStatus)` to `PersistenceManager`.
+    - In `PostgresPersistenceManager`, open a single connection, set `autoCommit(false)`, execute all insert/update statements, and commit.
+    - [Operator.complete()](file:///Users/mark/Development/sndrRcvr/src/main/java/com/enoughisasgoodasafeast/operator/Operator.java#L372) calls `commitSessionState()`, followed by flushing MT messages to RabbitMQ.
 
-#### **Option A: Consolidated `PersistenceManager.commitSessionState(...)` (Recommended)**
-Keep transaction management entirely inside [PostgresPersistenceManager](file:///Users/mark/Development/sndrRcvr/src/main/java/com/enoughisasgoodasafeast/operator/PostgresPersistenceManager.java).
-- Add a method `commitSessionState(Session session, Message moMessage, boolean isNewUser, UserStatus updatedStatus)` to `PersistenceManager`.
-- In `PostgresPersistenceManager`, open a single connection, set `autoCommit(false)`, execute all insert/update statements, and commit.
-- [Operator.complete()](file:///Users/mark/Development/sndrRcvr/src/main/java/com/enoughisasgoodasafeast/operator/Operator.java#L372) calls `commitSessionState()`, followed by flushing MT messages to RabbitMQ.
+    #### **Option B: Lambda-Based Transaction Runner `executeInTransaction(...)`**
+    Provide a generic transactional helper on `PostgresPersistenceManager`:
+    - `persistenceManager.executeInTransaction(Consumer<Connection> work)`
+    - This executes all internal `protected` SQL helper methods using the provided connection within a single `begin ... commit / rollback` wrapper.
 
-#### **Option B: Lambda-Based Transaction Runner `executeInTransaction(...)`**
-Provide a generic transactional helper on `PostgresPersistenceManager`:
-- `persistenceManager.executeInTransaction(Consumer<Connection> work)`
-- This executes all internal `protected` SQL helper methods using the provided connection within a single `begin ... commit / rollback` wrapper.
 
----
 Question:
     Since most constraint errors are thrown by the execute methods of the PreparedStatement, can we safely change the proposed commitSessionState() method to not actually commit the transaction and instead commit after the RabbitMQ acks and enqueues complete successfully? This seems like it could reduce the possibility of messages being reprocessed (which may be impossible to avoid entirely but is not ideal.)
 
-While it is tempting to delay `connection.commit()` until after RabbitMQ actions complete, doing so introduces significant architectural risks and performance bottlenecks.
+    While it is tempting to delay `connection.commit()` until after RabbitMQ actions complete, doing so introduces significant architectural risks and performance bottlenecks.
 
-Here is a detailed breakdown of why keeping the SQL transaction open across RabbitMQ network calls is unsafe, and how the standard enterprise pattern (**At-Least-Once Delivery with Idempotency**) solves reprocessing cleanly.
+    Here is a detailed breakdown of why keeping the SQL transaction open across RabbitMQ network calls is unsafe, and how the standard enterprise pattern (**At-Least-Once Delivery with Idempotency**) solves reprocessing cleanly.
 
----
+    ---
 
-### The Risks of Delaying `commit()` Until After RabbitMQ Actions
+    ### The Risks of Delaying `commit()` Until After RabbitMQ Actions
 
-If you execute PreparedStatements, publish MTs to RabbitMQ, send `basicAck`, and *then* call `connection.commit()`, you introduce three major issues:
+    If you execute PreparedStatements, publish MTs to RabbitMQ, send `basicAck`, and *then* call `connection.commit()`, you introduce three major issues:
 
-#### 1. DB Lock Contention & Connection Pool Exhaustion
-When an `INSERT`, `UPDATE`, or `DELETE` statement is executed (e.g., updating user status or upserting session), PostgreSQL acquires row-level exclusive locks on those rows.
-- If `connection.commit()` is delayed until after RabbitMQ network calls (`enqueue` and `basicAck`):
-  - **The database connection and row locks are held open during external network I/O.**
-  - If RabbitMQ experiences momentary latency, DB connections in `c3p0` will stay blocked in open transactions.
-  - This quickly starves the connection pool and creates lock contention across concurrent workers processing messages for the same user or route.
+    #### 1. DB Lock Contention & Connection Pool Exhaustion
+    When an `INSERT`, `UPDATE`, or `DELETE` statement is executed (e.g., updating user status or upserting session), PostgreSQL acquires row-level exclusive locks on those rows.
+    - If `connection.commit()` is delayed until after RabbitMQ network calls (`enqueue` and `basicAck`):
+      - **The database connection and row locks are held open during external network I/O.**
+      - If RabbitMQ experiences momentary latency, DB connections in `c3p0` will stay blocked in open transactions.
+      - This quickly starves the connection pool and creates lock contention across concurrent workers processing messages for the same user or route.
 
-#### 2. Risk of Ghost Outbound Messages and Data Loss
-If `connection.commit()` fails *after* RabbitMQ actions succeed (which can happen due to deferred constraints, serialization failures, DB disk issues, or a network disconnect between the app and Postgres):
-- The database transaction **rolls back**.
-- **However, outbound MT messages have ALREADY been published to RabbitMQ** (and potentially delivered to the end-user via SMS/WhatsApp).
-- **And the incoming MO message has ALREADY been acked** and deleted from the RabbitMQ queue.
-- **Result:** The system sent a real-world message, lost the incoming message from the queue, and has no database record of either.
+    #### 2. Risk of Ghost Outbound Messages and Data Loss
+    If `connection.commit()` fails *after* RabbitMQ actions succeed (which can happen due to deferred constraints, serialization failures, DB disk issues, or a network disconnect between the app and Postgres):
+    - The database transaction **rolls back**.
+    - **However, outbound MT messages have ALREADY been published to RabbitMQ** (and potentially delivered to the end-user via SMS/WhatsApp).
+    - **And the incoming MO message has ALREADY been acked** and deleted from the RabbitMQ queue.
+    - **Result:** The system sent a real-world message, lost the incoming message from the queue, and has no database record of either.
 
-#### 3. Un-rollable Partial RabbitMQ Publishes
-If a session generates multiple response MT messages (e.g., MT #1 and MT #2):
-- If MT #1 is enqueued to RabbitMQ, but MT #2 fails or `basicAck` throws an exception, rolling back the open SQL transaction does **not** recall MT #1 from RabbitMQ.
+    #### 3. Un-rollable Partial RabbitMQ Publishes
+    If a session generates multiple response MT messages (e.g., MT #1 and MT #2):
+    - If MT #1 is enqueued to RabbitMQ, but MT #2 fails or `basicAck` throws an exception, rolling back the open SQL transaction does **not** recall MT #1 from RabbitMQ.
 
----
+    ---
 
-### The Standard Solution: DB Commit First + Idempotency
+    ### The Standard Solution: DB Commit First + Idempotency
 
-In distributed messaging systems (RabbitMQ + relational databases), achieving 100% strictly-once delivery without slow distributed 2-Phase Commit (XA) protocols is mathematically impossible. The industry standard is **At-Least-Once Delivery with Idempotency**.
+    In distributed messaging systems (RabbitMQ + relational databases), achieving 100% strictly-once delivery without slow distributed 2-Phase Commit (XA) protocols is mathematically impossible. The industry standard is **At-Least-Once Delivery with Idempotency**.
 
-#### Recommended Execution Order:
-```
-1. Execute SQL PreparedStatements on Connection (autoCommit = false)
-   └── (Catches ~99.9% of constraint, syntax, and data errors immediately)
+    #### Recommended Execution Order:
+    ```
+    1. Execute SQL PreparedStatements on Connection (autoCommit = false)
+       └── (Catches ~99.9% of constraint, syntax, and data errors immediately)
 
-2. connection.commit()
-   └── (Releases DB locks immediately; DB becomes Single Source of Truth)
+    2. connection.commit()
+       └── (Releases DB locks immediately; DB becomes Single Source of Truth)
 
-3. Publish MTs to RabbitMQ & basicAck incoming MO message
-```
+    3. Publish MTs to RabbitMQ & basicAck incoming MO message
+    ```
 
-#### How Idempotency Handles Duplicate Reprocessing Safely
+    #### How Idempotency Handles Duplicate Reprocessing Safely
 
-If a crash or network failure occurs right between Step 2 (DB Commit) and Step 3 (`basicAck`), RabbitMQ will re-deliver the MO message on consumer restart.
+    If a crash or network failure occurs right between Step 2 (DB Commit) and Step 3 (`basicAck`), RabbitMQ will re-deliver the MO message on consumer restart.
 
-To make reprocessing completely safe and non-disruptive:
+    To make reprocessing completely safe and non-disruptive:
 
-1. In [PostgresPersistenceManager](file:///Users/mark/Development/sndrRcvr/src/main/java/com/enoughisasgoodasafeast/operator/PostgresPersistenceManager.java), `messages_mo_prcd` records every processed MO message ID (`id` column is primary key).
-2. At the beginning of [Operator.process()](file:///Users/mark/Development/sndrRcvr/src/main/java/com/enoughisasgoodasafeast/operator/Operator.java#L105), check if `message.id()` is already present in `messages_mo_prcd`:
-   - If present: Return `ProcessState.NOOP`.
-   - In [OperatorConsumer](file:///Users/mark/Development/sndrRcvr/src/main/java/com/enoughisasgoodasafeast/OperatorConsumer.java#L78), `NOOP` simply calls `basicAck` without executing new script logic or sending duplicate MTs.
+    1. In [PostgresPersistenceManager](file:///Users/mark/Development/sndrRcvr/src/main/java/com/enoughisasgoodasafeast/operator/PostgresPersistenceManager.java), `messages_mo_prcd` records every processed MO message ID (`id` column is primary key).
+    2. At the beginning of [Operator.process()](file:///Users/mark/Development/sndrRcvr/src/main/java/com/enoughisasgoodasafeast/operator/Operator.java#L105), check if `message.id()` is already present in `messages_mo_prcd`:
+       - If present: Return `ProcessState.NOOP`.
+       - In [OperatorConsumer](file:///Users/mark/Development/sndrRcvr/src/main/java/com/enoughisasgoodasafeast/OperatorConsumer.java#L78), `NOOP` simply calls `basicAck` without executing new script logic or sending duplicate MTs.
 
----
+    ---
 
-### Comparison Summary
+    ### Comparison Summary
 
-| Metric                        | Commit DB First (Recommended)                | Commit DB After MQ (Proposed)
-|-------------------------------|----------------------------------------------|----------------------------------------
-| Catches SQL Statement Errors? | Yes (during `ps.execute()`)                  | Yes (during ps.execute())
-| DB Lock Duration              | Minimal (released before network I/O)        | Long (held open across network I/O)
-| Connection Pool Contention    | Low                                          | High (pool exhaustion risk under load)
-| DB Commit Failure Outcome     | Rollsback *before* any MT sent or MO acked   | Data Loss/Ghost MTs: MT sent & MO acked,
-                                |                                              |     but DB changes lost
-| Reprocessing Handling         | Handled cleanly via `messages_mo_prcd`       |
-|                               |  idempotency check                           | Avoids some retries, fatal on commit failures
+    | Metric                        | Commit DB First (Recommended)                | Commit DB After MQ (Proposed)
+    |-------------------------------|----------------------------------------------|----------------------------------------
+    | Catches SQL Statement Errors? | Yes (during `ps.execute()`)                  | Yes (during ps.execute())
+    | DB Lock Duration              | Minimal (released before network I/O)        | Long (held open across network I/O)
+    | Connection Pool Contention    | Low                                          | High (pool exhaustion risk under load)
+    | DB Commit Failure Outcome     | Rollsback *before* any MT sent or MO acked   | Data Loss/Ghost MTs: MT sent & MO acked,
+                                    |                                              |  but DB changes lost
+    | Reprocessing Handling         | Handled cleanly via `messages_mo_prcd`       |
+    |                               |  idempotency check                           | Avoids some retries, fatal on commit failures
+    |-----------------------------------------------------------------------------------------------------------------------
+    ### Recommendation
+    Keep `commitSessionState()` committing the database transaction before publishing to RabbitMQ and sending `basicAck`. Pair it with an idempotency check on `messages_mo_prcd` to make reprocessing seamless and risk-free.
 
-### Recommendation
-Keep `commitSessionState()` committing the database transaction before publishing to RabbitMQ and sending `basicAck`. Pair it with an idempotency check on `messages_mo_prcd` to make reprocessing seamless and risk-free.
+Fair enough. Implementation includes the duplicate processing check on messages_mo_prcd. Seems to work fine. Unit tests, Chttr test, and manual Confab testing all pass.
+
+Need some unit tests for the updated implementation covering the RETRY.
+
+Prompt:
+    Create a new integration test class that checks the behavior of this message processing system starting from the handleDelivery() method of @src/main/java/com/enoughisasgoodasafeast/OperatorConsumer.java. Specifically check that the queueing behavior is correct for each value of ProcessState that may be returned by Operator.process. The following support classes can be used to mock parts of the system:
+        @src/main/java/com/enoughisasgoodasafeast/QueueProducer.java
+        @src/main/java/com/enoughisasgoodasafeast/InMemoryQueueProducer.java
+        @src/main/java/com/enoughisasgoodasafeast/operator/TestingMessageProcessor.java
+        @src/main/java/com/enoughisasgoodasafeast/operator/Operator.java
+        @src/test/java/com/enoughisasgoodasafeast/integration/DLQLogger.java
+    You are free to enhance these classes but don't break any existing tests in doing so.
+
+    You can use an instance of RabbitMQContainer to provide a running RabbitMQ queue by following the pattern used in @src/test/java/com/enoughisasgoodasafeast/integration/OperatorMessageFlowIT.java. The DLQLogger can be used to check the contents of specific queues when validating test results.
+    Provide a plan of action before writing any code.
+
+
+==== 2026/07/26 ====
+
+Note: Since I only had 33% of my free quota remaining I set the /model to "Claude Sonnet 4.6 (Thinking)" thinking it would be smart enough and cheaper than the "Gemini 3.6 Flash (High)"
+
+It read all the referenced files then provided the following:
+
+      Good, I now have a thorough understanding of the codebase. Here is the plan before writing any code.
+      ──────
+      ## Plan of Action
+      ### What We're Testing
+
+      OperatorConsumer.handleDelivery() is the entry point. It calls processor.process(message) and then routes based on the returned ProcessState. We need to
+      verify the RabbitMQ queue effects of each state:
+
+       ProcessState                         | Expected Queue Behavior
+      --------------------------------------|--------------------------------------------------------------------------------------------------
+       OK                                   | MO is basicAck'd from the primary queue. No messages in failedQueue.
+       OK + commit fails                    | MO goes to failedQueueName, basicAck'd. No MT published.
+       ERROR                                | MO published to failedQueueName, then basicAck'd from primary.
+       NOOP                                 | MO is basicAck'd from primary queue. No messages in failedQueue.
+       RETRY                                | MO is routed to the retry delay-bucket queue (via exchange routing key), basicAck'd from
+                                            |   primary. Not in failedQueue.
+      --------------------------------------|--------------------------------------------------------------------------------------------------
+
+      ──────
+      ### Design Decisions
+
+      1. A StubSessionAwareMessageProcessor class in the test package
+      Rather than wiring up the full Operator (which needs routes, scripts, a persistence manager, etc.), we introduce a simple configurable stub that implements SessionAwareMessageProcessor. It will have:
+          • A setProcessState(ProcessState) method to control what process() returns.
+          • A setCompleteThrows(boolean) method to simulate a complete() failure (for the OK-with-commit-failure case).
+          • A completeCallCount counter to verify complete() was called exactly when expected.
+      This is the appropriate approach for these tests: we want to exercise OperatorConsumer.handleDelivery() in isolation, not re-test Operator.process() (which has its own unit tests).
+      2. Reuse the RabbitMQContainer pattern from OperatorMessageFlowIT
+
+      We'll declare a single static RabbitMQContainer, start it once via @BeforeAll, and load queue properties from a new properties file (e.g., operator_consumer_it.properties). Per-test setup creates a fresh OperatorConsumer via RabbitQueueConsumer, wired with our stub processor.
+      3. Queue inspection strategy
+          • failedQueueName inspection: We'll reuse DLQLogger, but enhance it to accept a custom queue name (rather than always deriving the fail-queue from the
+          consumer queue). This allows the same class to be pointed at either the failed queue or the retry queue.
+          • Primary queue depth: After OK/NOOP, we verify the primary queue message count is 0 (message was acked).
+          • Retry queue: For RETRY, we inspect the TTL-backed delay-bucket queue (e.g., *_retry_DELAY_5S) message count using a passive queueDeclarePassive.
+      4. Sending messages to OperatorConsumer
+        We use an rcvrSurrogate (RabbitQueueProducer) to publish test Message objects into the primary queue. OperatorConsumer will consume them via handleDelivery() as it does in production. We use await() from Awaitility to wait for asynchronous queue changes.
+      5. Properties file
+        We create a new src/test/resources/operator_consumer_it.properties. It can reuse the same queue name/routing key as the existing IT properties (since each test class starts its own container), or use a distinct name for clarity.
+
+      6. Test structure
+
+        @Testcontainers
+        class OperatorConsumerIT {
+
+            // Shared container across tests (one start/stop cycle for the class)
+            static RabbitMQContainer broker;
+            static Properties testProps;
+
+            // Per-test instances
+            StubSessionAwareMessageProcessor stub;
+            QueueProducer rcvrSurrogate;
+            DLQLogger failQueueLogger;
+            Channel inspectionChannel;
+
+            @Test void processState_OK_messageIsAcked()
+            @Test void processState_OK_completeFails_messageGoesToFailedQueue()
+            @Test void processState_ERROR_messageGoesToFailedQueue()
+            @Test void processState_NOOP_messageIsAcked()
+            @Test void processState_RETRY_messageGoesToRetryQueue()
+        }
+        ──────
+      ### Files to Create or Modify
+
+      File                                                                    | Action
+     -------------------------------------------------------------------------|--------------------------------------------------------
+      src/test/java/com/.../integration/StubSessionAwareMessageProcessor.java | Create — Configurable stub implementing
+                                                                              |          SessionAwareMessageProcessor
+      src/test/java/com/.../integration/OperatorConsumerIT.java               | Create — The new IT class
+      src/test/resources/operator_consumer_it.properties                      | Create — Properties file for this test's queue config
+      src/test/java/com/.../integration/DLQLogger.java                        | Modify — Add a constructor/factory that accepts an
+                                                                              |          arbitrary queue name rather than always computing
+                                                                              |          the fail-queue name.
+     -------------------------------------------------------------------------|--------------------------------------------------------
+
+  ──────
+
+    Shall I proceed with writing the code?
+
+    ⚠ Individual quota reached. Please upgrade your subscription to increase your limits. Resets in 167h55m34s.
+
+The plan seems reasonable. Can I get some free time with Claude directly to implement it? (I put a reminder into my calendar for next Sunday...)
+
+We could also get (more) serious about finding a decent model to run locally and find out how useful (or not) it is for our work.
+
+In the meantime, the next goal should be one of the following:
+1) Website and prefab script editor (currently living in brbl_admin)
+2) Send scheduling.
+3) SMS provider integration.
+4) Starter setup for local AI (Qwen2.5-Coder-7B (Q4_K_M or Q5_K_M):? It runs on a 16gb M1 like ours...) Or maybe Qwen2.5-Coder-14B (Q4_K_M) though it may be slower.
+
+
+Spent some time looking at a few SMS providers. See "SMS API Integration Notes.txt"
+Some of the requirements imposed by WhatsApp (templates for everything outside the 24 hr customer service window approach) make this research highly relevant to the script editor design.
+
+Use case brainstorming:
+1) request call back useful for plumbers, electricians, etc.
+2) "overwatch" where one customer employee
+
+
+
+
+Fun with Machine Learning:
+Downloaded LMStudio and Gemma 4 E4B as a "baby's first model." They're pushing Bionic their agent focussed on smaller, open source models. Getting OpenSSH installed and configured on PoG is a nightmare so I resorted to using the "LM Link" feature of LMStudio to allow me to run Gemma on PoG but use it on Yakko. Apparently it uses TailScale to connect the two which is cool even if I had to create an account with the LMStudio company.
+
 

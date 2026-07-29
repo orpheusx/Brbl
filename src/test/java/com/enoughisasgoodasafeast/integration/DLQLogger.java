@@ -38,14 +38,25 @@ public class DLQLogger extends DefaultConsumer {
     }
 
     public static DLQLogger createDLQLogger(Properties p) throws IOException, TimeoutException {
+        var expectedFailQueue = failQueueForQueue(p.getProperty(CONSUMER_QUEUE_NAME));
+        return createDLQLogger(p, expectedFailQueue);
+    }
+
+    /**
+     * Creates a {@link DLQLogger} consuming from {@code queueName} rather than the auto-derived fail queue.
+     * Useful for tests that need to monitor a specific queue (e.g., a retry delay-bucket queue).
+     *
+     * @param p         properties containing broker host/port
+     * @param queueName the exact queue name to consume from
+     */
+    public static DLQLogger createDLQLogger(Properties p, String queueName) throws IOException, TimeoutException {
         ConnectionFactory factory = new ConnectionFactory();
         factory.setHost(p.getProperty(CONSUMER_QUEUE_HOST));
         factory.setPort(Integer.parseInt(p.getProperty(CONSUMER_QUEUE_PORT)));
-        var expectedFailQueue = failQueueForQueue(p.getProperty(CONSUMER_QUEUE_NAME));
 
         var channel = factory.newConnection().createChannel();
 
-        return new DLQLogger(channel, expectedFailQueue);
+        return new DLQLogger(channel, queueName);
     }
 
     @Override
