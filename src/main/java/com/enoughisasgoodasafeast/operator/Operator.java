@@ -48,7 +48,7 @@ public class Operator implements SessionAwareMessageProcessor {
             .build(id -> getNode(id));
 
     // NB: This is an odd duck because it's intended to contain a single entry with all the keyword data.
-    // We're using a LoadingCache here to benefit from its auto-eviction and thread safety features.
+    // We're using a LoadingCache here to benefit from its timed-eviction and thread safety features.
     final LoadingCache<@NonNull String, Map<Pattern, Keyword>> allKeywordsByPatternCache = Caffeine.newBuilder()
             .expireAfterWrite(20, TimeUnit.MINUTES)
             .build(theOneAndOnlyKey -> loadAllKeywords(theOneAndOnlyKey));
@@ -441,7 +441,7 @@ public class Operator implements SessionAwareMessageProcessor {
                         throw new IllegalStateException("CRITICAL_CONFIG_ERROR: process: Configuration error for opt_in_node_id in route table for " + sessionKey);
                     }
 
-                    // We don't want to modify the cached opt-in graph, so we create a copy of it that we can modify.
+                    // We don't want to modify the cached opt-in graph, so we create a copy of it that we can modify then append the selectedGraph.
                     selectedGraph = copyGraphAppending(originalOptInGraph, selectedGraph);
 
 //                    if (isExistingUserNeedsOptIn) {
@@ -770,6 +770,46 @@ public class Operator implements SessionAwareMessageProcessor {
 //
 //        return newNode;
 //    }
+
+    public void clearSessionCache(SessionKey sessionKey) {
+        sessionCache.invalidate(sessionKey);
+        LOG.info("Session cleared for {}", sessionKey);
+    }
+
+    public void clearSessionCache() {
+        sessionCache.invalidateAll();
+        LOG.warn("Session cache cleared completely");
+    }
+
+    public void clearUserCache(SessionKey sessionKey) {
+        userCache.invalidate(sessionKey);
+        LOG.info("User cache cleared for {}", sessionKey);
+    }
+
+    public void clearUserCache() {
+        userCache.invalidateAll();
+        LOG.warn("User cache cleared completely");
+    }
+
+    public void clearScriptCache(UUID id) {
+        scriptCache.invalidate(id);
+        LOG.info("Script cache cleared for {}", id);
+    }
+
+    public void clearScriptCache() {
+        userCache.invalidateAll();
+        LOG.warn("Script cache cleared completely");
+    }
+
+    public void clearKeywordCache() {
+        scriptByKeywordCache.invalidateAll();
+        LOG.info("Keyword cache cleared completely");
+    }
+
+    public void clearActiveRoutesCache() {
+        activeRoutesCache.invalidateAll();
+        LOG.info("Active routes cache cleared completely");
+    }
 
     public static void main(String[] args) throws IOException, TimeoutException, PersistenceManagerException {
         Operator operator = new Operator();

@@ -6899,20 +6899,41 @@ In the meantime, the next goal should be one of the following:
 1) Website and prefab script editor (currently living in brbl_admin)
 2) Send scheduling.
 3) SMS provider integration.
-4) Starter setup for local AI (Qwen2.5-Coder-7B (Q4_K_M or Q5_K_M):? It runs on a 16gb M1 like ours...) Or maybe Qwen2.5-Coder-14B (Q4_K_M) though it may be slower.
+4) Starter setup for local AI (Qwen2.5-Coder-7B (Q4_K_M or Q5_K_M):? It runs on a 16gb M1 like ours...) Or maybe q though it may be slower.
 
 
 Spent some time looking at a few SMS providers. See "SMS API Integration Notes.txt"
 Some of the requirements imposed by WhatsApp (templates for everything outside the 24 hr customer service window approach) make this research highly relevant to the script editor design.
 
 Use case brainstorming:
-1) request call back useful for plumbers, electricians, etc.
-2) "overwatch" where one customer employee
+1) "request call back"  useful for plumbers, electricians, etc.
+2) "overwatch" where one customer employee can observe a conversation between a customer and an employee and break in if necessary.
 
 
+
+==== 2026/07/24 ====
 
 
 Fun with Machine Learning:
 Downloaded LMStudio and Gemma 4 E4B as a "baby's first model." They're pushing Bionic their agent focussed on smaller, open source models. Getting OpenSSH installed and configured on PoG is a nightmare so I resorted to using the "LM Link" feature of LMStudio to allow me to run Gemma on PoG but use it on Yakko. Apparently it uses TailScale to connect the two which is cool even if I had to create an account with the LMStudio company.
+
+Not sure what expectations to have of this particular model. I'm told it def won't be as good as Claude or the Pro versions of Gemini.
+
+TODO
+  _ Unit tests for copyGraphAppending that prove its correctness for graphs that are deeper than a single Node with a single Edge.
+  _ Unit tests for testing OPT_IN/OUT. (Need an API defined on Operator to clear in-memory sessions and users from cache.)
+  _ Add CHANGE_TOPIC ScriptType to allow customization of the message.
+  _ Chttr: add pseudo-random unexpected input (for PROCESS_MULTI nodes), change topic, and possibly OPT_OUTs. These don't need to be dynamic; the logic that creates the permutations could generate them using a random seed.
+  _ Unit tests that excercise the retry/fail conditions returned by Operator et al. and
+
+Experimenting with using Gemma 4 E4B to write some semi-complicated unit tests. I've connected PoG with Yakko using LM Link. (Had to disable PoG's energy saving features to prevent the network connection from timing out; apparently only UI activity is considered.)
+
+Not a great experience. Gemma is a pretty careless student. It kept claiming victory without doing obvious things like writing the code to the file, compiling it, or running the tests. Even after being told to do so it would claim victory when the tests didn't pass. Instead it would wave its hands about unrelated errors in the test output. Really kind of terrible. Even tool use was bad; edit_file_tool failed over and over again to replace chunks of text that it knew were causing problems.
+
+re: LM studio it has some settings that are unhelpful; by default it was unloading models after a timeout expired leading to "Error: LM Link connection entered error state peer_keepalive_timeout"
+To hopefully avoid this I've turned off "JIT models auto-evict."
+
+
+
 
 

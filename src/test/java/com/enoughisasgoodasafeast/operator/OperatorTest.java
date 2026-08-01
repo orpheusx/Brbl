@@ -363,7 +363,6 @@ public class OperatorTest {
         assertTrue(requireNonNull(queuedMessages.get(1)).text().contains("favorite color"), "Expected text not found in first queued message.");
 
         // The session's currentNode should be awaiting a response.
-        // Arguably this is a bad test since it makes assumption about the internal state of the Operator/Session.
         assertEquals(NodeType.PROCESS_MULTI, session.getCurrentNode().type(), "Session node state has unexpected type.");
 
         // Send a valid response
@@ -538,6 +537,93 @@ public class OperatorTest {
         assertNotNull(session.getCurrentNode());
     }
 
+
+    /**
+     * Test case added to verify copyGraphAppending() handles graphs longer than a single link.
+     * NB: This method is total garbage created by Gemma 4 E4B Q4_K_M.
+     */
+    @Test
+    void copyGraphAppendingCorrectness() {
+        // Set up a somewhat complex graphs ---
+
+        // The "original" Node is typically an opt-in notice though it doesn't usually have multiple nodes.
+        // The function under test should copy it and add the appendedNode to the end of it.
+        Node originalStart = new Node("OriginalStart", NodeType.OPT_IN, "OriginalStart");
+        Node originalSecond = new Node("OriginalSecond", NodeType.SEND_MESSAGE, "OriginalSecond");
+
+        Edge origStartToSecond = new Edge(originalSecond);
+        originalStart.edges().add(origStartToSecond);
+
+        Edge origSecondToEnd = new Edge(null);
+        originalSecond.edges().add(origSecondToEnd);
+
+        originalSecond.edges().addLast(origSecondToEnd);
+
+        // The Node graph that should be appended to the end of the original
+        Node appendedStart = new Node("AppendStart: Pick 1 or 2", NodeType.PRESENT_MULTI, "AppendStart");
+
+        Node appendedFirstChoice = new Node("AppendFirstChoice selected", NodeType.PROCESS_MULTI, "AppendFirstChoice");
+        Node appendedSecondChoice = new Node("AppendSecondChoice selected", NodeType.PROCESS_MULTI, "AppendSecondChoice");
+
+        Edge appendedStartToFirstChoice = new Edge(appendedFirstChoice);
+        appendedStart.edges().add(appendedStartToFirstChoice);
+
+        Edge appendedStartToSecondChoice = new Edge(appendedSecondChoice);
+        appendedStart.edges().add(appendedStartToSecondChoice);
+
+        Edge appendedFirstChoiceToEnd = new Edge(null);
+        appendedFirstChoice.edges().add(appendedFirstChoiceToEnd);
+
+        Edge appendedSecondChoiceToEnd = new Edge(null);
+        appendedSecondChoice.edges().add(appendedSecondChoiceToEnd);
+
+
+        // Execute Copy and Append ---
+        Node copiedStart = operator.copyGraphAppending(originalStart, appendedStart);
+
+        // Verify structure and linking...
+
+        // 1. Check the root of the copied graph (it should be a copy of originalStart and its connected elements)
+        assertNotNull(copiedStart);
+        assertEquals(originalStart, copiedStart, "copiedStart mismatch.");
+        assertEquals(originalStart.edges().size(), copiedStart.edges().size());
+        assertNotSame(originalStart, copiedStart, "originalStart wasn't copied as required.");
+
+        // The first edge should link to the copy of origStartToSecond
+        Edge copiedStartToSecond = copiedStart.edges().getFirst();
+        assertNotNull(copiedStartToSecond);
+
+        Node copiedSecond = copiedStartToSecond.targetNode();
+        assertNotNull(copiedSecond);
+        assertEquals(originalSecond, copiedSecond); // same values...
+        assertNotSame(originalSecond, copiedSecond, "originalSecond wasn't copied as required."); // but different instance.
+
+        // 2. The next edge must be the appended segment, replacing the original graph's null link.
+        Edge copiedSecondToAppendedStart = copiedSecond.edges().getFirst();
+        assertNotNull(copiedSecondToAppendedStart);
+
+        Node copiedAppendedStart = copiedSecondToAppendedStart.targetNode();
+        assertSame(appendedStart, copiedAppendedStart);
+
+        assertEquals(2, copiedAppendedStart.edges().size());
+
+        Node copiedAppendedFirstChoice = copiedAppendedStart.edges().getFirst().targetNode();
+        assertNotNull(copiedAppendedFirstChoice);
+        assertEquals(appendedFirstChoice, copiedAppendedFirstChoice);
+        assertSame(appendedFirstChoice, copiedAppendedFirstChoice);
+
+        // SequencedSet doesn't offer an indexed get so we get tricky
+        Node copiedAppendedSecondChoice = copiedAppendedStart.edges().reversed().getFirst().targetNode();
+        assertNotNull(copiedAppendedSecondChoice);
+        assertEquals(appendedSecondChoice, copiedAppendedSecondChoice);
+        assertSame(appendedSecondChoice, copiedAppendedSecondChoice);
+
+        Edge copiedAppendedFirstChoiceToEnd = copiedAppendedFirstChoice.edges().getFirst();
+        assertNull(copiedAppendedFirstChoiceToEnd.targetNode()); // end of graph
+
+        Edge copiedAppendedSecondChoiceToEnd = copiedAppendedSecondChoice.edges().getFirst();
+        assertNull(copiedAppendedSecondChoiceToEnd.targetNode()); // end of graph
+    }
 
     @Test
     void findOrCreateUserUncachedCached() {

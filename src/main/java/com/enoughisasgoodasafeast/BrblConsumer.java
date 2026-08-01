@@ -45,13 +45,14 @@ public abstract class BrblConsumer extends DefaultConsumer {
     }
 
     /**
-     * Called when the consumer is cancelled for reasons <i>other than</i> by a call to
+     * Called when the consumer is canceled for reasons <i>other than</i> by a call to
      * {@link Channel#basicCancel}. For example, the queue has been deleted.
      * See {@link #handleCancelOk} for notification of consumer
      * cancellation due to {@link Channel#basicCancel}.
      * @param consumerTag the <i>consumer tag</i> associated with the consumer
-     * @throws IOException
+     * @throws IOException stub implementation
      */
+    @Override
     public void handleCancel(String consumerTag) throws IOException {
         LOG.warn("handleCancel called with consumerTag {}", consumerTag);
     }
