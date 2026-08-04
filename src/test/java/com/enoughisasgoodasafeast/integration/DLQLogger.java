@@ -1,8 +1,6 @@
 package com.enoughisasgoodasafeast.integration;
 
 import com.enoughisasgoodasafeast.Message;
-import com.enoughisasgoodasafeast.RabbitQueueProducer;
-import com.enoughisasgoodasafeast.SharedConstants;
 import com.rabbitmq.client.*;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -15,12 +13,11 @@ import java.util.concurrent.TimeoutException;
 
 import static com.enoughisasgoodasafeast.RabbitQueueFunctions.failQueueForQueue;
 import static com.enoughisasgoodasafeast.SharedConstants.*;
-import static com.enoughisasgoodasafeast.SharedConstants.CONSUMER_QUEUE_NAME;
 
 public class DLQLogger extends DefaultConsumer {
 
     private static final Logger LOG = LoggerFactory.getLogger(DLQLogger.class);
-    private static final boolean autoAck = true;
+    private static final boolean autoAck = false;
 
     private final String consumerTag;
     private final List<Message> deadMessages;

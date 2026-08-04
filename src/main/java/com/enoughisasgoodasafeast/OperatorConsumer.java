@@ -11,6 +11,8 @@ import org.slf4j.LoggerFactory;
 
 import java.io.IOException;
 
+import static com.enoughisasgoodasafeast.RabbitQueueFunctions.retryForExchangeName;
+
 /**
  * An implementation of the Rabbit Consumer interface that handles Messages.
  */
@@ -76,7 +78,9 @@ public class OperatorConsumer extends BrblConsumer {
                     String delayByKey = computeDelayRoutingKey(numFailed);
                     if (delayByKey != null) {
                         LOG.info("Routing to delay queue with key {}", delayByKey);
-                        routeToDelayBucket(getChannel(), envelope.getExchange(), deliveryTag,
+                        // Publish to the *retry* exchange.
+                        String retryExchangeName = retryForExchangeName(envelope.getExchange());
+                        routeToDelayBucket(getChannel(), retryExchangeName, deliveryTag,
                                 properties, body, delayByKey);
                     } else {
                         LOG.info("Retries exceeded. Failing message: {}", message);

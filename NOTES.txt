@@ -6966,3 +6966,13 @@ NB:
 
     Instead of the just the Go-style ProcessStateSession objects we might consider algebraic types using records and Sealed Classes as described here: https://rockthejvm.com/articles/algebraic-data-types-in-java.
 
+=== 2026/08/04 ===
+
+Fixed the last bits of the latest OperatorTest.copyGraphAppendingOptInUseCase(). Gemma 4 didn't do too bad a job on this though not clear if it saved me much time.
+
+Resumed the Antigravity session and had it complete
+agy --conversation=18de89f8-e62d-42c0-8013-de2a938fc0a3
+
+DLQLogger's handleDelivery should call
+getChannel().basicAck(envelope.getDeliveryTag(), false);
+but Gemini notes that the class was created with autoAck=true. It's fix is to drop the basicAck. We should revert this after G is done.
