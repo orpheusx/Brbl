@@ -85,6 +85,12 @@ public class OperatorTest {
     private Node endConversation;
     private Node processAnswer;
 
+    private Node presentQuestion;
+    private Node altOptInNode;
+    private Node optInNode;
+    private Node optOutNode;
+    private Node defaultNode;
+
     @BeforeEach
     void setup() {
         queueProducer = new InMemoryQueueProducer();
@@ -96,7 +102,7 @@ public class OperatorTest {
         persistenceManager.addKeyword(Pattern.compile(colorKeyword.wordPattern()), colorKeyword);
 
         // Construct a script for testing purposes
-        Node presentQuestion = new Node(SCRIPT_ID, COLOR_QUIZ_START_TEXT, NodeType.PRESENT_MULTI, null, "ColorQuizStart");
+        presentQuestion = new Node(SCRIPT_ID, COLOR_QUIZ_START_TEXT, NodeType.PRESENT_MULTI, null, "ColorQuizStart");
         processAnswer = new Node(COLOR_QUIZ_UNEXPECTED_INPUT, NodeType.PROCESS_MULTI, "ColorQuizProcessResponse");
         presentQuestion.edges().add(
                 new Edge(List.of("n/a"), "n/a", processAnswer)
@@ -130,7 +136,7 @@ public class OperatorTest {
         Edge confirmChange = new Edge(List.of("yes"), "Ok, cool.", presentTopics);
 
         // Include a placeholder that the Operator will replace when setting up the 'change topic' conversation.
-        Node continueCurrentPlaceholder = new Node("N/A",	NodeType.END_OF_CHAT, "ContinueCurrentPlaceholder");
+        Node continueCurrentPlaceholder = new Node("N/A", NodeType.END_OF_CHAT, "ContinueCurrentPlaceholder");
         Edge stayOnCurrent = new Edge(List.of("no"), "Ok, I'll repeat the last question.", continueCurrentPlaceholder);
 
         processChangeResponse.edges().addAll(List.of(confirmChange, stayOnCurrent));
@@ -142,17 +148,17 @@ public class OperatorTest {
                     edge.matchText(), edge.responseText(), edge.targetNode().label(), edge.targetNode().type());
         });
 
-        Node optInNode = new Node(WELCOME_OPT_IN_MESSAGE, NodeType.SEND_MESSAGE, "OptIn");
+        optInNode = new Node(WELCOME_OPT_IN_MESSAGE, NodeType.SEND_MESSAGE, "OptIn");
         optInNode.edges().add(new Edge(null));
 
-        Node altOptInNode = new Node(CHINESE_OPT_IN_MESSAGE, NodeType.SEND_MESSAGE, "ChineseOptIn");
+        altOptInNode = new Node(CHINESE_OPT_IN_MESSAGE, NodeType.SEND_MESSAGE, "ChineseOptIn");
         altOptInNode.edges().add(new Edge(null));
 
-        Node optOutNode = new Node("You have been opted out. Thanks for all the fish", NodeType.SEND_MESSAGE, "OptOut");
+        optOutNode = new Node("You have been opted out. Thanks for all the fish", NodeType.SEND_MESSAGE, "OptOut");
         optOutNode.edges().add(new Edge(null));
 
         // Define a default conversation graph for the platform-channel, adding it with the default route.
-        Node defaultNode = new Node("Welcome! You can talk to us about the following topics...", NodeType.END_OF_CHAT, "CustomerTopicStarter");
+        defaultNode = new Node("Welcome! You can talk to us about the following topics...", NodeType.END_OF_CHAT, "CustomerTopicStarter");
         Route route1 = new Route(Platform.SMS, mo1.to(), defaultNode.id(), randomUUID(), confirmChangeTopic.id(), optInNode.id(), optOutNode.id());
         Route route2 = new Route(Platform.SMS, SHORT_CODE_2, defaultNode.id(), randomUUID(), confirmChangeTopic.id(), optInNode.id(), optOutNode.id());
         Route route3 = new Route(Platform.SMS, SHORT_CODE_3, defaultNode.id(), randomUUID(), confirmChangeTopic.id(), altOptInNode.id(), optOutNode.id());
@@ -232,8 +238,9 @@ public class OperatorTest {
         queueProducer.enqueued().clear(); // Need to manually clear the enqueued message list between process() calls.
 
         assertDoesNotThrow(() -> {
-            operator.process(mo2);
-            hackyForcedFlush(mo2);}
+                    operator.process(mo2);
+                    hackyForcedFlush(mo2);
+                }
         );
         //println("------ Messages queued for mo2 ------");
         //queueProducer.enqueued().forEach(System.out::println);
@@ -247,8 +254,9 @@ public class OperatorTest {
 
         // The opt-in message for the route specified by mo3 is different.
         assertDoesNotThrow(() -> {
-            operator.process(mo3);
-            hackyForcedFlush(mo3); }
+                    operator.process(mo3);
+                    hackyForcedFlush(mo3);
+                }
         );
         //IO.println("------ Messages queued for mo3 ------");
         //queueProducer.enqueued().forEach(System.out::println);
@@ -529,7 +537,8 @@ public class OperatorTest {
         assertEquals(2, session.getCurrentNode().edges().size());
 
         session.getCurrentNode().edges().forEach(edge -> {
-            LOG.info("Available responses: {}: {} [{}]", edge.responseText(), edge.targetNode().label(), edge.targetNode().type());});
+            LOG.info("Available responses: {}: {} [{}]", edge.responseText(), edge.targetNode().label(), edge.targetNode().type());
+        });
 
         // FIXME still need to formalize how we know which edge was the placeholder. For now, it's the last one in the list.
         LOG.info("Replaced node: {}", session.getCurrentNode().edges().getLast().targetNode().label());
@@ -656,4 +665,55 @@ public class OperatorTest {
         assertEquals("US", Telecom.deriveCountryCodeFromId(MOBILE_US));
     }
 
+    /**
+     * Test case added to verify copyGraphAppending() handles specific graph sequences
+     * when using altOptInNode and presentQuestion. Generated locally using Gemma 4 E4B.
+     */
+    @Test
+    void copyGraphAppendingOptInUseCase() {
+
+        // The collection elements of a record can be changed so track the id so we know if it was altered.
+        UUID presentToProcessEdgeId =  presentQuestion.edges().getFirst().id();
+        UUID flortAnswerEdgeId = processAnswer.edges().getLast().id();
+        UUID endOfConversationNodeId = endConversation.id();
+
+        // Execute copy-and-append
+        Node copiedGraphStart = operator.copyGraphAppending(altOptInNode, presentQuestion);
+        assertNotNull(copiedGraphStart);
+
+        // The original altOptInNode must be successfully copied into the new graph structure.
+        assertEquals(altOptInNode, copiedGraphStart, "copiedStart mismatch. The root node must match the original altOptInNode.");
+        // Important: Ensure that the returned node is a new object, proving it was copied, not merely referenced.
+        assertNotSame(altOptInNode, copiedGraphStart, "The root node of the new graph must be a distinct copy.");
+
+        // Check link to the appended graph.
+        // The first edge should link to the copy of altOptInNode's next node, demonstrating successful copying through the graph.
+        // The edge itself is also expected to be a copy.
+        Edge copiedGraphStartEdge = copiedGraphStart.edges().getFirst();
+        assertNotNull(copiedGraphStartEdge, "The root node must have at least one outgoing edge.");
+        assertNotSame(altOptInNode.edges().getFirst(), copiedGraphStartEdge);
+
+        Node referencedNode = copiedGraphStartEdge.targetNode();
+        // The opt-in graph points to null whereas the new graph is expected to point to the presentQuestion node.
+        assertNotEquals(altOptInNode.edges().getFirst().targetNode(), referencedNode); // i.e. null != referencedNode
+
+        // Check the referencedNode itself:
+        assertNotNull(referencedNode);
+        assertEquals(presentQuestion, referencedNode); // Verify the values/properties match the original.
+        assertSame(presentQuestion, referencedNode, "The second node in the new graph should not be a copy.");
+
+        // Check the edge connecting to the second Node of the appended graph.
+        Edge referencedNodeEdge = referencedNode.edges().getFirst();
+        assertNotNull(referencedNodeEdge, "Referenced Node's edge must not be null.");
+        assertEquals(presentToProcessEdgeId, referencedNodeEdge.id(), "Referenced Node's edge was altered");
+
+        Node referencedNodeSuccessor = referencedNodeEdge.targetNode(); // This should be the processAnswer created in setup().
+        assertSame(processAnswer, referencedNodeSuccessor,
+                "The edge must correctly point to the appended starting node.");
+        assertEquals(3, referencedNodeSuccessor.edges().size());
+        assertEquals(flortAnswerEdgeId, referencedNodeSuccessor.edges().getLast().id(), "The processAnswer node's edges were altered"); // must still point to null
+        Node lastNodeInGraph = referencedNodeSuccessor.edges().getLast().targetNode();
+        assertEquals(endConversation, lastNodeInGraph, "Expected endConversation node");
+        assertTrue(lastNodeInGraph.edges().isEmpty(), "Appended graph must preserve terminating edge."); //
+    }
 }

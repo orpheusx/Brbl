@@ -6933,7 +6933,36 @@ Not a great experience. Gemma is a pretty careless student. It kept claiming vic
 re: LM studio it has some settings that are unhelpful; by default it was unloading models after a timeout expired leading to "Error: LM Link connection entered error state peer_keepalive_timeout"
 To hopefully avoid this I've turned off "JIT models auto-evict."
 
+As bad as Gemma 4 E4B was, the more targeted variant, gemm-4-12b-coder-fable5-composer2.5-v1, was *way* worse. It clearly had no idea how to write Java, at all.
 
+Last test (for now) Qwen's qwen3-coder-30b (a 14.6gb model.)
 
+Prompt:
+    Create a new test method called "copyGraphAppending2" in OperatorTest that tests the copyGraphAppending() method of Operator. Model this new test after OperatorTest.copyGraphAppendingCorrectness() but uses fixtures provided by the setup() method. Specifically, use the altOptInNode instance as the first parameter to copyGraphAppending and presentQuestion as the second parameter. Check the result to make sure the altOptInNode was copied.
+    Make sure you write the test code to the OperatorTest.java file.
+    You must run the following command to compile and execute the test:
+        mvn test -Dtest=com.enoughisasgoodasafeast.operator.OperatorTest#copyGraphAppending2
+    Check the output to determine if the test passed.
 
+Ran this once, realized I'd referenced variables that were only available in the setup() scope. Qwen recognized the problem from looking at the compilation failsures, tried to figure out how to work around but appeared to be spinning. I stopped it and fixed the problem (made the variables global.) When it resumed, Qwen recognized that the problem had been fixed but then seemed to be stuck writing the test.
+I stopped it again and decided to rerun the whole process from scratch. Restarted the model and created a new session. It got through the same steps (minus the scope error) then took a really long time to add the test method to the file. No insights from the logs about why it was taking so long, sadly. (Bionic could really benefit from time tracking in it's chat interface.)
+It's been running for a while. Currently 3:09. I will wait another 10 minutes then give up.
+Part of the problem here, I assume, is that the model doesn't fit entirely on the GPU. As well, the process is taking up nearly all of the 16gb of system RAM. the default context window is only 8k which isn't big enough to even process the prompt. I bumped it up to 102,656 tokens. (262,144 is the max.)
+
+The Bionic agent currently shows Context: 23.4K but I saw it go as high as 29k in previous attempts. So if we try it on yakko perhaps we can reduce it to 60K? There's a bug in the prompt template when I run Gemma 4 E4B with Bionic. It uses a fucking Jinja2 template (from the Django web framework) for some reason. Went looking for a fix and found nothing. Running the same model directly in LM Studio has no such problem.
+
+Maybe the google/gemma-4-12b-qat will work? Requires 7.15gb, not that much more than e4b.
+
+==== 2026/08/03 ====
+
+Interesting projects:
+RotorQuant - a possible performance improvement over TurboQuant (same compression.)
+TurboVec   - a vector index that greatly reduces the amount of ram needed to vectorize documents for RAG.
+https://lmstudio.ai/models/google/gemma-4-12b-qat
+
+NB:
+    SuperDuper is still in development: https://www.shirt-pocket.com/superduper4.php (we really should make a backup; iCloud is a big unknown.)
+    For deep cleaning our disk: https://github.com/tw93/Mole for TUI interface. https://mole.fit/ for GUI.
+
+    Instead of the just the Go-style ProcessStateSession objects we might consider algebraic types using records and Sealed Classes as described here: https://rockthejvm.com/articles/algebraic-data-types-in-java.
 
