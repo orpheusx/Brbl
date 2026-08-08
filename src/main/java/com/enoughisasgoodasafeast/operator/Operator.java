@@ -186,9 +186,12 @@ public class Operator implements SessionAwareMessageProcessor {
             // The Caffeine sessionCache wraps exceptions thrown by its loading method in CompletionException but passes RuntimeExceptions through.
             // The possible wrapped exceptions include InterruptedException and ExecutionException (courtesy of Structured Concurrency).
             // Also, a failed loadSession may throw PersistenceManagerException. We use its isRetriable flag to determine the retriability.
+
+            // Pluck the root Exception out of what's returned.
             // e.g. java.util.concurrent.CompletionException wrapping java.util.concurrent.ExecutionException wrapping java.lang.IllegalStateException
             var cause = innermost(e);
-            // TODO Convert to case-switch
+
+            // TODO Convert to case-switch?
             if (cause instanceof PersistenceManagerException pme && !pme.isRetriable) {
                 // The root cause is likely a ClassNotFound or unknown IOException
                 LOG.error("process: Permanent failure to find or create session for {}", sessionKey, cause);

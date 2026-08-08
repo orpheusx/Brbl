@@ -13,15 +13,15 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 
 public class UserTest {
 
-    final static Map<Platform, UUID> platformIds = Map.of(Platform.SMS, randomUUID());
-    final static UUID groupId = randomUUID();
-    final static UUID claimantId = randomUUID();
-    final static Map<Platform, String> platformNumbers = Map.of(Platform.SMS, "17815551234");
-    final static Map<Platform, Instant> platformsCreated = Map.of(Platform.SMS, NanoClock.systemUTC().instant());
-    final static Map<Platform, String> userNickNames = Map.of(Platform.SMS, "Boo");
-    final static String countryCode = Locale.getDefault().getCountry();
-    final static Set<LanguageCode> languages = Set.of(SPA, FRA, ENG);
-    final static Map<Platform, UserStatus> platformStatuses = Map.of(Platform.SMS, UserStatus.IN);
+    static final Map<Platform, UUID> platformIds = Map.of(Platform.SMS, randomUUID());
+    static final UUID groupId = randomUUID();
+    static final UUID claimantId = randomUUID();
+    static final Map<Platform, String> platformNumbers = Map.of(Platform.SMS, "17815551234");
+    static final Map<Platform, Instant> platformsCreated = Map.of(Platform.SMS, NanoClock.systemUTC().instant());
+    static final Map<Platform, String> userNickNames = Map.of(Platform.SMS, "Boo");
+    static final String countryCode = Locale.getDefault().getCountry();
+    static final Set<LanguageCode> languages = Set.of(SPA, FRA, ENG);
+    static final Map<Platform, UserStatus> platformStatuses = Map.of(Platform.SMS, UserStatus.IN);
 
     @Test
     void idNull() {

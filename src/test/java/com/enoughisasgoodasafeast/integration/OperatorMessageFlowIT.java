@@ -115,6 +115,74 @@ public class OperatorMessageFlowIT {
     }
 
     @Test
+    public void messageFlow() {
+        var startNode = buildNodeGraph();
+        var startNodeId = startNode.id();
+        persistenceManager.addNodeGraph(startNode.id(), startNode);
+
+        var optInNode = buildOptInNode();
+        var optInNodeId = optInNode.id();
+        persistenceManager.addNodeGraph(optInNodeId, optInNode);
+
+        // for now, use same Node referenced by keyword
+        var defaultNodeId = startNodeId; // TODO make a separate one to distinguish processing behavior.
+
+        final Route[] routes = registerCompatibleRoute(routableMessage, defaultNodeId, optInNodeId);
+
+        assertEquals(routes.length, persistenceManager.getActiveRoutes().length);
+        var activeRoute = persistenceManager.getActiveRoutes()[0];
+        assertSame(routes[0], activeRoute);
+        assertEquals(optInNodeId, activeRoute.optInNodeId());
+
+        var pattern = Pattern.compile("(color|colour|colr).*(quiz|q|kwiz)");
+        var keyword = registerMatchingKeyword(pattern, startNode, routableMessage.to());
+
+        assertSame(startNode, persistenceManager.getNodeGraph(startNodeId));
+        assertSame(optInNode, persistenceManager.getNodeGraph(optInNodeId));
+        assertSame(startNode, persistenceManager.getNodeGraph(defaultNodeId)); // keyword and default are the same
+
+        var fetchedKeyword = persistenceManager.getKeywords().get(pattern);
+        assertSame(keyword, fetchedKeyword);
+
+        rcvrSurrogate.enqueue(routableMessage); // Ok, start the conversation.
+        await().atMost(2, SECONDS).until(anyMTResponsesEnqueued(operatorProducer));
+
+        List<Message> queuedMessages = operatorProducer.enqueued();
+        assertEquals(2, queuedMessages.size());
+
+        var optInMT = queuedMessages.get(0); // new user expects opt-in first...
+        assertNotNull(optInMT);
+        assertEquals(routableMessage.from(), optInMT.to());
+        assertEquals(routableMessage.to(), optInMT.from());
+        assertTrue(optInMT.text().contains("opted in"));
+        //LOG.info("New session opt-in: {}", optInMT.text());
+
+        var responseMT = queuedMessages.get(1); // ...then the actual scripted response
+        assertNotNull(responseMT);
+        assertEquals(routableMessage.from(), responseMT.to());
+        assertEquals(routableMessage.to(), responseMT.from());
+        assertTrue(responseMT.text().contains("favorite color"));
+        //LOG.info("Second message: {}", responseMT.text());
+
+        queuedMessages.clear();
+
+        rcvrSurrogate.enqueue(flortMO); // user answers the question
+        await().atMost(2, SECONDS).until(anyMTResponsesEnqueued(operatorProducer));
+        Message flortMT = operatorProducer.enqueued().getFirst();
+        assertNotNull(flortMT);
+        //LOG.info("flortMT: {}", flortMT);
+        assertEquals(flortMO.from(), flortMT.to());
+        assertEquals(flortMO.to(), flortMT.from());
+        assertTrue(flortMT.text().contains("for the cool kids"));
+
+        queuedMessages.clear();
+
+        // Add the cases from messageFlowWithUnexpectedInputAndChangeTopicRequested
+        //  and messageFlowWithUnexpectedInputAndChangeTopicRequested
+        // ...
+    }
+
+    @Test
     public void basicConfig() throws IOException, TimeoutException {
         var expectedQueueName = testProps.getProperty(CONSUMER_QUEUE_NAME);
         var expectedFailQueue = failQueueForQueue(expectedQueueName);
@@ -238,74 +306,6 @@ public class OperatorMessageFlowIT {
 
     }
 
-    @Test
-    public void messageFlow() {
-        var startNode = buildNodeGraph();
-        var startNodeId = startNode.id();
-        persistenceManager.addNodeGraph(startNode.id(), startNode);
-
-        var optInNode = buildOptInNode();
-        var optInNodeId = optInNode.id();
-        persistenceManager.addNodeGraph(optInNodeId, optInNode);
-
-        // for now, use same Node referenced by keyword
-        var defaultNodeId = startNodeId; // TODO make a separate one to distinguish processing behavior.
-
-        final Route[] routes = registerCompatibleRoute(routableMessage, defaultNodeId, optInNodeId);
-
-        assertEquals(routes.length, persistenceManager.getActiveRoutes().length);
-        var activeRoute = persistenceManager.getActiveRoutes()[0];
-        assertSame(routes[0], activeRoute);
-        assertEquals(optInNodeId, activeRoute.optInNodeId());
-
-        var pattern = Pattern.compile("(color|colour|colr).*(quiz|q|kwiz)");
-        var keyword = registerMatchingKeyword(pattern, startNode, routableMessage.to());
-
-        assertSame(startNode, persistenceManager.getNodeGraph(startNodeId));
-        assertSame(optInNode, persistenceManager.getNodeGraph(optInNodeId));
-        assertSame(startNode, persistenceManager.getNodeGraph(defaultNodeId)); // keyword and default are the same
-
-        var fetchedKeyword = persistenceManager.getKeywords().get(pattern);
-        assertSame(keyword, fetchedKeyword);
-
-        rcvrSurrogate.enqueue(routableMessage); // Ok, start the conversation.
-        await().atMost(2, SECONDS).until(anyMTResponsesEnqueued(operatorProducer));
-
-        List<Message> queuedMessages = operatorProducer.enqueued();
-        assertEquals(2, queuedMessages.size());
-
-        var optInMT = queuedMessages.get(0); // new user expects opt-in first...
-        assertNotNull(optInMT);
-        assertEquals(routableMessage.from(), optInMT.to());
-        assertEquals(routableMessage.to(), optInMT.from());
-        assertTrue(optInMT.text().contains("opted in"));
-        //LOG.info("New session opt-in: {}", optInMT.text());
-
-        var responseMT = queuedMessages.get(1); // ...then the actual scripted response
-        assertNotNull(responseMT);
-        assertEquals(routableMessage.from(), responseMT.to());
-        assertEquals(routableMessage.to(), responseMT.from());
-        assertTrue(responseMT.text().contains("favorite color"));
-        //LOG.info("Second message: {}", responseMT.text());
-
-        queuedMessages.clear();
-
-        rcvrSurrogate.enqueue(flortMO); // user answers the question
-        await().atMost(2, SECONDS).until(anyMTResponsesEnqueued(operatorProducer));
-        Message flortMT = operatorProducer.enqueued().getFirst();
-        assertNotNull(flortMT);
-        //LOG.info("flortMT: {}", flortMT);
-        assertEquals(flortMO.from(), flortMT.to());
-        assertEquals(flortMO.to(), flortMT.from());
-        assertTrue(flortMT.text().contains("for the cool kids"));
-
-        queuedMessages.clear();
-
-        // Add the cases from messageFlowWithUnexpectedInputAndChangeTopicRequested
-        //  and messageFlowWithUnexpectedInputAndChangeTopicRequested
-        // ...
-    }
-
     /**
      * Currently there are places in the Operator processing that return ProcessState.RETRY.
      * This is left as a placeholder in case we
@@ -329,9 +329,9 @@ public class OperatorMessageFlowIT {
         rcvrSurrogate.enqueue(routableMessage);
     }
 
-    //    @Test
+    @Test
     public void messageFlowWithUnexpectedInput() {
-        assertDoesNotThrow(() -> {
+//        assertDoesNotThrow(() -> {
             rcvrSurrogate.enqueue(keywordMO);
             await().atMost(5, SECONDS).until(anyMTResponsesEnqueued(operatorProducer));
 
@@ -356,7 +356,7 @@ public class OperatorMessageFlowIT {
 
             queuedMessages.clear();
 
-        });
+//        });
     }
 
     //    @Test

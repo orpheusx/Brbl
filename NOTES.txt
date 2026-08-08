@@ -6973,6 +6973,131 @@ Fixed the last bits of the latest OperatorTest.copyGraphAppendingOptInUseCase().
 Resumed the Antigravity session and had it complete
 agy --conversation=18de89f8-e62d-42c0-8013-de2a938fc0a3
 
-DLQLogger's handleDelivery should call
-getChannel().basicAck(envelope.getDeliveryTag(), false);
-but Gemini notes that the class was created with autoAck=true. It's fix is to drop the basicAck. We should revert this after G is done.
+DLQLogger's handleDelivery() was calling getChannel().basicAck(envelope.getDeliveryTag(), false)
+but, as Claude noted, class instance was created with autoAck=true. The resulting double ack was causing problems.
+Claude's fix was to drop the basicAck call but I prefer to have the method be explicit. So I set autoAck=true after Claude was done.
+
+Not really a lot of work needed to be done but it burned through my free weekly quota. :-P
+
+Back to studying the SMS provider developer docs. Pretty much what I expected.
+    Telnyx:
+    - Requires an API key acquired via their self-serve portal.
+    - MOs are handled by what they prefers to call a webhook. It notes, unsurprisingly, that message order is not guaranteed.
+    - If we use HTTPS the certificate will be checked.
+    - Webhook calls are signed with an Ed25519 public key to prove that they sent it.
+    - Message encoding rounds up from ASCII to UTF-16 (where emojis live) which is more expensive in terms of money and character limits.
+    - Depending on this a single message may be split into multiple parts. The send response API includes the number of parts used and the costs.
+    - They support message status which, if we also support it, requires tracking the message id assigned in their response to the MT (or "direction=outbound" as they call it.) Another write-mostly table for this might work. We could include the info on the customer dashboard.
+
+    Plivo:
+     - Their API is unified, supporting SMS as well as WhatsApp (as an extension.)
+     - Uses XML!
+     - Per https://docs.plivo.com/docs/messaging/sms-availability: "Plivo provisions SMS only to direct brands through sales with a Minimum Monthly Commitment (MMC) [$1,000/month.] SMS is not currently offered to resellers or ISVs (independent software vendors)."
+     - So fuck these guys.
+
+    AWS:
+    - https://aws.amazon.com/blogs/messaging-and-targeting/sms-onboarding-for-saas-isv-and-multi-tenant-applications-with-aws-end-user-messaging/
+    - Useful article about the SMS Originator registration process.
+        It echoes some of the things that I'd been planning but hadn't written down:
+            - Providing our customers with standard Privacy Policy and/or Terms & Conditions.
+            - Summarizing restrictions that impact user interaction (quiet hours, template requirements.)
+            - Bundled Messaging: Include a certain number of messages in your base subscription with overage fees for additional messages.
+    - Supports email services Amazon Simple Email Service (SES) which could be useful for communicating with our customers.
+    - Supports origination selection by area code.
+    - Supports "sender ID" (in SMS is the name or number that appears as the sender on a text message.)
+
+    We will start with the idea that we handle all the registration, templating, stuff on behalf of our customers.
+
+=== 2026/08/06 ===
+
+NB: Models to try out (if they fit)
+https://huggingface.co/barozp/Qwen3.6-28B-REAP20-A3B-GGUF suggested by Codaceous. Doesn't appear to support tool-calls or reasoning according to the tags I'm seeing in LM Studio's download client.
+
+
+Planning our 3rd party gateway integrations:
+    - Review our Message class fields for fit against each gateway representation.
+        Requires checking out each gateways MO format.
+    - Define standard Sndr queue behavior for success, fail, retry, backoff
+    - Organization of the queues by "Connectivity Partner" (CNP) industry lingo for the 3rd party gateway provider.
+    - Fuzzing for provider behavior (combination of the MT payload, the declared error cases, and random failures)
+    - For each provider:
+        - Build an testing MT server that models their declared set of HTTP status codes for various errors.
+            - For Telnyx
+                - They provide a sender client which can be used as a reference:
+                    See https://developers.telnyx.com/development/sdk/java/index#client-configuration
+                - They also display a curl command that shows how simple their API is:
+                    curl -X POST https://api.telnyx.com/v2/messages \
+                      -H "Content-Type: application/json" \
+                      -H "Authorization: Bearer YOUR_API_KEY" \
+                      -d '{
+                        "from": "+15551234567",
+                        "to": "+15559876543",
+                        "text": "Hello, world!"
+                      }'
+                - Create integration tests that excercise each of the error cases.
+                - Their SDK uses OkHttp. It also uses reflection. We may have to deal with this if Sndr/Rcvr are AOT compiled and run on Graal. It also depends on Jackson 2.18.2 but is compatible with version 2.13.4 or higher.
+                - Because they provide a whole bunch of other telecom services their API (and/or their documentation) isn't as it could be about how to simply send and receive SMS messages. The latter is handled by implementing one or more webhooks.
+                 See https://developers.telnyx.com/docs/messaging/messages/receiving-webhooks/index.
+                - Some of the highlights -->
+                    A message is received by your number, or a sent message changes status (queued → sent → delivered)
+                    Return a 2xx status code within 2 seconds to acknowledge receipt.
+                    Telnyx sends a POST request (with JSON payload.)
+                    Return a 2xx status code within 2 seconds to acknowledge receipt.
+                    If our server doesn’t respond in time, Telnyx retries (up to 3 attempts per URL) and then tries your failover URL if configured.
+                    (Not clear if it waits in between attempts.)
+                    The webhook url can be overidden in the sent message's webhook_url and webhook_failover_url parameters. Otherwise our profile setting will be used. The messages/events are available as Message Detail Records (which contains the current state of the message.) These MDRs can be used (badly) to poll for responses and state changes. For example, if we had an outage we might run a process that looks for delivered message that never received a delivery notification.
+            - For Amazon AWS
+                - Seems to involve on SNS to support "two-way messaging," their term for A2P SMS. They show the code using AWS SDK ("boto") but it's Python. I think there are Java versions of the standard SDK, too.
+
+
+=== 2026/08/07 ===
+NOTE: Did some refactoring that needs a little explanation. The base class HttpMessageHandler only "sends" Messages. This is clear when the Message represents an MT. When the message represents an MO the caller is playing the role of an SMSc/Connectivty Partner. Clarified this by renaming the class to HttpMessageSender and its inheritors HttpMTSender and HttpMOSender.
+
+
+SndrConsumer extends BrblConsumer registered with RMQ.
+    Manages interaction with queue (ack, nack, queue for retry)
+    Calls process() on
+        Sndr implements SndrMessageProcessor
+            has a
+                QueueConsumer (impl RabbitQueueConsumer)
+                PersistenceManager (impl PostgresPersistenceManager)
+                HttpMTSender (is impl)
+            calls handle on HttpMTSender
+    Extends BrblConsumer which has methods for retry tracking: getRetriedCount() and routeToDelayBucket().
+
+
+HttpMTSender extends HttpMessageSender implements MTHandler
+    HttpMessageHandler.handle(Message) returning boolean.
+        Implement a standard retry mechanism used when runtime exceptions (i.e. UncheckedIOException when we can't connect to the provider endpoint) are thrown but are not fatal.
+        Change the boolean StatusException, a union of the response code and any exception that might have been thrown. Then, in Sndr, evaluate the response with a switch that uses a vendor specific mapping table to decide if the message should be acked, nacked, or retried (including the RetryDelayRoutingKey.)
+        NB: right now both MTHandler and MOHandlers define a boolean handle(Message) method. Might be time to change it.
+
+Tasks:
+- Provide a Message-to-3rd party format converter.
+- Capture whatever HTTP code the PUT/POST operation the 3rd party returns along with any runtime exceptions thrown by WebClient in a union-like record.
+- Use a defined a set of mappings for each 3rd party to detemine the appropriate action for the queue consumer to take.
+
+Issues:
+    1) Throttling: Not sure how to handle throttle signals; probably want to track our message/second rate in any case.
+    2) Multi-message responses: If a Node/Edge generates multiple messages we need to guarantee that they are sent in the correct order. If the first is sent to the retry queue because of a transient outage or throttle signal we don't want to succeed in sending the second
+
+
+
+Gah, ran our integration tests before getting started with the actual (non-refactoring) changes. Seeing errors (meaning the test couldn't be executed) for 2 of the three active classes.
+
+For EndToEndMessagingIT:
+    Local Docker Compose exited abnormally with code 1 whilst running command: compose up -d" type="org.testcontainers.containers.ContainerLaunchException
+    The error explains:
+    2026-08-08 10:54:47,329 INFO  [] [Thread-13] tc.docker - Error response from daemon: driver failed programming external connectivity on endpoint kbbfysnnrt6h-brkr-1 (dd98a2ab7b60d76ee94dcdf53e570dcafe3351eba0c9c8895ab985db09df8da5): Bind for 0.0.0.0:5672 failed: port is already allocated
+    The test uses the same docker compose file: docker-compose-jvm.yaml up
+    We include '--remove-orphans' switch when running it manually. Do we need the equivalent for testcontainers?
+
+    Updated Maven dependency from org.testcontainers:junit-jupiter:1.20.4 to 1.20.4. Appears to fix the problem.
+
+
+For OperatorMessageFlowIT:
+    org.awaitility.core.ConditionTimeoutException: Condition with Lambda expression in com.enoughisasgoodasafeast.integration.OperatorMessageFlowIT was not fulfilled within 5 seconds.
+
+    This class was updated recently but the failing test, messageFlowWithUnexpectedInput(), is much older.
+
+

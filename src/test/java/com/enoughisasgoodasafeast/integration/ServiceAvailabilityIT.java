@@ -36,7 +36,7 @@ public class ServiceAvailabilityIT {
     private static final String BURBLE_CONTAINER = "burble-jvm:0.1.0";
 
 //    @Container
-    final static RabbitMQContainer brokerContainer = new RabbitMQContainer("rabbitmq:4.0-management");
+    static final RabbitMQContainer brokerContainer = new RabbitMQContainer("rabbitmq:4.0-management");
     // NOTE: RabbitMQContainer is still INCUBATING according to https://java.testcontainers.org/modules/rabbitmq/
     private static Properties testProps;
 

@@ -43,7 +43,7 @@ public class PlatformGateway extends WebService {
     public int port = 2424; // the port we listen on
     public MessageDirection direction = MessageDirection.MT;
     public String destinationUrl;
-    private HttpMTHandler client;
+    private HttpMTSender client;
     public RecordingHandler recordingHandler;
     private WebServer webServer;
 
@@ -70,7 +70,7 @@ public class PlatformGateway extends WebService {
         webServer = buildNewWebServer(recordingHandler)
                 .start();
 
-        client = new HttpMTHandler(destinationUrl);
+        client = new HttpMTSender(destinationUrl);
     }
 
     private WebServer buildNewWebServer(RecordingHandler recordingHandler) {
@@ -198,7 +198,7 @@ public class PlatformGateway extends WebService {
     }
 
     public void sendMoTraffic(Message message) {
-        this.client.handle(message);
+        this.client.send(message);
     }
 
     public static void sendFiveAndQuit() {

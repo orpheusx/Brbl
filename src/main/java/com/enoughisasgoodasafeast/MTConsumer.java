@@ -93,8 +93,7 @@ public class MTConsumer extends DefaultConsumer {
 
         try {
             latest.seqNum = seqId;
-            boolean ok = this.handler.handle(message);
-            if (ok) {
+            if (handler.send(message).isSuccess()) {
                 LOG.info("Processed message: {}", message);
                 getChannel().basicAck(deliveryTag, false);
                 latest.wasSent = true;

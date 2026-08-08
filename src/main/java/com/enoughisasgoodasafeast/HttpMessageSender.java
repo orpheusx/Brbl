@@ -9,23 +9,37 @@ import org.slf4j.LoggerFactory;
 
 import static io.helidon.http.Status.Family.SUCCESSFUL;
 
-public class HttpMessageHandler {
+public class HttpMessageSender {
 
-    private static final Logger LOG = LoggerFactory.getLogger(HttpMessageHandler.class);
+    private static final Logger LOG = LoggerFactory.getLogger(HttpMessageSender.class);
     static {
         ((ch.qos.logback.classic.Logger) LOG).setLevel(Level.ERROR);
     }
 
+    static final String PLATFORM_MT_PROTOCOL = "platform.mt.protocol";
+    static final String PLATFORM_MT_HOST = "platform.mt.host";
+    static final String PLATFORM_MT_PORT = "platform.mt.port";
+    static final String PATH_INFO = "platform.mt.pathInfo";
+
     protected final String endpoint;
     protected final WebClient client;
 
-    public HttpMessageHandler(String endpoint) {
+    public HttpMessageSender(String endpoint) {
         this.endpoint = endpoint;
         LOG.info("Creating HttpMessageHandler with URL {}", endpoint);
 
         client = WebClient.builder()
                 //.addService(WebClientTracing.create())
                 .baseUri(endpoint)
+                // TODO Telnyx requires the API KEY in a Bearer header, I think.
+                // TODO Additional configuration that doesn't already define sensible defaults:
+                //    read-timeout, connect-timeout
+
+                // TODO Setup TLS support. Gotta have this but maybe not for initial implementation.
+                // .tls(it -> it.trust(t -> t
+                //     .keystore(k -> k.passphrase("password")
+                //         .trustStore(true)
+                //     .keystore(r -> r.resourcePath("client.p12")))))
                 .build();
     }
 
@@ -35,9 +49,14 @@ public class HttpMessageHandler {
         return true;
     }
 
+    // FIXME placeholder while we convert to using deliver(Message)
+//    public boolean send(Message payload) {
+//        return true;
+//    }
+
     // FIXME The Helidon WebClient will throw an UncheckedIOException if it can't connect to the endpoint.
     //  Need to have a think about how we manage this possibility.
-    public boolean handle(Message payload) {
+    public StatusException send(Message payload) {
         LOG.info("Sending message, '{}'", payload);
 
         try {
@@ -48,15 +67,14 @@ public class HttpMessageHandler {
             Status status = res.status();
             if (status.family() != SUCCESSFUL) {
                 LOG.error("Post to {} failed: {}", endpoint, status);
-                return false;
+                return new StatusException(status, null);
             } else {
                 LOG.info("Post to {} OK: {}", endpoint, status);
-                return true;
+                return new StatusException(status, null);
             }
         } catch (RuntimeException e) {
             LOG.error("Caught {} sending to {}", e.getMessage(), endpoint);
-            LOG.warn("FIXME: Acking message despite failure.");
-            return true; // FIXME retry policy needs to be worked out.
+            return new StatusException(null, e);
         }
     }
 

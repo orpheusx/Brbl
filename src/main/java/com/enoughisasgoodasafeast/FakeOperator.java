@@ -1,6 +1,7 @@
 package com.enoughisasgoodasafeast;
 
 import com.enoughisasgoodasafeast.operator.*;
+import io.helidon.http.Status;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -52,7 +53,6 @@ public class FakeOperator implements SessionAwareMessageProcessor {
     @Override
     public ProcessStateSession process(Message message) {
         LOG.info("Processed {}", message);
-        boolean ok = producerMTHandler.handle(message);
         var session = new Session(
                 randomUUID(),
                 new Node("Node text for fake Session", NodeType.END_OF_CHAT),
@@ -73,7 +73,9 @@ public class FakeOperator implements SessionAwareMessageProcessor {
                 ),
                 new InMemoryQueueProducer(),
                 null);
-        return new ProcessStateSession((ok) ? ProcessState.OK : ProcessState.ERROR, session);
+        var sendStatusException= producerMTHandler.send(message);
+        assert sendStatusException.status() != null; // FIXME hack fix for a logical issue: Sending a message != enqueuing a message
+        return new ProcessStateSession((sendStatusException.status().equals(Status.OK_200)) ? ProcessState.OK : ProcessState.ERROR, session);
     }
 
     @Override
@@ -86,6 +88,7 @@ public class FakeOperator implements SessionAwareMessageProcessor {
         LOG.info("complete: {} for Session {}", session.getUser(), session.getId());
     }
 
+    // This is problematic. An MTHandler is really meant as a sender of Messages, not a QueueProducer.
     public static class QueueProducerMTHandler implements MTHandler {
 
         QueueProducer producer;
@@ -95,7 +98,7 @@ public class FakeOperator implements SessionAwareMessageProcessor {
         }
 
         @Override
-        public boolean handle(Message payload) {
+        public StatusException send(Message payload) {
             // FIXME implement a meaningful return value or change return type.
             LOG.info("Processing message, '{}'", payload);
             // if(payload.contains("hello")) {
@@ -112,7 +115,11 @@ public class FakeOperator implements SessionAwareMessageProcessor {
             //     Message sndText = inputs[0] + " goodbye";
             //     producer.enqueue(sndText);
             // } else {
-            return producer.enqueue(payload);
+            if (producer.enqueue(payload)) {
+                return new StatusException(Status.OK_200, null);
+            } else {
+                return new StatusException(Status.NOT_FOUND_404, null);
+            }
         }
 
         public MTHandler newHandler(Properties properties) {

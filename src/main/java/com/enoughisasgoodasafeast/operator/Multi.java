@@ -49,7 +49,7 @@ public class Multi {
     static class Process {
 
         // FIXME in practice, this cannot be a constant. This could, however, serve as a default.
-        final static String UNEXPECTED_INPUT_MESSAGE = """
+        static final String UNEXPECTED_INPUT_MESSAGE = """
                 Oops, that's not one of the options. Try again with one of the listed options
                 or say 'change topic' to start talking about something else.
                 """;

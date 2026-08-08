@@ -1,12 +1,7 @@
 package com.enoughisasgoodasafeast.chatter;
 
-import com.enoughisasgoodasafeast.ConfigLoader;
-import com.enoughisasgoodasafeast.HttpMOHandler;
-import com.enoughisasgoodasafeast.MOHandler;
-import com.enoughisasgoodasafeast.Message;
+import com.enoughisasgoodasafeast.*;
 import com.enoughisasgoodasafeast.datagen.KnownData;
-import com.enoughisasgoodasafeast.operator.CampaignUser;
-import com.enoughisasgoodasafeast.operator.DeliveryStatus;
 import com.enoughisasgoodasafeast.operator.Platform;
 import com.enoughisasgoodasafeast.operator.PostgresPersistenceManager;
 import io.helidon.webserver.WebServer;
@@ -47,7 +42,7 @@ public class ChttrClient {
         for (UserActor actor : actors) {
             userActors.put(actor.getPhoneNumber(), actor);
         }
-        this.moHandler = HttpMOHandler.newHandler(properties);
+        this.moHandler = HttpMOSender.newHandler(properties);
         this.countdown = new AtomicInteger(actors.size());
     }
 
@@ -89,8 +84,8 @@ public class ChttrClient {
                 var startMessage = new Message(MO, Platform.SMS, actor.getPhoneNumber(),
                         KnownData.knownRouteIdsAndChannels[0][1], keyword);
                 LOG.info("Sending initiating keyword '{}' from user number, {}", keyword, actor.getPhoneNumber());
-                final boolean ok = moHandler.handle(startMessage);
-                if (!ok) {
+                final var statusException = moHandler.send(startMessage);
+                if (!statusException.isSuccess()) {
                     LOG.error("Failed to send initiating keyword, {}, from {}", keyword, actor.getPhoneNumber());
                 }
             }
@@ -199,8 +194,8 @@ public class ChttrClient {
             // Create MO message: 'from' is the user (phoneNumber), 'to' is the sender of the MT message.
             Message moResponseMessage = new Message(MO, mtIncomingMessage.platform(), phoneNumber, mtIncomingMessage.from(),
                     nextEvent.message());
-            boolean success = moHandler.handle(moResponseMessage);
-            if (success) {
+            var statusException = moHandler.send(moResponseMessage);
+            if (statusException.isSuccess()) {
                 LOG.info("Response sent from {} with {}", phoneNumber, moResponseMessage);
                 actor.sentMessages.add(moResponseMessage);
                 nextEvent = actor.nextEvent();

@@ -1184,7 +1184,7 @@ PostgresPersistenceManager implements PersistenceManager {
     }
 
     // NB: Per the method name, assumes this is a new, unconnected User. Thus, the various map properties assume a single value.
-    private boolean insertNewUserAmalgam(Connection connection, User user) throws SQLException {
+    private boolean insertNewUserAmalgam(Connection connection, User user) {
         LOG.info("insertUserAmalgam: {}", user);
 
         final var onlyId = user.platformIds().entrySet().iterator().next();

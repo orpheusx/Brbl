@@ -59,7 +59,10 @@ public class TestingPersistenceManager implements PersistenceManager {
         LOG.info("commitSessionState for MO {}", moMessage.id());
         processedMoIds.add(moMessage.id());
         if (isNewUser) {
-            insertNewUser(session.getUser());
+            if (!insertNewUser(session.getUser())) {
+                throw new PersistenceManagerException("commitSessionState failed for message " + moMessage.id(),
+                        new SQLException("Failed to insert new user: " + moMessage.id()));
+            }
         }
         if (updatedUserStatus != null) {
             updateUserStatus(session.getUser(), moMessage.platform(), updatedUserStatus);
@@ -105,7 +108,7 @@ public class TestingPersistenceManager implements PersistenceManager {
     }
 
     @Override
-    public boolean insertNewUser(User user) {
+    public boolean insertNewUser(User user) { //declare possible PersistenceManagerException?
         if (this.isFailInsertNewUser) {
             LOG.info("Failing insertNewUser");
             return false;
