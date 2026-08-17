@@ -47,10 +47,8 @@ public class RabbitQueueProducer implements QueueProducer {
         String queueRoutingKey = props.getProperty(PRODUCER_QUEUE_ROUTING_KEY);
 
         boolean queueIsDurable = Boolean.parseBoolean(props.getProperty(PRODUCER_QUEUE_DURABLE));
-        int heartbeatTimeoutSeconds = SharedConstants.STANDARD_HEARTBEAT_TIMEOUT_SECONDS;
 
-
-        return new RabbitQueueProducer(queueHost, queuePort, queueName, queueRoutingKey, queueIsDurable, heartbeatTimeoutSeconds);
+        return new RabbitQueueProducer(queueHost, queuePort, queueName, queueRoutingKey, queueIsDurable, SharedConstants.STANDARD_HEARTBEAT_TIMEOUT_SECONDS);
     }
 
     private RabbitQueueProducer(String queueHost, int queuePort, String queueName, String routingKey,

@@ -1,22 +1,23 @@
 package com.enoughisasgoodasafeast;
 
-import static com.enoughisasgoodasafeast.RabbitQueueConsumer.FAILED_QUEUE_SUFFIX;
+import static com.enoughisasgoodasafeast.RabbitQueueConsumer.*;
 
 public class RabbitQueueFunctions {
 
     public static String exchangeForQueueName(String queueName) {
-        return queueName + "-x";
+        return queueName + EXCHANGE_SUFFIX;
     }
 
-    public static String retryForExchangeName(String exchangeName) {
-        return exchangeName + "r";
+    public static String retryExchangeForQueueName(String queueName) {
+        return queueName + RETRY_QUEUE_SUFFIX + EXCHANGE_SUFFIX;
     }
 
     public static String failQueueForQueue(String queueName) {
         return queueName + FAILED_QUEUE_SUFFIX;
     }
 
-    public static String delayQueueForRoutingKey(String baseName, RetryDelayRoutingKey routingKey) {
-        return baseName + routingKey.suffix();
+
+    public static String delayQueueForRoutingKey(String queueName, RetryDelayRoutingKey routingKey) {
+        return queueName + RETRY_QUEUE_SUFFIX + routingKey.suffix();
     }
 }

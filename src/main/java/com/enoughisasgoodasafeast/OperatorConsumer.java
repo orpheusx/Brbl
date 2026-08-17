@@ -1,17 +1,14 @@
 package com.enoughisasgoodasafeast;
 
-import com.rabbitmq.client.AMQP;
-import com.rabbitmq.client.Channel;
-import com.rabbitmq.client.Envelope;
-import com.rabbitmq.client.MessageProperties;
+import com.rabbitmq.client.*;
 import org.jspecify.annotations.NonNull;
 import org.jspecify.annotations.Nullable;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import java.io.IOException;
-
-import static com.enoughisasgoodasafeast.RabbitQueueFunctions.retryForExchangeName;
+import java.util.HashMap;
+import java.util.Map;
 
 /**
  * An implementation of the Rabbit Consumer interface that handles Messages.
@@ -21,12 +18,14 @@ public class OperatorConsumer extends BrblConsumer {
     private static final Logger LOG = LoggerFactory.getLogger(OperatorConsumer.class);
 
     SessionAwareMessageProcessor processor;
-    String failedQueueName;
+    String failedExchangeName;
+    String retryExchangeName;
 
-    public OperatorConsumer(SessionAwareMessageProcessor processor, Channel channel, String failedQueueName) {
+    public OperatorConsumer(SessionAwareMessageProcessor processor, Channel channel, String failedExchangeName, String retryExchangeName) {
         super(channel);
         this.processor = processor;
-        this.failedQueueName = failedQueueName;
+        this.failedExchangeName = failedExchangeName;
+        this.retryExchangeName = retryExchangeName;
     }
 
     /**
@@ -57,33 +56,42 @@ public class OperatorConsumer extends BrblConsumer {
                         getChannel().basicAck(deliveryTag, false);
                     } catch (Exception e) {
                         LOG.error("Failed to commit processing for message: {}. Routing to failed queue.", message.id(), e);
-                        getChannel().basicPublish("", failedQueueName, MessageProperties.PERSISTENT_TEXT_PLAIN, body);
+                        getChannel().basicPublish(failedExchangeName, envelope.getRoutingKey(), properties, body);
                         getChannel().basicAck(deliveryTag, false);
                     }
                 }
 
                 case ERROR -> {
-                    LOG.info("Failed {}", message);
+                    LOG.error("Failed {}", message);
                     // Put it on the failed message queue
-                    getChannel().basicPublish("", failedQueueName, MessageProperties.PERSISTENT_TEXT_PLAIN, body);
+                    LOG.error("Routing message to failed queue {}.", failedExchangeName);
+                    getChannel().basicPublish(failedExchangeName, envelope.getRoutingKey(), properties, body);
                     // Ack the original once its safely in the failed queue.
                     getChannel().basicAck(deliveryTag, false);
                     // Also write to table or file of error messages?
                     // ...
                 }
                 case RETRY -> {
-                    long numFailed = getRetriedCount(properties);
-                    assert numFailed < 50; // Even this seems pathological...
-                    LOG.warn("Queueing for retry {}: {}", numFailed, message);
-                    String delayByKey = computeDelayRoutingKey(numFailed);
+                    int numRetries = getBrblRetryCount(properties);
+                    assert numRetries < 50; // TODO Backstop infinite retries...
+                    LOG.warn("Queueing for retry {}: {}", numRetries, message);
+                    String delayByKey = computeDelayRoutingKey(numRetries);
+
                     if (delayByKey != null) {
                         LOG.info("Routing to delay queue with key {}", delayByKey);
-                        // Publish to the *retry* exchange.
-                        String retryExchangeName = retryForExchangeName(envelope.getExchange());
+                        // Publish to the *retry* exchange which will route to the appropriate delay queue
+                        properties = incrementBrblRetryCount(properties, numRetries);
                         routeToDelayBucket(getChannel(), retryExchangeName, deliveryTag,
                                 properties, body, delayByKey);
+
                     } else {
-                        LOG.info("Retries exceeded. Failing message: {}", message);
+                        // DRY this up; we're doing the same thing in the ERROR case.
+                        // Put it on the failed message queue TODO/FIXME somehow compute the routingKey
+                        getChannel().basicPublish(failedExchangeName, envelope.getRoutingKey(), properties, body);
+                        // Ack the original once its safely in the failed queue.
+                        getChannel().basicAck(deliveryTag, false);
+
+                        LOG.info("Retries exceeded. Failed: {}", message);
                     }
                 }
                 case NOOP -> {
@@ -98,27 +106,27 @@ public class OperatorConsumer extends BrblConsumer {
             // We can't recover from this dynamically so ack it
             LOG.error("Failed to deserialize message in {}", envelope, e);
             getChannel().basicAck(deliveryTag, false);
+            // TODO write to a file for later forensic analysis?
         }
     }
 
-    //    void flushSession(Session session, Message message) {
-    //        if (!session.flush(session.getCurrentNode() == null)) {
-    //            LOG.error("Errors flushing session: {}", session);
-    //        } // TODO Gotta clear the operator's session cache, too but Session doesn't have access to it.
-    //        processor.clearSession(SessionKey.newSessionKey(message)); // we're going to need this for testing and, possibly, even production.
-    //    }
+    private AMQP.BasicProperties incrementBrblRetryCount(AMQP.BasicProperties props, int numRetries) {
+        int counter = numRetries + 1;
+        LOG.info("Incrementing brbl retry count to {}", counter);
+        // Create new properties with the updated header
+        Map<String, Object> headers = props.getHeaders();
+        if (headers == null) {
+            headers = new HashMap<>();
+        }
 
-    // Effectively determines the number of retries supported by the consumer.
-    private @Nullable String computeDelayRoutingKey(@NonNull long numFailed) {
-        return switch (numFailed) {
-            case 0L -> RetryDelayRoutingKey.DELAY_5S.name();
-            case 1L -> RetryDelayRoutingKey.DELAY_5S.name(); //FIX -> RetryDelayRoutingKey.DELAY_10S.name();
-            case 3L -> RetryDelayRoutingKey.DELAY_5S.name(); //FIX -> RetryDelayRoutingKey.DELAY_30S.name();
-            default -> {
-                LOG.error("Unsupported number of retries");
-                yield null;
-            }
-        };
+        headers.put(BRBL_RETRY_COUNT_HEADER, counter);
+
+        return new AMQP.BasicProperties.Builder()
+                .headers(headers)
+                .contentType(props.getContentType())
+                .deliveryMode(2) // Persistent
+                .build();
     }
+
 }
 

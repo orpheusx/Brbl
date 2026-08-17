@@ -72,7 +72,7 @@ public class OperatorConsumerIT {
 
         primaryQueueName = testProps.getProperty(CONSUMER_QUEUE_NAME);
         failedQueueName  = failQueueForQueue(primaryQueueName);
-        retryQueueName   = delayQueueForRoutingKey(primaryQueueName + RETRY_QUEUE_SUFFIX, DELAY_5S);
+        retryQueueName   = delayQueueForRoutingKey(primaryQueueName, DELAY_5S);
 
         LOG.info("Primary queue:  {}", primaryQueueName);
         LOG.info("Failed queue:   {}", failedQueueName);

@@ -11,6 +11,7 @@ import java.io.IOException;
 import java.sql.Connection;
 import java.sql.SQLException;
 import java.time.Instant;
+import java.time.temporal.ChronoUnit;
 import java.util.*;
 import java.util.regex.Pattern;
 
@@ -30,6 +31,7 @@ public class TestingPersistenceManager implements PersistenceManager {
 
     private Route[] routes;
     private boolean isFailInsertNewUser;
+    private boolean isFailLoadSession = false;
 
     public TestingPersistenceManager() {
         LOG.info("no-arg constructor called");
@@ -169,13 +171,22 @@ public class TestingPersistenceManager implements PersistenceManager {
         }
     }
 
+    public void failLoadSession(boolean isFailLoadSession) {
+        this.isFailLoadSession = isFailLoadSession;
+    }
+
     @Override
     public @Nullable Session loadSession(UUID id) throws PersistenceManagerException {
         LOG.info("loadSession");
+
+        if (isFailLoadSession) {
+            throw new PersistenceManagerException("Simulated Load Session failure", null, true);
+        }
+
         final byte[] bytes = savedSessions.get(id);
         if (bytes == null) {
             LOG.error("Session {} not found.", id);
-//            throw new PersistenceManagerException("No session data for id: " + id.toString());
+            // throw new PersistenceManagerException("No session data for id: " + id.toString());
             return null;
         }
         try {
@@ -204,6 +215,24 @@ public class TestingPersistenceManager implements PersistenceManager {
 //        return null;
 //    }
 
+    boolean isUserNotNew = false;
+
+    public boolean isUserNotNew() {
+        return isUserNotNew;
+    }
+
+    public void setUserNotNew(boolean userNotNew) {
+        isUserNotNew = userNotNew;
+    }
+
+    public Instant getUserCreatedInstant() {
+        if (isUserNotNew) {
+            return  Instant.now().minus(1, ChronoUnit.HOURS);
+        } else {
+            return Instant.now();
+        }
+    }
+
     @Override
     public User getUser(SessionKey sessionKey) throws PersistenceManagerException {
         // FIXME seems like it would make more sense to create the User using the properties of the provided SessionKey, no?
@@ -213,7 +242,7 @@ public class TestingPersistenceManager implements PersistenceManager {
 //        platformNumbers.put(Platform.SMS, USER_ID);
         platformNumbers.put(sessionKey.platform(), sessionKey.from());
         Map<Platform, Instant> platformCreatedAt = new HashMap<>();
-        platformCreatedAt.put(sessionKey.platform(), Instant.now());
+        platformCreatedAt.put(sessionKey.platform(), getUserCreatedInstant());
         Map<Platform, String> userNickNames = new LinkedHashMap<>();
         userNickNames.put(Platform.SMS, "Bozo");
         Map<Platform, UserStatus> userStatuses = new LinkedHashMap<>();

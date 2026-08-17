@@ -65,11 +65,12 @@ public class DLQLogger extends DefaultConsumer {
         getChannel().basicAck(envelope.getDeliveryTag(), false);
 
         try {
-            LOG.info("handleDelivery thread before: {}", Thread.currentThread().getName());
+            //LOG.info("handleDelivery thread before: {}", Thread.currentThread().getName());
             var message = Message.fromBytes(body);
             deadMessages.add(message);
-            LOG.info("handleDelivery: one-time only {}", deadMessages.getLast());
-            LOG.info("handleDelivery thread after: {}", Thread.currentThread().getName());
+            LOG.info("DLQLogger received: {}", message);
+            //LOG.info("handleDelivery: one-time only {}", deadMessages.getLast());
+            //LOG.info("handleDelivery thread after: {}", Thread.currentThread().getName());
         } catch (ClassNotFoundException e) {
             throw new RuntimeException(e);
         }

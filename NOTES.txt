@@ -6379,8 +6379,7 @@ Here's the summary after it got it working:
 
       ### 3. The Resolution
 
-      We modified the route registration in OperatorMessageFlowIT.java to use  routableMessage.to()  instead of  KnownData.knownRouteIdsAndChannels[0][1] . This is
-    consistent
+      We modified the route registration in OperatorMessageFlowIT.java to use  routableMessage.to()  instead of  KnownData.knownRouteIdsAndChannels[0][1] . This is consistent
       with how the other test method  processMessageBypassingQueue  maps the route.
 
       ### 4. Secondary Assertion Fix (Opt-In Messages)
@@ -7082,6 +7081,7 @@ Issues:
     2) Multi-message responses: If a Node/Edge generates multiple messages we need to guarantee that they are sent in the correct order. If the first is sent to the retry queue because of a transient outage or throttle signal we don't want to succeed in sending the second
 
 
+=== 2026/08/08 ===
 
 Gah, ran our integration tests before getting started with the actual (non-refactoring) changes. Seeing errors (meaning the test couldn't be executed) for 2 of the three active classes.
 
@@ -7100,4 +7100,134 @@ For OperatorMessageFlowIT:
 
     This class was updated recently but the failing test, messageFlowWithUnexpectedInput(), is much older.
 
+=== 2026/08/09 ===
 
+Trying to craft a unit/integration test that covers a retriable message...
+
+In the wake of the overhaul of the whole Operator.process pipeline aimed at support retries and DLQs, I think the pattern we're using in PostgresPersistenceManager to separate the connection fetching from the the actual query execution may need to be reviewed.
+
+In test
+create a user so that the incoming message doesn't create new one
+create a switch to control whether loadSession throws a PersistenceManagerException (with retriable set to true.)
+
+=== 2026/08/10 ===
+
+Whilst working on the integration test for retries realized that existing code isn't doing what we expected. The retry count in the x-death header wasn't being incremented. Spent a bunch of time working on the queue <--> dead letter queue setup without success.
+
+=== 2026/08/11 ===
+Installed a program called "rtk" which stand for Rust Token Killer, a fork of which specializes in filtering Maven output. The conceit is that it filters out the noise from Maven's (extremely verbose) output and thus makes it more efficient and useful for LLM use.
+Required installing Rust from homebrew then building the binary from a github URL.
+Also built cargo-cache: cargo install cargo-cache
+Then ran it to clean up some of the remaining artifacts: cargo install cargo-cache
+Note: the rtk program writes working files in ~/Library/Application\ Support/rtk/
+Hopefully that won't be a problem...
+
+Problems getting OperatorMessageFlowIT working after the changes to the retry exchange/queue.
+We were trying to use RabbitQueueProducer as the surrogate for Rcvr feeding the test messages into the primary queue.
+The queue/exchange setup ended up being declared/bound in RabbitQueueProducer and RabbitQueueConsumer with differing configuration.
+Let's just replace the producer with a testing producer instead of trying to adding more complexity to the existing components.
+
+=== 2026/08/13 ===
+Disastrously unproductive yesterday.
+Too many changes made in too many places now break the running system.
+Time to revert the ones that made real changes then pull pieces of them back in one by one...
+
+Reverted:
+    BrblConsumer
+    operator.properties
+    operator_message_flow_it.properties
+    OperatorConsumer
+    OperatorMessageFlowIT
+    RabbitQueueConsumer
+
+Built, ran unit tests only. Checked the result with a run through Confab. Works fine.
+
+With the other tests fixed we can (re)focus on the retriableMessage test.
+Queuing messages to different queues with TTLs doesn't cause the x-death header to increment past 1 so we aren't able to track the number of retries we've performed for a given messages.
+
+Switched the RETRY handling to basicReject the message but the source queue doesn't have a DLX or TTL configured so it doesn't wait the intended 5 secs each time.
+So we weren't terribly far off from our initial solution using dedicated TTL-defined queues and manually routing them. The problem was in assuming that x-death header would be managed by RMQ. Instead, we need to set/update our own custom header.
+ _________________________________________________________
+| Useful article about RMQ monitoring:                    |
+|     https://rabbitgui.com/blog/rabbitmq-monitoring-api  |
+|_________________________________________________________|
+
+Naming scheme:
+WorkQueue:      <env>-<consumer-name>-<direction>-<platform>    --> dev-opr8r-mo-sms
+WorkExchange:   <workQueue>-x                                   --> dev-opr8r-mo-sms-x
+FailQueue:      <workQueue>_fail                                --> dev-opr8r-mo-sms-fail
+FailExchange:   <failQueue>-x                                   --> dev-opr8r-mo-sms-fail-x
+RetryExchange   <workQueue>-retry-x                             --> dev-opr8r-mo-sms-retry-x
+Then several queues defined by their TTL:
+RetryQueueByDelay
+                <workQueue>-retry<TTL>                          --> dev-opr8r-mo-sms-retry_5s
+                                                                --> dev-opr8r-mo-sms-retry_10s
+=== 2026/08/15 ===
+
+Got the queues setup and working as expected at least where OperatorMessageFlowIT is concerned.
+
+=== 2026/08/16 ===
+
+While fixing the last test in OperatorMessageFlowIT (messageFlowWithUnexpectedInputAndChangeTopicRequested) I hit a problem where a Route was created without an interruptNodeId. The errors didn't directly implicate the problem; the table definition in Postgres enforces non-nullness for all it's colums/fields. The record model, however, doesn't reflect this. Should we add enforcement on the record class, too, or is enough to add @NonNull annotations? We were already explicitly calling out that the fixture Route would be lacking some of the fields. Adding the annotation doesn't cause IntelliJ to complain about my invalid. Poked around the IDE config but still not seeing any of the warnings we'd like.
+
+Ack! The docker-compose config won't start due to unmatched queue/exchange declarations by Rcvr and Opr8r for dev-sndr-mt_sms-fail-x and dev-opr8r-mo-sms-xr.
+The brkr container complains:
+    operation queue.declare caused a channel exception precondition_failed: inequivalent arg 'x-dead-letter-exchange' for queue 'dev-opr8r-mo-sms' in vhost '/': received none but current is the value 'dev-opr8r-mo-sms-xr' of type 'longstr'
+        and
+    operation exchange.declare caused a channel exception precondition_failed: inequivalent arg 'durable' for exchange 'dev-opr8r-mo-sms-fail-x' in vhost '/': received 'true' but current is 'false'
+
+We also see errors from the Opr8r and Sndr containers while they're creating their queueConsumers:
+    com.rabbitmq.client.ShutdownSignalException: channel error; protocol method: #method<channel.close>(reply-code=406, reply-text=PRECONDITION_FAILED - inequivalent arg 'durable' for exchange 'dev-opr8r-mo-sms-fail-x' in vhost '/': received 'true' but current is 'false', class-id=40, method-id=10)
+
+    com.rabbitmq.client.ShutdownSignalException: channel error; protocol method: #method<channel.close>(reply-code=406, reply-text=PRECONDITION_FAILED - inequivalent arg 'durable' for exchange 'dev-sndr-mt_sms-fail-x' in vhost '/': received 'true' but current is 'false', class-id=40, method-id=10)
+
+The stack traces point at RabbitQueueProducer.java:line 81 and RabbitQueueConsumer.java:line 98 respectively.
+
+I guess the pattern RabbitMQ's API expects is that the ordering of the queue/exchange declaration doesn't matter as long as the parameters are the same. So the parts about "durable" might be simple to fix.
+
+The inequivalent value of 'x-dead-letter-exchange' for queue 'dev-opr8r-mo-sms', however...
+Are we running into queue naming conflict maybe? I thought we'd changed the derived names to use dashes exclusively...
+
+Ran 'rabbitmqadmin queues list --columns name' to figure out what our starting point is. To delete them all...
+
+rabbitmqadmin queues delete --name dev-opr8r-mo-sms
+rabbitmqadmin queues delete --name dev-opr8r-mo-sms-fail
+rabbitmqadmin queues delete --name dev-opr8r-mo-sms-retry_5s
+rabbitmqadmin queues delete --name dev-opr8r-mo_sms
+rabbitmqadmin queues delete --name dev-opr8r-mo_sms_fail
+rabbitmqadmin queues delete --name dev-opr8r-mo_sms_retry_5s
+rabbitmqadmin queues delete --name dev-sndr-mt-sms
+rabbitmqadmin queues delete --name dev-sndr-mt_sms
+rabbitmqadmin queues delete --name dev-sndr-mt_sms-retry_5s
+rabbitmqadmin queues delete --name dev-sndr-mt_sms_fail
+rabbitmqadmin queues delete --name dev-sndr-mt_sms_retry_5s
+
+Ran 'rabbitmqadmin exchanges list' for the list of exchanges. To delete them all and start fresh
+rabbitmqadmin exchanges delete --name dev-opr8r-mo-sms-fail-x
+rabbitmqadmin exchanges delete --name dev-opr8r-mo-sms-retry-x
+rabbitmqadmin exchanges delete --name dev-opr8r-mo-sms-x
+rabbitmqadmin exchanges delete --name dev-opr8r-mo-sms-xr
+rabbitmqadmin exchanges delete --name dev-opr8r-mo_sms-x
+rabbitmqadmin exchanges delete --name dev-opr8r-mo_sms-xr
+rabbitmqadmin exchanges delete --name dev-sndr-mt-sms-x
+rabbitmqadmin exchanges delete --name dev-sndr-mt_sms-fail-x
+rabbitmqadmin exchanges delete --name dev-sndr-mt_sms-retry-x
+rabbitmqadmin exchanges delete --name dev-sndr-mt_sms-x
+rabbitmqadmin exchanges delete --name dev-sndr-mt_sms-xr
+
+
+Yep, that was the problem; likely the binding of existing exhanges to queues.
+Ran the usual manual tests with Confab and the automated tests (ChttrClient triggered by curl calling the /chttrStart endpoint.
+Looks good.
+Next steps:
+X generate a commit messages
+_ commit and push
+
+At this point we should probably then merge branch to main. Tag main before the merge?
+Create new branch for the gateway integration prototyping.
+
+------------------
+Getting back to building our prototype third-party gateway integration...
+Telnyx provides documents ready for AI ingestion. Let's try feeding them to our current big model.
+Prompt:
+We're building an integration with Telnyx to be send and receive SMS messages. They provide the following url to help LLMs understand the APIs including

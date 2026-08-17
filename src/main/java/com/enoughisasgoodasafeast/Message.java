@@ -37,7 +37,7 @@ public record Message(UUID id, Instant receivedAt, MessageType type, Platform pl
     }
 
     // Seems like the place for these methods.
-    byte[] toBytes() throws IOException {
+    public byte[] toBytes() throws IOException {
         final ByteArrayOutputStream bos = new ByteArrayOutputStream();
         new ObjectOutputStream(bos).writeObject(this);
         return bos.toByteArray();

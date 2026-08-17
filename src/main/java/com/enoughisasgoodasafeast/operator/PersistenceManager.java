@@ -101,6 +101,11 @@ public interface PersistenceManager {
             this.isRetriable = isRetriable;
         }
 
+        public PersistenceManagerException(String message, boolean isRetriable) {
+            super(message);
+            this.isRetriable = isRetriable;
+        }
+
         public boolean isRetriable() {
             return isRetriable;
         }

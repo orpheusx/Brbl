@@ -26,7 +26,7 @@ public class Burble {
 
             case "sndr" -> Sndr.main(args);
 
-            case "operator" -> Operator.main(args);
+            case "operator", "opr8r" -> Operator.main(args);
 
 //            case "fakeoperator" -> FakeOperator.main(args);
 

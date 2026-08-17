@@ -119,7 +119,7 @@ public class Operator implements SessionAwareMessageProcessor {
         try {
 
             synchronized (session = sessionCache.get(sessionKey)) {
-                assert session != null; // As long as the .get() doesn't throw the session should never be null. Right?
+                //assert session != null; // As long as the .get() doesn't throw the session should never be null. Right?
 
                 // if (null == session) { // NB: the cache load method *can* return null (likely signaling a database problem)
                 //     // Rely on findOrCreateSession to remove user from cache if session create fails
@@ -202,7 +202,7 @@ public class Operator implements SessionAwareMessageProcessor {
                 LOG.error("process: Configuration failure to find or create session for {}", sessionKey, cause);
                 return new ProcessStateSession(ProcessState.ERROR, null);
             } else {
-                LOG.info("process: Retriable failure to find or create session for {}", sessionKey);
+                LOG.info("process: Retriable failure to find or create session for {}", sessionKey, cause);
                 return new ProcessStateSession(ProcessState.RETRY, null);
             }
         }
@@ -287,9 +287,9 @@ public class Operator implements SessionAwareMessageProcessor {
             return new ProcessStateNode(ProcessState.ERROR, null);
         }
 
-        // Find the PRESENT_MULTI/REQUEST_INPUT node that immediately preceded with the current PROCESS_MULTI/PROCESS_INPUT.
-        // It should be two slots prior in the list.
-        // This will be Node we swap in as the target of the "no, continue" option.
+        // Find the PRESENT_MULTI/REQUEST_INPUT or other type with awaitInput=true node that immediately preceded the
+        // current PROCESS_MULTI/PROCESS_INPUT. It should be two slots prior in the list.
+        // This will be the Node we swap in as the target of the "no, continue" option.
         Node convoToContinue = findPairedPrecursor(session.getEvaluatedNodes(), session.getCurrentNode());
         assert convoToContinue != null;
 
@@ -821,9 +821,9 @@ public class Operator implements SessionAwareMessageProcessor {
 
     public void shutdown() throws IOException, TimeoutException {
         LOG.info("Shutting down Operator");
-        queueConsumer.shutdown();
+        if(queueConsumer!=null) queueConsumer.shutdown();
         LOG.info("Shutdown queueConsumer.");
-        queueProducer.shutdown(); // FIXME call getQueueProducer() and iterate through all the queueProducers
+        if(queueProducer!=null) queueProducer.shutdown(); // FIXME call getQueueProducer() and iterate through all the queueProducers
         LOG.info("Shutdown queueProducer.");
     }
 }
