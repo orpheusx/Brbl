@@ -119,7 +119,7 @@ public class Blaster {
             return report;
         }
 
-        Node.printGraph(node, node, 0);
+        //Node.printGraph(node, node, 0);
 
         if (!campaign.routeStatus().equals(RouteStatus.ACTIVE)) {
             report.routeStatusNotActive(campaign.routeStatus());

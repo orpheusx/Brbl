@@ -42,14 +42,16 @@ class OperatorPersistenceIntegrationTest {
 
     @Test
     void findUserExisting() {
-        final User user = pm.getUser(
-                new SessionKey(Platform.SMS, knownNumbersForUsers[0], knownRouteIdsAndChannels[0][1], "random keyword")
-        );
-        assertNotNull(user);
-        assertNotNull(user.platformProfiles());
-        assertEquals(1, user.platformProfiles().size());
-        assertEquals(2, user.platformStatus().size()); // TODO create/find an example where there are grouped
-        LOG.info("Found {}", user);
+        assertDoesNotThrow(() -> {
+            final User user = pm.getUser(
+                    new SessionKey(Platform.SMS, knownNumbersForUsers[0], knownRouteIdsAndChannels[0][1], "random keyword")
+            );
+            assertNotNull(user);
+            assertNotNull(user.platformProfiles());
+            assertEquals(1, user.platformProfiles().size());
+            assertEquals(2, user.platformStatus().size()); // TODO create/find an example where there are grouped
+            LOG.info("Found {}", user);
+        });
     }
 
     @Test
@@ -59,7 +61,7 @@ class OperatorPersistenceIntegrationTest {
         final Node stopNode = pm.getNodeGraph(nodeId);
         assertNotNull(stopNode);
         assertEquals(stopNode.id(), nodeId);
-//        Node.printGraph(stopNode, stopNode, 2); // simple cycle
+        // Node.printGraph(stopNode, stopNode, 2); // simple cycle
 
         // Fetch and validate the initial PRESENT node of the 'change topic' graph.
         final var startingChangeTopicNodeId = UUID.fromString(knownUnreferencedNodeIds[0]);
@@ -69,7 +71,7 @@ class OperatorPersistenceIntegrationTest {
         assertSame(NodeType.PRESENT_MULTI, presentChangeTopic.type());
         assertTrue(presentChangeTopic.text().contains("Oh, you want to talk about something else?"));
 
-//        Node.printGraph(stopNode, presentChangeTopic, 2); // explodes
+        // Node.printGraph(stopNode, presentChangeTopic, 2); // explodes
 
         // Check the single Edge connecting initial PRESENT to PROCESS
         final SequencedSet<Edge> presentChangeEdges = presentChangeTopic.edges();
@@ -212,43 +214,51 @@ class OperatorPersistenceIntegrationTest {
     @Test
     void findOrCreateUser() {
         // FIXME this test creates new users every time it runs.
-        Instant before = Instant.now();
         SessionKey unknown = new SessionKey(Platform.SMS, randomUserNumber(), knownRouteIdsAndChannels[0][1], "colour");
-        final User createdUser = op.findOrCreateUser(unknown);
-        assertNotNull(createdUser);
-        LOG.info("Created user: {}", createdUser);
-        assertTrue(createdUser.platformCreationTimes().get(Platform.SMS).isAfter(before));
+
+        assertDoesNotThrow(() -> {
+            Instant before = Instant.now();
+            final User createdUser = op.findOrCreateUser(unknown);
+            assertNotNull(createdUser);
+            //LOG.info("Created first user: {}", createdUser);
+            assertTrue(createdUser.platformCreationTimes().get(Platform.SMS).isAfter(before));
+        });
 
         // this time with an unknown keyword
-        SessionKey unknown2 = new SessionKey(Platform.SMS, randomUserNumber(), knownRouteIdsAndChannels[0][1], "wlkewerj");
-        final User createdUser2 = op.findOrCreateUser(unknown);
-        assertNotNull(createdUser2);
-        LOG.info("Created user: {}", createdUser2);
+        assertDoesNotThrow(() -> {
+            SessionKey unknown2 = new SessionKey(Platform.SMS, randomUserNumber(), knownRouteIdsAndChannels[0][1], "wlkewerj");
+            final User createdUser2 = op.findOrCreateUser(unknown);
+            assertNotNull(createdUser2);
+            //LOG.info("Created second user: {}", createdUser2);
+        });
     }
 
     @Test
     void updateUserStatus() {
         var sk = new SessionKey(Platform.SMS, knownNumbersForUsers[0], knownRouteIdsAndChannels[0][1], "random keyword");
-        var optedInUser = pm.getUser(sk);
-        assertNotNull(optedInUser);
-        assertEquals(UserStatus.IN, optedInUser.platformStatus().get(Platform.SMS));
-        LOG.info("OptedIN? {}", optedInUser);
 
-        // now test the updating of the status to OUT
-        pm.updateUserStatus(optedInUser, Platform.SMS, UserStatus.OUT);
-        var optedOutUser = pm.getUser(sk);
-        assertNotEquals(optedInUser, optedOutUser);
-        assertEquals(optedInUser.groupId(), optedOutUser.groupId());
-        LOG.info("OptedOUT? {}", optedInUser);
+        assertDoesNotThrow(() -> {
+            var optedInUser = pm.getUser(sk);
+            assertNotNull(optedInUser);
+            assertEquals(UserStatus.IN, optedInUser.platformStatus().get(Platform.SMS));
+            LOG.info("OptedIN? {}", optedInUser);
 
-        assertEquals(UserStatus.OUT, optedOutUser.platformStatus().get(Platform.SMS));
+            // now test the updating of the status to OUT
+            pm.updateUserStatus(optedInUser, Platform.SMS, UserStatus.OUT);
+            var optedOutUser = pm.getUser(sk);
+            assertNotEquals(optedInUser, optedOutUser);
+            assertEquals(optedInUser.groupId(), optedOutUser.groupId());
+            LOG.info("OptedOUT? {}", optedInUser);
 
-        // Restore the original status
-        pm.updateUserStatus(optedOutUser, Platform.SMS, UserStatus.IN);
-        var restoredStatusUser = pm.getUser(sk);
-        LOG.info("Reverted status? {}", restoredStatusUser);
-        assertEquals(UserStatus.IN, restoredStatusUser.platformStatus().get(Platform.SMS));
-        assertEquals(optedInUser, restoredStatusUser);
+            assertEquals(UserStatus.OUT, optedOutUser.platformStatus().get(Platform.SMS));
+
+            // Restore the original status
+            pm.updateUserStatus(optedOutUser, Platform.SMS, UserStatus.IN);
+            var restoredStatusUser = pm.getUser(sk);
+            LOG.info("Reverted status? {}", restoredStatusUser);
+            assertEquals(UserStatus.IN, restoredStatusUser.platformStatus().get(Platform.SMS));
+            assertEquals(optedInUser, restoredStatusUser);
+        });
     }
 
     @Test

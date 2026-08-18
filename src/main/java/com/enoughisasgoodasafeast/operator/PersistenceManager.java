@@ -18,8 +18,15 @@ public interface PersistenceManager {
     // Called by Rcvr
     boolean insertMO(Message message);
 
+    // Called by Operator to check idempotency
+    boolean isMOProcessed(UUID moId);
+
+    // Called by Operator to commit session state atomically
+    boolean commitSessionState(Message moMessage, Session session, boolean isNewUser, @Nullable UserStatus updatedUserStatus) throws PersistenceManagerException;
+
     // Called by Operator
     boolean insertProcessedMO(Message message, Session session);
+
 
     // Called by Session
     boolean insertMT(Message message, Session session);
@@ -28,7 +35,7 @@ public interface PersistenceManager {
     boolean insertDeliveredMT(Message message);
 
     // Called by Operator
-    User getUser(SessionKey sessionKey);
+    User getUser(SessionKey sessionKey) throws PersistenceManagerException;
 
     // Called by Operator
     boolean insertNewUser(User user);
@@ -70,17 +77,37 @@ public interface PersistenceManager {
 
     /*
      * This exception exists simply to slightly abstract the internal details involved.
+     * We add one additional flag to denote if creator thinks the related error is retriable.
      */
     static class PersistenceManagerException extends Exception {
+
+        public boolean isRetriable = false;
+
         public PersistenceManagerException(Exception e) {
             super(e);
+        }
+
+        public PersistenceManagerException(Exception e, boolean retriable) {
+            super(e);
+            this.isRetriable = retriable;
         }
 
         public PersistenceManagerException(String message, Exception e) {
             super(message, e);
         }
 
-        public PersistenceManagerException(String s) {
+        public PersistenceManagerException(String message, Exception e, boolean isRetriable) {
+            super(message, e);
+            this.isRetriable = isRetriable;
+        }
+
+        public PersistenceManagerException(String message, boolean isRetriable) {
+            super(message);
+            this.isRetriable = isRetriable;
+        }
+
+        public boolean isRetriable() {
+            return isRetriable;
         }
     }
 

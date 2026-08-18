@@ -37,9 +37,10 @@ public class SndrConsumer extends BrblConsumer {
         try {
             long deliveryTag = envelope.getDeliveryTag();
             final Message message = Message.fromBytes(body);
-            boolean ack = processor.process(message);
+            var statusException = processor.process(message); // TODO return something with a ProcessState
             LOG.info("Processed message: {}", message);
-            if(ack) {
+            // TODO Retry? Throttle? Other situations
+            if(statusException.isSuccess()) {
                 getChannel().basicAck(deliveryTag, false);
                 if (!processor.log(message)) {
                     LOG.error("Failed to log {}", message);

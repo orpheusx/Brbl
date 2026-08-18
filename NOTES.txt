@@ -6379,8 +6379,7 @@ Here's the summary after it got it working:
 
       ### 3. The Resolution
 
-      We modified the route registration in OperatorMessageFlowIT.java to use  routableMessage.to()  instead of  KnownData.knownRouteIdsAndChannels[0][1] . This is
-    consistent
+      We modified the route registration in OperatorMessageFlowIT.java to use  routableMessage.to()  instead of  KnownData.knownRouteIdsAndChannels[0][1] . This is consistent
       with how the other test method  processMessageBypassingQueue  maps the route.
 
       ### 4. Secondary Assertion Fix (Opt-In Messages)
@@ -6414,3 +6413,821 @@ Perhaps, if all the writes happen at the end of the process, we can have them sh
     > scriptengine.flush
         > session.flush (move this up one level?)
 
+==== 2026/07/18 ====
+
+Took the day off.
+
+==== 2026/07/19 ====
+Fixed a long time, lurking synchronization issue by moving the lock on the session up into the process method of Operator.
+
+Goal:
+Move all the db writes to the end of message processing.
+By deferring the side-effects (new/updated/deleted artifacts in the database) till the end we improve our chances of being able to cleanly retry the processing using the queued retry mechanism.
+We also may have the option to better coordinate the queue operation with the database writes:
+    1) start transaction
+    2) execute all the necessary operations
+    3) try to enqueue the outbound messages
+    4) if the enqueues succeed the commit the tx, else rollback.
+
+Likewise, is it viable to share a single Connection/transaction?
+
+--> Operator.process:
+        insertNewUser(user) : Inserts new user profiles.
+--> Operator.process:
+        updateUserStatus(user, platform, status) : Sets a user's opt-in/opt-out status.
+--> Session.flush:
+        insertMT(message, session) : Inserts MT (Mobile Terminated) response as logs into brbl_logs.mt_messages.
+--> Session.flush:
+        saveSession(session) : Serializes and stores active session data.
+--> Session.flush:
+        clearSession(session) : Purges expired or completed sessions from brbl_users.sessions.
+--> OperatorConsumer.handleDelivery:
+        Operator.log:
+            insertProcessedMO(message, session) : Updates the processing state of the incoming MO message.
+
+So the last database write happens in OperatorConsumer
+The Session has all the data we need to write and access to the persistence manager.
+
+==== 2026/07/22 ====
+
+A moment of temporary insanity yesterday led me to think that the load method used in a (Caffeine) LoadingCache would throw an error if a null value was returned. I immediately started replacing all the nulls with exceptions to signal the particular nature of the failed load but, fortunately, I whipped up a quick unit test to verify and realized that I and/or Google's interpretation of the cache behavior was mistaken. Null is fine. It doesn't get stored in the cache (which is good) but it doesn't blow up. That said, as I'm finally working on the details of our queue integration, it did make me consider how we could communicate the context of a failure and how we ought to handle it. Returning null or not null doesn't tell the caller much so determining if the message should be retried or failed is difficult.
+
+==== 2026/07/23 ====
+ Before arriving at a solution for grouping writes at the very end of process()...consider the way we signal errors in the whole method, including reads that don't return the required data.
+
+Operator.process:
+        try:
+        -- findOrCreateSession
+
+            -- userCache.get:findOrCreateUser
+                -- findOwningCompanyIdByRouteChannel
+                    -- activeRoutesCache.get:loadAllActiveRoutes
+                        --> throw IllegalStateException if zero routes.
+                    --> throw IllegalStateException if no company.
+
+            -- scriptByKeywordCache.get:findScriptForKeywordChannel
+                -- allKeywordsByPatternCache.get:loadAllKeywords
+                    --> throw IllegalStateException only if map is empty.
+                -- scriptCache.get:
+                    --> throw IllegalStateException if node doesn't exist.
+
+            -- findDefaultScriptByRoute:
+                -- activeRoutesCache.get:loadAllActiveRoutes
+                    --> throw IllegalStateException if zero routes.
+                -- scriptCache.get:
+                    --> throw IllegalStateException if node doesn't exist.
+
+            -- findOptInScriptByRoute: same as findDefaultScriptByRoute.
+
+            --> throw InterruptedException if StructuredTaskScope.join() interrupted.
+            --> throw ExecutionException wrapping task.get exception.
+            --> throw PersistenceManagerException wrapping pm.loadSession exception.
+        catch:
+        --> IllegalStateException: return ProcessState:.ERROR.
+        --> CompletionException: return ProcessState.RETRY.
+
+        -- insertNewUser(user) : Inserts new user profiles.
+
+        -- updateUserStatus(user, platform, status) : Sets a user's opt-in/opt-out status.
+
+
+Ran the unit tests and hit three failures in OperatorTest:
+
+java.util.concurrent.CompletionException: java.util.concurrent.ExecutionException: java.lang.IllegalStateException: CRITICAL_CONFIG_ERROR: getNode: No node found for 019f8f8d-9f6a-7306-b198-28192e976ba6
+
+Oof, even more exception chaining going on that I expected. Logback/SLF4J helpfully prints out the nesting by default.
+
+Looks like we find a matching keyword but the script its associated with doesn't exist according to the PersistenceManager.
+So PersistenceManager.getNodeGraph returns null,
+    Operator.getNode throws IllegalArgumentException,
+        the LoadingCache of Nodes rethrows it,
+            the StructuredConcurrency throwIfFailed() wraps it in an ExecutionException,
+                and the Session LoadingCache wraps it in CompletionException.
+
+
+==== 2026/07/24 ====
+
+TODO
+    X Update Operator.findOrCreateUser/PersistenceManager.getUser to throw PME at least when fetchConnection fails.
+    X Fix any broken unit tests, run Chttr and Confab manually.
+    X Commit and push.
+
+Next up: think work/research for coordinating persistence such that it can be rolled back if we need to retry a message.
+Initially thought this would be as easy as sharing the same Connection object between the various PersistenceManager methods called for process().
+
+Gemini 3.1 Pro suggests that's not far off. It recommends:
+    1. Disable Auto-Commit: Set Connection.setAutoCommit(false).
+    2. Execute Statements: Run your various PreparedStatement updates or inserts.
+    3. Commit: If all statements execute without throwing an exception, call Connection.commit().
+    3. Rollback: Catch any SQLException. In the catch block, call Connection.rollback() to undo any partial changes.
+
+So, from the outline  the operations we need to combine are:
+    Operator.process:
+        insertNewUser(user) : Inserts new user profiles.
+        updateUserStatus(user, platform, status) : Sets a user's opt-in/opt-out status.
+    Session.flush:
+        insertMT(message, session) : Inserts MT (Mobile Terminated) response as logs into brbl_logs.mt_messages.
+        saveSession(session) : Serializes and stores active session data.
+            -or-
+        clearSession(session) : Purges expired or completed sessions from brbl_users.sessions.
+    OperatorConsumer.handleDelivery:
+         Operator.log:
+             insertProcessedMO(message, session) : Updates the processing state of the incoming MO message.
+
+Prompt to Antigravity:
+    Consider the code path starting from the handleDelivery method of @src/main/java/com/enoughisasgoodasafeast/OperatorConsumer.java where the implementation the SessionAwareMessageProcessor member, "processor", is an instance of @src/main/java/com/enoughisasgoodasafeast/operator/Operator.java that uses an instance of @src/main/java/com/enoughisasgoodasafeast/operator/PostgresPersistenceManager.java as its "persistenceManager" member.
+    My goal is to modify handleDelivery() so that all the SQL operations are performed in a single transaction, committing them only after Operator.process() returns ProcessState.OK and the Message has been successfully acked. If process() returns any other ProcessState value the transaction should be rolled back.
+    Analyze the idea of creating the java.sql.Connection (via PostgresPersistenceManager.fetchConnection()) at the beginning of handleDelivery() and adding it to the SessionAwareMessageProcessor.process() method signature. This would allow the Operator to pass it to any of the PostgresPersistenceManager database methods it uses. Of course, those existing methods of PostgresPersistenceManager that take a Connection would have to change their access level from private to protected.
+    What would need to be done? What problems have I missed? (Do not write any code yet.)
+
+Gemini via Antigravity response:
+    Here is an analysis of your proposed architectural change to perform all SQL operations in a single transaction managed within [OperatorConsumer.handleDelivery()](file:///Users/mark/Development/sndrRcvr/src/main/java/com/enoughisasgoodasafeast/OperatorConsumer.java#L39).
+
+    ---
+
+    ### What Would Need to Be Done
+
+    To implement this idea as described, the following changes would be necessary across the call stack:
+
+    1. **Interface and Signature Updates:**
+       - Update [SessionAwareMessageProcessor](file:///Users/mark/Development/sndrRcvr/src/main/java/com/enoughisasgoodasafeast/SessionAwareMessageProcessor.java) to include `java.sql.Connection` in `process()`, `complete()`, and `log()` methods (or introduce overloaded versions).
+       - Update [PersistenceManager](file:///Users/mark/Development/sndrRcvr/src/main/java/com/enoughisasgoodasafeast/operator/PersistenceManager.java) interface to accept `Connection` parameters for transactional methods: `insertNewUser()`, `updateUserStatus()`, `insertProcessedMO()`, `insertMT()`, `saveSession()`, `clearSession()`, `getUser()`, and `loadSession()`.
+       - Update all implementations of these interfaces, including [Operator](file:///Users/mark/Development/sndrRcvr/src/main/java/com/enoughisasgoodasafeast/operator/Operator.java), [FakeOperator](file:///Users/mark/Development/sndrRcvr/src/main/java/com/enoughisasgoodasafeast/FakeOperator.java), and [PostgresPersistenceManager](file:///Users/mark/Development/sndrRcvr/src/main/java/com/enoughisasgoodasafeast/operator/PostgresPersistenceManager.java).
+
+    2. **OperatorConsumer Updates:**
+       - Give [OperatorConsumer](file:///Users/mark/Development/sndrRcvr/src/main/java/com/enoughisasgoodasafeast/OperatorConsumer.java) access to a connection source (either via `PersistenceManager` or an abstraction on `SessionAwareMessageProcessor`).
+       - Acquire a `Connection` at the start of `handleDelivery()`, set `connection.setAutoCommit(false)`, and wrap execution in a `try-catch-finally` block.
+       - Pass the `Connection` to `processor.process(message, connection)` and `processor.complete(message, session, connection)`.
+       - Execute `connection.commit()` only when `ProcessState.OK` is returned and message acknowledgment succeeds; call `connection.rollback()` on non-OK states or exceptions.
+
+    3. **PostgresPersistenceManager Visibility:**
+       - Change access levels of internal connection-aware helpers in [PostgresPersistenceManager](file:///Users/mark/Development/sndrRcvr/src/main/java/com/enoughisasgoodasafeast/operator/PostgresPersistenceManager.java) (e.g., `insertProcessedMO`, `insertMT`, `saveSession`, `clearSession`) to `public` (or `protected` if in package) and declare them in the `PersistenceManager` interface.
+
+    ---
+
+    ### Critical Problems and Missed Issues
+
+    While consolidating transactions is a solid goal, passing a single `java.sql.Connection` through the current architecture introduces several significant issues:
+
+    #### 1. Concurrency Violation with `StructuredTaskScope` (Virtual Threads)
+    In [Operator.findOrCreateSession()](file:///Users/mark/Development/sndrRcvr/src/main/java/com/enoughisasgoodasafeast/operator/Operator.java#L399), Java 23 `StructuredTaskScope.ShutdownOnFailure` forks multiple concurrent subtasks (loading user, loading script by keyword, loading default script) onto separate virtual threads.
+    - A JDBC `Connection` is **not thread-safe**.
+    - Sharing a single `Connection` concurrently across threads in `StructuredTaskScope` will result in race conditions, corrupted JDBC driver state, or SQL exceptions.
+
+    #### 2. Incompatibility with Caffeine `LoadingCache`
+    [Operator](file:///Users/mark/Development/sndrRcvr/src/main/java/com/enoughisasgoodasafeast/operator/Operator.java#L38) relies heavily on Caffeine loading caches (`sessionCache`, `userCache`, `scriptCache`, `scriptByKeywordCache`, `activeRoutesCache`).
+    - Caffeine cache loaders (e.g. `sessionKey -> findOrCreateSession(sessionKey)`) only accept the key, not arbitrary runtime parameters like `Connection`.
+    - When `sessionCache.get(sessionKey)` is called inside `process()`, there is no clean way to pass the `Connection` down to `findOrCreateSession` or `findOrCreateUser` without using `ThreadLocal` hacks or completely dismantling the Caffeine loader mechanism.
+
+    #### 3. In-Memory Cache Pollution on Transaction Rollback
+    If `Operator.process()` reads or mutates state (e.g. `userCache.get()`, `sessionUser.platformStatus().put(...)`, `session.setCurrentNode(...)`) and the SQL transaction is subsequently rolled back:
+    - PostgreSQL will revert database changes.
+    - **However, Caffeine's in-memory caches will still hold the modified `User` and `Session` objects.**
+    - Subsequent incoming messages for that user will hit the stale/corrupted in-memory cache, causing inconsistency between memory and database.
+
+    #### 4. Transaction Scoping vs. Outbound Side Effects (RabbitMQ MT Messages)
+    Currently in [OperatorConsumer](file:///Users/mark/Development/sndrRcvr/src/main/java/com/enoughisasgoodasafeast/OperatorConsumer.java#L52-L55):
+    - `processor.complete()` is called under `ProcessState.OK`, which triggers `session.flush()`.
+    - Inside [Session.flush()](file:///Users/mark/Development/sndrRcvr/src/main/java/com/enoughisasgoodasafeast/operator/Session.java#L157), response messages (MTs) are enqueued to RabbitMQ via `producer.enqueue(mtMessage)`.
+    - If the database transaction is committed *after* `complete()` and `basicAck`:
+      - MT messages are **already sent to RabbitMQ** before the DB transaction commits.
+      - If `connection.commit()` fails (e.g., lock timeout, network glitch), the DB transaction rolls back, but outbound messages have already been sent to external gateways and the incoming MO was already acked.
+
+    #### 5. Interface Leakage and Abstraction Violation
+    - `SessionAwareMessageProcessor` is a high-level messaging abstraction. Adding `java.sql.Connection` directly to its method signatures tightly couples the messaging layer to JDBC.
+    - This breaks implementations that do not use JDBC directly, such as [FakeOperator](file:///Users/mark/Development/sndrRcvr/src/main/java/com/enoughisasgoodasafeast/FakeOperator.java).
+
+    #### 6. Resource Leakage Risk
+    - If `fetchConnection()` is invoked at the entry of `handleDelivery()`, any unhandled exception (such as deserialization errors on line 48 or unexpected runtime exceptions) must be strictly managed with `try-with-resources` or `finally` blocks to guarantee connection release, avoiding pool exhaustion in `c3p0`.
+
+    ---
+
+    ### Summary Recommendation
+
+    Before writing code, the design will need to address:
+    1. How cache loading works when database calls require an external `Connection` (or moving read-only cache loads out of the transaction).
+    2. Ensuring virtual threads in `StructuredTaskScope` do not share a single JDBC connection.
+    3. Flushing/invalidating in-memory cache state if a transaction rolls back.
+    4. Ordering DB commits **before** publishing outbound RabbitMQ MT messages and sending `basicAck`.
+
+My response:
+Regarding item #4 of "Critical Problems and Missed Issues," we should delay calling commit or rollback until after Operator.
+Regarding item #6 of "Critical Problems and Missed Issues," the OperatorConsumer's handleDelivery must run everything inside a try-catch-finally
+
+But ultimately, the idea is unworkable as noted by items 1, 2, and (partially) 3.
+So I asked for an alternative...
+
+    Here is a clean, robust alternative architecture that achieves single-transaction atomicity for all database mutations while preserving Caffeine caching, `StructuredTaskScope` concurrency, and RabbitMQ message reliability.
+
+    ---
+
+    ### Core Architectural Insight: Decouple Reads from Writes
+
+    The key to solving the compatibility issues is recognizing that SQL operations fall into two distinct categories:
+
+    1. **Read-Only Lookups (Safe for Caches & Virtual Threads):**
+       Fetching reference data (Routes, Keywords, Node Graphs) and performing initial User/Session lookups are read-only `SELECT` queries. These do **not** need to be part of the write transaction and can continue using Caffeine caches and `StructuredTaskScope` with standard connection pooling.
+    2. **State Mutations (Must Be Atomic):**
+       `insertNewUser`, `updateUserStatus`, `insertProcessedMO`, `insertMT`, and `saveSession` / `clearSession` are all write operations. These are executed sequentially after script evaluation and **must occur within a single SQL transaction**.
+
+    ---
+
+    ### Proposed Solution: Phase-Based "Unit of Work" Architecture
+
+    Instead of passing a low-level `java.sql.Connection` through all methods, structure message processing into three distinct phases:
+
+    ```
+    [Phase 1: Read & Evaluate]  ──>  [Phase 2: Atomic DB Transaction]  ──>  [Phase 3: MQ Publish & Ack]
+     (In-Memory Script Engine)        (Single SQL Connection Commit)         (RabbitMQ MTs & BasicAck)
+    ```
+
+    #### **Phase 1: In-Memory Read & Script Evaluation**
+    - [Operator.process()](file:///Users/mark/Development/sndrRcvr/src/main/java/com/enoughisasgoodasafeast/operator/Operator.java#L105) uses Caffeine loading caches and `StructuredTaskScope` to fetch the `Session` and `User` via read-only pooled connections as it does today.
+    - [ScriptEngine](file:///Users/mark/Development/sndrRcvr/src/main/java/com/enoughisasgoodasafeast/operator/Operator.java#L173) evaluates the message in-memory:
+      - Generates outgoing MT messages into `session.outputBuffer`.
+      - Determines status updates (`UserStatus.IN` / `UserStatus.OUT`).
+      - Computes the updated session state (`currentNode`, `evaluatedNodes`).
+    - **No SQL writes or RabbitMQ publishes take place in Phase 1.**
+
+    #### **Phase 2: Single-Transaction Atomic DB Commit**
+    - If `process()` returns `ProcessState.OK`, all pending SQL mutations are passed to a single transactional method on [PostgresPersistenceManager](file:///Users/mark/Development/sndrRcvr/src/main/java/com/enoughisasgoodasafeast/operator/PostgresPersistenceManager.java):
+      ```java
+      // Concept: Executed inside ONE Connection with autoCommit=false
+      persistenceManager.commitMessageBatch(connection -> {
+          if (isNewUser) insertNewUser(connection, user);
+          if (statusChanged) updateUserStatus(connection, user, platform, newStatus);
+          insertProcessedMO(connection, message, session);
+          for (Message mt : session.getOutputBuffer()) {
+              insertMT(connection, mt, session);
+          }
+          if (session.getCurrentNode() == null) {
+              clearSession(connection, session);
+          } else {
+              saveSession(connection, session);
+          }
+      });
+      ```
+    - If any write fails or an exception occurs, `connection.rollback()` is executed, rolling back **all** SQL operations at once.
+
+    #### **Phase 3: External Side-Effects (RabbitMQ MT Enqueue & BasicAck)**
+    - **Only after** the database transaction successfully commits:
+      1. Emit MT response messages to RabbitMQ (`queueProducer.enqueue(mt)`).
+      2. Send `basicAck` for the incoming MO message in [OperatorConsumer](file:///Users/mark/Development/sndrRcvr/src/main/java/com/enoughisasgoodasafeast/OperatorConsumer.java#L53).
+    - If Phase 2 rolls back, Phase 3 is skipped. No MT messages are queued, and the incoming MO message is routed to the retry/failed queue instead of being acked.
+
+    ---
+
+    ### How This Solves All Previous Problems
+
+    | Problem                           | How This Proposal Solves It                                                               |
+    | ----------------------------------| ----------------------------------------------------------------------------------------- |
+    | StructuredTaskScope Thread Safety | Reads in Phase 1 use standard pool connections. The single transactional Connection       |
+    |                                   |   is only used in Phase 2 sequentially on a single thread.                                |
+    | Caffeine Cache Compatibility      | Caffeine loaders continue to work unchanged during Phase 1 without needing a              |
+    |                                   |  Connection parameter.                                                                    |
+    | Cache Pollution on Rollback       | If Phase 2 fails/rolls back, userCache.invalidate(sessionKey) and sessionCache.invalidate |
+                                        |   (sessionKey) are called to purge the transient in-memory objects.                       |
+    | RabbitMQ Side-Effect Ordering     | MT messages are enqueued to RabbitMQ after the DB transaction commits, eliminating ghost  |
+    |                                   |   messages on DB failure.                                                                 |
+    | Clean Interface Boundaries        | SessionAwareMessageProcessor and PersistenceManager do not expose java.sql.Connection in  |
+    |                                   |   public API signatures.                                                                  |
+    |-----------------------------------------------------------------------------------------------------------------------
+    ---
+
+    ### Implementation Patterns
+
+    To achieve this, there are two primary implementation patterns to consider:
+
+    #### **Option A: Consolidated `PersistenceManager.commitSessionState(...)` (Recommended)**
+    Keep transaction management entirely inside [PostgresPersistenceManager](file:///Users/mark/Development/sndrRcvr/src/main/java/com/enoughisasgoodasafeast/operator/PostgresPersistenceManager.java).
+    - Add a method `commitSessionState(Session session, Message moMessage, boolean isNewUser, UserStatus updatedStatus)` to `PersistenceManager`.
+    - In `PostgresPersistenceManager`, open a single connection, set `autoCommit(false)`, execute all insert/update statements, and commit.
+    - [Operator.complete()](file:///Users/mark/Development/sndrRcvr/src/main/java/com/enoughisasgoodasafeast/operator/Operator.java#L372) calls `commitSessionState()`, followed by flushing MT messages to RabbitMQ.
+
+    #### **Option B: Lambda-Based Transaction Runner `executeInTransaction(...)`**
+    Provide a generic transactional helper on `PostgresPersistenceManager`:
+    - `persistenceManager.executeInTransaction(Consumer<Connection> work)`
+    - This executes all internal `protected` SQL helper methods using the provided connection within a single `begin ... commit / rollback` wrapper.
+
+
+Question:
+    Since most constraint errors are thrown by the execute methods of the PreparedStatement, can we safely change the proposed commitSessionState() method to not actually commit the transaction and instead commit after the RabbitMQ acks and enqueues complete successfully? This seems like it could reduce the possibility of messages being reprocessed (which may be impossible to avoid entirely but is not ideal.)
+
+    While it is tempting to delay `connection.commit()` until after RabbitMQ actions complete, doing so introduces significant architectural risks and performance bottlenecks.
+
+    Here is a detailed breakdown of why keeping the SQL transaction open across RabbitMQ network calls is unsafe, and how the standard enterprise pattern (**At-Least-Once Delivery with Idempotency**) solves reprocessing cleanly.
+
+    ---
+
+    ### The Risks of Delaying `commit()` Until After RabbitMQ Actions
+
+    If you execute PreparedStatements, publish MTs to RabbitMQ, send `basicAck`, and *then* call `connection.commit()`, you introduce three major issues:
+
+    #### 1. DB Lock Contention & Connection Pool Exhaustion
+    When an `INSERT`, `UPDATE`, or `DELETE` statement is executed (e.g., updating user status or upserting session), PostgreSQL acquires row-level exclusive locks on those rows.
+    - If `connection.commit()` is delayed until after RabbitMQ network calls (`enqueue` and `basicAck`):
+      - **The database connection and row locks are held open during external network I/O.**
+      - If RabbitMQ experiences momentary latency, DB connections in `c3p0` will stay blocked in open transactions.
+      - This quickly starves the connection pool and creates lock contention across concurrent workers processing messages for the same user or route.
+
+    #### 2. Risk of Ghost Outbound Messages and Data Loss
+    If `connection.commit()` fails *after* RabbitMQ actions succeed (which can happen due to deferred constraints, serialization failures, DB disk issues, or a network disconnect between the app and Postgres):
+    - The database transaction **rolls back**.
+    - **However, outbound MT messages have ALREADY been published to RabbitMQ** (and potentially delivered to the end-user via SMS/WhatsApp).
+    - **And the incoming MO message has ALREADY been acked** and deleted from the RabbitMQ queue.
+    - **Result:** The system sent a real-world message, lost the incoming message from the queue, and has no database record of either.
+
+    #### 3. Un-rollable Partial RabbitMQ Publishes
+    If a session generates multiple response MT messages (e.g., MT #1 and MT #2):
+    - If MT #1 is enqueued to RabbitMQ, but MT #2 fails or `basicAck` throws an exception, rolling back the open SQL transaction does **not** recall MT #1 from RabbitMQ.
+
+    ---
+
+    ### The Standard Solution: DB Commit First + Idempotency
+
+    In distributed messaging systems (RabbitMQ + relational databases), achieving 100% strictly-once delivery without slow distributed 2-Phase Commit (XA) protocols is mathematically impossible. The industry standard is **At-Least-Once Delivery with Idempotency**.
+
+    #### Recommended Execution Order:
+    ```
+    1. Execute SQL PreparedStatements on Connection (autoCommit = false)
+       └── (Catches ~99.9% of constraint, syntax, and data errors immediately)
+
+    2. connection.commit()
+       └── (Releases DB locks immediately; DB becomes Single Source of Truth)
+
+    3. Publish MTs to RabbitMQ & basicAck incoming MO message
+    ```
+
+    #### How Idempotency Handles Duplicate Reprocessing Safely
+
+    If a crash or network failure occurs right between Step 2 (DB Commit) and Step 3 (`basicAck`), RabbitMQ will re-deliver the MO message on consumer restart.
+
+    To make reprocessing completely safe and non-disruptive:
+
+    1. In [PostgresPersistenceManager](file:///Users/mark/Development/sndrRcvr/src/main/java/com/enoughisasgoodasafeast/operator/PostgresPersistenceManager.java), `messages_mo_prcd` records every processed MO message ID (`id` column is primary key).
+    2. At the beginning of [Operator.process()](file:///Users/mark/Development/sndrRcvr/src/main/java/com/enoughisasgoodasafeast/operator/Operator.java#L105), check if `message.id()` is already present in `messages_mo_prcd`:
+       - If present: Return `ProcessState.NOOP`.
+       - In [OperatorConsumer](file:///Users/mark/Development/sndrRcvr/src/main/java/com/enoughisasgoodasafeast/OperatorConsumer.java#L78), `NOOP` simply calls `basicAck` without executing new script logic or sending duplicate MTs.
+
+    ---
+
+    ### Comparison Summary
+
+    | Metric                        | Commit DB First (Recommended)                | Commit DB After MQ (Proposed)
+    |-------------------------------|----------------------------------------------|----------------------------------------
+    | Catches SQL Statement Errors? | Yes (during `ps.execute()`)                  | Yes (during ps.execute())
+    | DB Lock Duration              | Minimal (released before network I/O)        | Long (held open across network I/O)
+    | Connection Pool Contention    | Low                                          | High (pool exhaustion risk under load)
+    | DB Commit Failure Outcome     | Rollsback *before* any MT sent or MO acked   | Data Loss/Ghost MTs: MT sent & MO acked,
+                                    |                                              |  but DB changes lost
+    | Reprocessing Handling         | Handled cleanly via `messages_mo_prcd`       |
+    |                               |  idempotency check                           | Avoids some retries, fatal on commit failures
+    |-----------------------------------------------------------------------------------------------------------------------
+    ### Recommendation
+    Keep `commitSessionState()` committing the database transaction before publishing to RabbitMQ and sending `basicAck`. Pair it with an idempotency check on `messages_mo_prcd` to make reprocessing seamless and risk-free.
+
+Fair enough. Implementation includes the duplicate processing check on messages_mo_prcd. Seems to work fine. Unit tests, Chttr test, and manual Confab testing all pass.
+
+Need some unit tests for the updated implementation covering the RETRY.
+
+Prompt:
+    Create a new integration test class that checks the behavior of this message processing system starting from the handleDelivery() method of @src/main/java/com/enoughisasgoodasafeast/OperatorConsumer.java. Specifically check that the queueing behavior is correct for each value of ProcessState that may be returned by Operator.process. The following support classes can be used to mock parts of the system:
+        @src/main/java/com/enoughisasgoodasafeast/QueueProducer.java
+        @src/main/java/com/enoughisasgoodasafeast/InMemoryQueueProducer.java
+        @src/main/java/com/enoughisasgoodasafeast/operator/TestingMessageProcessor.java
+        @src/main/java/com/enoughisasgoodasafeast/operator/Operator.java
+        @src/test/java/com/enoughisasgoodasafeast/integration/DLQLogger.java
+    You are free to enhance these classes but don't break any existing tests in doing so.
+
+    You can use an instance of RabbitMQContainer to provide a running RabbitMQ queue by following the pattern used in @src/test/java/com/enoughisasgoodasafeast/integration/OperatorMessageFlowIT.java. The DLQLogger can be used to check the contents of specific queues when validating test results.
+    Provide a plan of action before writing any code.
+
+
+==== 2026/07/26 ====
+
+Note: Since I only had 33% of my free quota remaining I set the /model to "Claude Sonnet 4.6 (Thinking)" thinking it would be smart enough and cheaper than the "Gemini 3.6 Flash (High)"
+
+It read all the referenced files then provided the following:
+
+      Good, I now have a thorough understanding of the codebase. Here is the plan before writing any code.
+      ──────
+      ## Plan of Action
+      ### What We're Testing
+
+      OperatorConsumer.handleDelivery() is the entry point. It calls processor.process(message) and then routes based on the returned ProcessState. We need to
+      verify the RabbitMQ queue effects of each state:
+
+       ProcessState                         | Expected Queue Behavior
+      --------------------------------------|--------------------------------------------------------------------------------------------------
+       OK                                   | MO is basicAck'd from the primary queue. No messages in failedQueue.
+       OK + commit fails                    | MO goes to failedQueueName, basicAck'd. No MT published.
+       ERROR                                | MO published to failedQueueName, then basicAck'd from primary.
+       NOOP                                 | MO is basicAck'd from primary queue. No messages in failedQueue.
+       RETRY                                | MO is routed to the retry delay-bucket queue (via exchange routing key), basicAck'd from
+                                            |   primary. Not in failedQueue.
+      --------------------------------------|--------------------------------------------------------------------------------------------------
+
+      ──────
+      ### Design Decisions
+
+      1. A StubSessionAwareMessageProcessor class in the test package
+      Rather than wiring up the full Operator (which needs routes, scripts, a persistence manager, etc.), we introduce a simple configurable stub that implements SessionAwareMessageProcessor. It will have:
+          • A setProcessState(ProcessState) method to control what process() returns.
+          • A setCompleteThrows(boolean) method to simulate a complete() failure (for the OK-with-commit-failure case).
+          • A completeCallCount counter to verify complete() was called exactly when expected.
+      This is the appropriate approach for these tests: we want to exercise OperatorConsumer.handleDelivery() in isolation, not re-test Operator.process() (which has its own unit tests).
+      2. Reuse the RabbitMQContainer pattern from OperatorMessageFlowIT
+
+      We'll declare a single static RabbitMQContainer, start it once via @BeforeAll, and load queue properties from a new properties file (e.g., operator_consumer_it.properties). Per-test setup creates a fresh OperatorConsumer via RabbitQueueConsumer, wired with our stub processor.
+      3. Queue inspection strategy
+          • failedQueueName inspection: We'll reuse DLQLogger, but enhance it to accept a custom queue name (rather than always deriving the fail-queue from the
+          consumer queue). This allows the same class to be pointed at either the failed queue or the retry queue.
+          • Primary queue depth: After OK/NOOP, we verify the primary queue message count is 0 (message was acked).
+          • Retry queue: For RETRY, we inspect the TTL-backed delay-bucket queue (e.g., *_retry_DELAY_5S) message count using a passive queueDeclarePassive.
+      4. Sending messages to OperatorConsumer
+        We use an rcvrSurrogate (RabbitQueueProducer) to publish test Message objects into the primary queue. OperatorConsumer will consume them via handleDelivery() as it does in production. We use await() from Awaitility to wait for asynchronous queue changes.
+      5. Properties file
+        We create a new src/test/resources/operator_consumer_it.properties. It can reuse the same queue name/routing key as the existing IT properties (since each test class starts its own container), or use a distinct name for clarity.
+
+      6. Test structure
+
+        @Testcontainers
+        class OperatorConsumerIT {
+
+            // Shared container across tests (one start/stop cycle for the class)
+            static RabbitMQContainer broker;
+            static Properties testProps;
+
+            // Per-test instances
+            StubSessionAwareMessageProcessor stub;
+            QueueProducer rcvrSurrogate;
+            DLQLogger failQueueLogger;
+            Channel inspectionChannel;
+
+            @Test void processState_OK_messageIsAcked()
+            @Test void processState_OK_completeFails_messageGoesToFailedQueue()
+            @Test void processState_ERROR_messageGoesToFailedQueue()
+            @Test void processState_NOOP_messageIsAcked()
+            @Test void processState_RETRY_messageGoesToRetryQueue()
+        }
+        ──────
+      ### Files to Create or Modify
+
+      File                                                                    | Action
+     -------------------------------------------------------------------------|--------------------------------------------------------
+      src/test/java/com/.../integration/StubSessionAwareMessageProcessor.java | Create — Configurable stub implementing
+                                                                              |          SessionAwareMessageProcessor
+      src/test/java/com/.../integration/OperatorConsumerIT.java               | Create — The new IT class
+      src/test/resources/operator_consumer_it.properties                      | Create — Properties file for this test's queue config
+      src/test/java/com/.../integration/DLQLogger.java                        | Modify — Add a constructor/factory that accepts an
+                                                                              |          arbitrary queue name rather than always computing
+                                                                              |          the fail-queue name.
+     -------------------------------------------------------------------------|--------------------------------------------------------
+
+  ──────
+
+    Shall I proceed with writing the code?
+
+    ⚠ Individual quota reached. Please upgrade your subscription to increase your limits. Resets in 167h55m34s.
+
+The plan seems reasonable. Can I get some free time with Claude directly to implement it? (I put a reminder into my calendar for next Sunday...)
+
+We could also get (more) serious about finding a decent model to run locally and find out how useful (or not) it is for our work.
+
+In the meantime, the next goal should be one of the following:
+1) Website and prefab script editor (currently living in brbl_admin)
+2) Send scheduling.
+3) SMS provider integration.
+4) Starter setup for local AI (Qwen2.5-Coder-7B (Q4_K_M or Q5_K_M):? It runs on a 16gb M1 like ours...) Or maybe q though it may be slower.
+
+
+Spent some time looking at a few SMS providers. See "SMS API Integration Notes.txt"
+Some of the requirements imposed by WhatsApp (templates for everything outside the 24 hr customer service window approach) make this research highly relevant to the script editor design.
+
+Use case brainstorming:
+1) "request call back"  useful for plumbers, electricians, etc.
+2) "overwatch" where one customer employee can observe a conversation between a customer and an employee and break in if necessary.
+
+
+
+==== 2026/07/24 ====
+
+
+Fun with Machine Learning:
+Downloaded LMStudio and Gemma 4 E4B as a "baby's first model." They're pushing Bionic their agent focussed on smaller, open source models. Getting OpenSSH installed and configured on PoG is a nightmare so I resorted to using the "LM Link" feature of LMStudio to allow me to run Gemma on PoG but use it on Yakko. Apparently it uses TailScale to connect the two which is cool even if I had to create an account with the LMStudio company.
+
+Not sure what expectations to have of this particular model. I'm told it def won't be as good as Claude or the Pro versions of Gemini.
+
+TODO
+  _ Unit tests for copyGraphAppending that prove its correctness for graphs that are deeper than a single Node with a single Edge.
+  _ Unit tests for testing OPT_IN/OUT. (Need an API defined on Operator to clear in-memory sessions and users from cache.)
+  _ Add CHANGE_TOPIC ScriptType to allow customization of the message.
+  _ Chttr: add pseudo-random unexpected input (for PROCESS_MULTI nodes), change topic, and possibly OPT_OUTs. These don't need to be dynamic; the logic that creates the permutations could generate them using a random seed.
+  _ Unit tests that excercise the retry/fail conditions returned by Operator et al. and
+
+Experimenting with using Gemma 4 E4B to write some semi-complicated unit tests. I've connected PoG with Yakko using LM Link. (Had to disable PoG's energy saving features to prevent the network connection from timing out; apparently only UI activity is considered.)
+
+Not a great experience. Gemma is a pretty careless student. It kept claiming victory without doing obvious things like writing the code to the file, compiling it, or running the tests. Even after being told to do so it would claim victory when the tests didn't pass. Instead it would wave its hands about unrelated errors in the test output. Really kind of terrible. Even tool use was bad; edit_file_tool failed over and over again to replace chunks of text that it knew were causing problems.
+
+re: LM studio it has some settings that are unhelpful; by default it was unloading models after a timeout expired leading to "Error: LM Link connection entered error state peer_keepalive_timeout"
+To hopefully avoid this I've turned off "JIT models auto-evict."
+
+As bad as Gemma 4 E4B was, the more targeted variant, gemm-4-12b-coder-fable5-composer2.5-v1, was *way* worse. It clearly had no idea how to write Java, at all.
+
+Last test (for now) Qwen's qwen3-coder-30b (a 14.6gb model.)
+
+Prompt:
+    Create a new test method called "copyGraphAppending2" in OperatorTest that tests the copyGraphAppending() method of Operator. Model this new test after OperatorTest.copyGraphAppendingCorrectness() but uses fixtures provided by the setup() method. Specifically, use the altOptInNode instance as the first parameter to copyGraphAppending and presentQuestion as the second parameter. Check the result to make sure the altOptInNode was copied.
+    Make sure you write the test code to the OperatorTest.java file.
+    You must run the following command to compile and execute the test:
+        mvn test -Dtest=com.enoughisasgoodasafeast.operator.OperatorTest#copyGraphAppending2
+    Check the output to determine if the test passed.
+
+Ran this once, realized I'd referenced variables that were only available in the setup() scope. Qwen recognized the problem from looking at the compilation failsures, tried to figure out how to work around but appeared to be spinning. I stopped it and fixed the problem (made the variables global.) When it resumed, Qwen recognized that the problem had been fixed but then seemed to be stuck writing the test.
+I stopped it again and decided to rerun the whole process from scratch. Restarted the model and created a new session. It got through the same steps (minus the scope error) then took a really long time to add the test method to the file. No insights from the logs about why it was taking so long, sadly. (Bionic could really benefit from time tracking in it's chat interface.)
+It's been running for a while. Currently 3:09. I will wait another 10 minutes then give up.
+Part of the problem here, I assume, is that the model doesn't fit entirely on the GPU. As well, the process is taking up nearly all of the 16gb of system RAM. the default context window is only 8k which isn't big enough to even process the prompt. I bumped it up to 102,656 tokens. (262,144 is the max.)
+
+The Bionic agent currently shows Context: 23.4K but I saw it go as high as 29k in previous attempts. So if we try it on yakko perhaps we can reduce it to 60K? There's a bug in the prompt template when I run Gemma 4 E4B with Bionic. It uses a fucking Jinja2 template (from the Django web framework) for some reason. Went looking for a fix and found nothing. Running the same model directly in LM Studio has no such problem.
+
+Maybe the google/gemma-4-12b-qat will work? Requires 7.15gb, not that much more than e4b.
+
+==== 2026/08/03 ====
+
+Interesting projects:
+RotorQuant - a possible performance improvement over TurboQuant (same compression.)
+TurboVec   - a vector index that greatly reduces the amount of ram needed to vectorize documents for RAG.
+https://lmstudio.ai/models/google/gemma-4-12b-qat
+
+NB:
+    SuperDuper is still in development: https://www.shirt-pocket.com/superduper4.php (we really should make a backup; iCloud is a big unknown.)
+    For deep cleaning our disk: https://github.com/tw93/Mole for TUI interface. https://mole.fit/ for GUI.
+
+    Instead of the just the Go-style ProcessStateSession objects we might consider algebraic types using records and Sealed Classes as described here: https://rockthejvm.com/articles/algebraic-data-types-in-java.
+
+=== 2026/08/04 ===
+
+Fixed the last bits of the latest OperatorTest.copyGraphAppendingOptInUseCase(). Gemma 4 didn't do too bad a job on this though not clear if it saved me much time.
+
+Resumed the Antigravity session and had it complete
+agy --conversation=18de89f8-e62d-42c0-8013-de2a938fc0a3
+
+DLQLogger's handleDelivery() was calling getChannel().basicAck(envelope.getDeliveryTag(), false)
+but, as Claude noted, class instance was created with autoAck=true. The resulting double ack was causing problems.
+Claude's fix was to drop the basicAck call but I prefer to have the method be explicit. So I set autoAck=true after Claude was done.
+
+Not really a lot of work needed to be done but it burned through my free weekly quota. :-P
+
+Back to studying the SMS provider developer docs. Pretty much what I expected.
+    Telnyx:
+    - Requires an API key acquired via their self-serve portal.
+    - MOs are handled by what they prefers to call a webhook. It notes, unsurprisingly, that message order is not guaranteed.
+    - If we use HTTPS the certificate will be checked.
+    - Webhook calls are signed with an Ed25519 public key to prove that they sent it.
+    - Message encoding rounds up from ASCII to UTF-16 (where emojis live) which is more expensive in terms of money and character limits.
+    - Depending on this a single message may be split into multiple parts. The send response API includes the number of parts used and the costs.
+    - They support message status which, if we also support it, requires tracking the message id assigned in their response to the MT (or "direction=outbound" as they call it.) Another write-mostly table for this might work. We could include the info on the customer dashboard.
+
+    Plivo:
+     - Their API is unified, supporting SMS as well as WhatsApp (as an extension.)
+     - Uses XML!
+     - Per https://docs.plivo.com/docs/messaging/sms-availability: "Plivo provisions SMS only to direct brands through sales with a Minimum Monthly Commitment (MMC) [$1,000/month.] SMS is not currently offered to resellers or ISVs (independent software vendors)."
+     - So fuck these guys.
+
+    AWS:
+    - https://aws.amazon.com/blogs/messaging-and-targeting/sms-onboarding-for-saas-isv-and-multi-tenant-applications-with-aws-end-user-messaging/
+    - Useful article about the SMS Originator registration process.
+        It echoes some of the things that I'd been planning but hadn't written down:
+            - Providing our customers with standard Privacy Policy and/or Terms & Conditions.
+            - Summarizing restrictions that impact user interaction (quiet hours, template requirements.)
+            - Bundled Messaging: Include a certain number of messages in your base subscription with overage fees for additional messages.
+    - Supports email services Amazon Simple Email Service (SES) which could be useful for communicating with our customers.
+    - Supports origination selection by area code.
+    - Supports "sender ID" (in SMS is the name or number that appears as the sender on a text message.)
+
+    We will start with the idea that we handle all the registration, templating, stuff on behalf of our customers.
+
+=== 2026/08/06 ===
+
+NB: Models to try out (if they fit)
+https://huggingface.co/barozp/Qwen3.6-28B-REAP20-A3B-GGUF suggested by Codaceous. Doesn't appear to support tool-calls or reasoning according to the tags I'm seeing in LM Studio's download client.
+
+
+Planning our 3rd party gateway integrations:
+    - Review our Message class fields for fit against each gateway representation.
+        Requires checking out each gateways MO format.
+    - Define standard Sndr queue behavior for success, fail, retry, backoff
+    - Organization of the queues by "Connectivity Partner" (CNP) industry lingo for the 3rd party gateway provider.
+    - Fuzzing for provider behavior (combination of the MT payload, the declared error cases, and random failures)
+    - For each provider:
+        - Build an testing MT server that models their declared set of HTTP status codes for various errors.
+            - For Telnyx
+                - They provide a sender client which can be used as a reference:
+                    See https://developers.telnyx.com/development/sdk/java/index#client-configuration
+                - They also display a curl command that shows how simple their API is:
+                    curl -X POST https://api.telnyx.com/v2/messages \
+                      -H "Content-Type: application/json" \
+                      -H "Authorization: Bearer YOUR_API_KEY" \
+                      -d '{
+                        "from": "+15551234567",
+                        "to": "+15559876543",
+                        "text": "Hello, world!"
+                      }'
+                - Create integration tests that excercise each of the error cases.
+                - Their SDK uses OkHttp. It also uses reflection. We may have to deal with this if Sndr/Rcvr are AOT compiled and run on Graal. It also depends on Jackson 2.18.2 but is compatible with version 2.13.4 or higher.
+                - Because they provide a whole bunch of other telecom services their API (and/or their documentation) isn't as it could be about how to simply send and receive SMS messages. The latter is handled by implementing one or more webhooks.
+                 See https://developers.telnyx.com/docs/messaging/messages/receiving-webhooks/index.
+                - Some of the highlights -->
+                    A message is received by your number, or a sent message changes status (queued → sent → delivered)
+                    Return a 2xx status code within 2 seconds to acknowledge receipt.
+                    Telnyx sends a POST request (with JSON payload.)
+                    Return a 2xx status code within 2 seconds to acknowledge receipt.
+                    If our server doesn’t respond in time, Telnyx retries (up to 3 attempts per URL) and then tries your failover URL if configured.
+                    (Not clear if it waits in between attempts.)
+                    The webhook url can be overidden in the sent message's webhook_url and webhook_failover_url parameters. Otherwise our profile setting will be used. The messages/events are available as Message Detail Records (which contains the current state of the message.) These MDRs can be used (badly) to poll for responses and state changes. For example, if we had an outage we might run a process that looks for delivered message that never received a delivery notification.
+            - For Amazon AWS
+                - Seems to involve on SNS to support "two-way messaging," their term for A2P SMS. They show the code using AWS SDK ("boto") but it's Python. I think there are Java versions of the standard SDK, too.
+
+
+=== 2026/08/07 ===
+NOTE: Did some refactoring that needs a little explanation. The base class HttpMessageHandler only "sends" Messages. This is clear when the Message represents an MT. When the message represents an MO the caller is playing the role of an SMSc/Connectivty Partner. Clarified this by renaming the class to HttpMessageSender and its inheritors HttpMTSender and HttpMOSender.
+
+
+SndrConsumer extends BrblConsumer registered with RMQ.
+    Manages interaction with queue (ack, nack, queue for retry)
+    Calls process() on
+        Sndr implements SndrMessageProcessor
+            has a
+                QueueConsumer (impl RabbitQueueConsumer)
+                PersistenceManager (impl PostgresPersistenceManager)
+                HttpMTSender (is impl)
+            calls handle on HttpMTSender
+    Extends BrblConsumer which has methods for retry tracking: getRetriedCount() and routeToDelayBucket().
+
+
+HttpMTSender extends HttpMessageSender implements MTHandler
+    HttpMessageHandler.handle(Message) returning boolean.
+        Implement a standard retry mechanism used when runtime exceptions (i.e. UncheckedIOException when we can't connect to the provider endpoint) are thrown but are not fatal.
+        Change the boolean StatusException, a union of the response code and any exception that might have been thrown. Then, in Sndr, evaluate the response with a switch that uses a vendor specific mapping table to decide if the message should be acked, nacked, or retried (including the RetryDelayRoutingKey.)
+        NB: right now both MTHandler and MOHandlers define a boolean handle(Message) method. Might be time to change it.
+
+Tasks:
+- Provide a Message-to-3rd party format converter.
+- Capture whatever HTTP code the PUT/POST operation the 3rd party returns along with any runtime exceptions thrown by WebClient in a union-like record.
+- Use a defined a set of mappings for each 3rd party to detemine the appropriate action for the queue consumer to take.
+
+Issues:
+    1) Throttling: Not sure how to handle throttle signals; probably want to track our message/second rate in any case.
+    2) Multi-message responses: If a Node/Edge generates multiple messages we need to guarantee that they are sent in the correct order. If the first is sent to the retry queue because of a transient outage or throttle signal we don't want to succeed in sending the second
+
+
+=== 2026/08/08 ===
+
+Gah, ran our integration tests before getting started with the actual (non-refactoring) changes. Seeing errors (meaning the test couldn't be executed) for 2 of the three active classes.
+
+For EndToEndMessagingIT:
+    Local Docker Compose exited abnormally with code 1 whilst running command: compose up -d" type="org.testcontainers.containers.ContainerLaunchException
+    The error explains:
+    2026-08-08 10:54:47,329 INFO  [] [Thread-13] tc.docker - Error response from daemon: driver failed programming external connectivity on endpoint kbbfysnnrt6h-brkr-1 (dd98a2ab7b60d76ee94dcdf53e570dcafe3351eba0c9c8895ab985db09df8da5): Bind for 0.0.0.0:5672 failed: port is already allocated
+    The test uses the same docker compose file: docker-compose-jvm.yaml up
+    We include '--remove-orphans' switch when running it manually. Do we need the equivalent for testcontainers?
+
+    Updated Maven dependency from org.testcontainers:junit-jupiter:1.20.4 to 1.20.4. Appears to fix the problem.
+
+
+For OperatorMessageFlowIT:
+    org.awaitility.core.ConditionTimeoutException: Condition with Lambda expression in com.enoughisasgoodasafeast.integration.OperatorMessageFlowIT was not fulfilled within 5 seconds.
+
+    This class was updated recently but the failing test, messageFlowWithUnexpectedInput(), is much older.
+
+=== 2026/08/09 ===
+
+Trying to craft a unit/integration test that covers a retriable message...
+
+In the wake of the overhaul of the whole Operator.process pipeline aimed at support retries and DLQs, I think the pattern we're using in PostgresPersistenceManager to separate the connection fetching from the the actual query execution may need to be reviewed.
+
+In test
+create a user so that the incoming message doesn't create new one
+create a switch to control whether loadSession throws a PersistenceManagerException (with retriable set to true.)
+
+=== 2026/08/10 ===
+
+Whilst working on the integration test for retries realized that existing code isn't doing what we expected. The retry count in the x-death header wasn't being incremented. Spent a bunch of time working on the queue <--> dead letter queue setup without success.
+
+=== 2026/08/11 ===
+Installed a program called "rtk" which stand for Rust Token Killer, a fork of which specializes in filtering Maven output. The conceit is that it filters out the noise from Maven's (extremely verbose) output and thus makes it more efficient and useful for LLM use.
+Required installing Rust from homebrew then building the binary from a github URL.
+Also built cargo-cache: cargo install cargo-cache
+Then ran it to clean up some of the remaining artifacts: cargo install cargo-cache
+Note: the rtk program writes working files in ~/Library/Application\ Support/rtk/
+Hopefully that won't be a problem...
+
+Problems getting OperatorMessageFlowIT working after the changes to the retry exchange/queue.
+We were trying to use RabbitQueueProducer as the surrogate for Rcvr feeding the test messages into the primary queue.
+The queue/exchange setup ended up being declared/bound in RabbitQueueProducer and RabbitQueueConsumer with differing configuration.
+Let's just replace the producer with a testing producer instead of trying to adding more complexity to the existing components.
+
+=== 2026/08/13 ===
+Disastrously unproductive yesterday.
+Too many changes made in too many places now break the running system.
+Time to revert the ones that made real changes then pull pieces of them back in one by one...
+
+Reverted:
+    BrblConsumer
+    operator.properties
+    operator_message_flow_it.properties
+    OperatorConsumer
+    OperatorMessageFlowIT
+    RabbitQueueConsumer
+
+Built, ran unit tests only. Checked the result with a run through Confab. Works fine.
+
+With the other tests fixed we can (re)focus on the retriableMessage test.
+Queuing messages to different queues with TTLs doesn't cause the x-death header to increment past 1 so we aren't able to track the number of retries we've performed for a given messages.
+
+Switched the RETRY handling to basicReject the message but the source queue doesn't have a DLX or TTL configured so it doesn't wait the intended 5 secs each time.
+So we weren't terribly far off from our initial solution using dedicated TTL-defined queues and manually routing them. The problem was in assuming that x-death header would be managed by RMQ. Instead, we need to set/update our own custom header.
+ _________________________________________________________
+| Useful article about RMQ monitoring:                    |
+|     https://rabbitgui.com/blog/rabbitmq-monitoring-api  |
+|_________________________________________________________|
+
+Naming scheme:
+WorkQueue:      <env>-<consumer-name>-<direction>-<platform>    --> dev-opr8r-mo-sms
+WorkExchange:   <workQueue>-x                                   --> dev-opr8r-mo-sms-x
+FailQueue:      <workQueue>_fail                                --> dev-opr8r-mo-sms-fail
+FailExchange:   <failQueue>-x                                   --> dev-opr8r-mo-sms-fail-x
+RetryExchange   <workQueue>-retry-x                             --> dev-opr8r-mo-sms-retry-x
+Then several queues defined by their TTL:
+RetryQueueByDelay
+                <workQueue>-retry<TTL>                          --> dev-opr8r-mo-sms-retry_5s
+                                                                --> dev-opr8r-mo-sms-retry_10s
+=== 2026/08/15 ===
+
+Got the queues setup and working as expected at least where OperatorMessageFlowIT is concerned.
+
+=== 2026/08/16 ===
+
+While fixing the last test in OperatorMessageFlowIT (messageFlowWithUnexpectedInputAndChangeTopicRequested) I hit a problem where a Route was created without an interruptNodeId. The errors didn't directly implicate the problem; the table definition in Postgres enforces non-nullness for all it's colums/fields. The record model, however, doesn't reflect this. Should we add enforcement on the record class, too, or is enough to add @NonNull annotations? We were already explicitly calling out that the fixture Route would be lacking some of the fields. Adding the annotation doesn't cause IntelliJ to complain about my invalid. Poked around the IDE config but still not seeing any of the warnings we'd like.
+
+Ack! The docker-compose config won't start due to unmatched queue/exchange declarations by Rcvr and Opr8r for dev-sndr-mt_sms-fail-x and dev-opr8r-mo-sms-xr.
+The brkr container complains:
+    operation queue.declare caused a channel exception precondition_failed: inequivalent arg 'x-dead-letter-exchange' for queue 'dev-opr8r-mo-sms' in vhost '/': received none but current is the value 'dev-opr8r-mo-sms-xr' of type 'longstr'
+        and
+    operation exchange.declare caused a channel exception precondition_failed: inequivalent arg 'durable' for exchange 'dev-opr8r-mo-sms-fail-x' in vhost '/': received 'true' but current is 'false'
+
+We also see errors from the Opr8r and Sndr containers while they're creating their queueConsumers:
+    com.rabbitmq.client.ShutdownSignalException: channel error; protocol method: #method<channel.close>(reply-code=406, reply-text=PRECONDITION_FAILED - inequivalent arg 'durable' for exchange 'dev-opr8r-mo-sms-fail-x' in vhost '/': received 'true' but current is 'false', class-id=40, method-id=10)
+
+    com.rabbitmq.client.ShutdownSignalException: channel error; protocol method: #method<channel.close>(reply-code=406, reply-text=PRECONDITION_FAILED - inequivalent arg 'durable' for exchange 'dev-sndr-mt_sms-fail-x' in vhost '/': received 'true' but current is 'false', class-id=40, method-id=10)
+
+The stack traces point at RabbitQueueProducer.java:line 81 and RabbitQueueConsumer.java:line 98 respectively.
+
+I guess the pattern RabbitMQ's API expects is that the ordering of the queue/exchange declaration doesn't matter as long as the parameters are the same. So the parts about "durable" might be simple to fix.
+
+The inequivalent value of 'x-dead-letter-exchange' for queue 'dev-opr8r-mo-sms', however...
+Are we running into queue naming conflict maybe? I thought we'd changed the derived names to use dashes exclusively...
+
+Ran 'rabbitmqadmin queues list --columns name' to figure out what our starting point is. To delete them all...
+
+rabbitmqadmin queues delete --name dev-opr8r-mo-sms
+rabbitmqadmin queues delete --name dev-opr8r-mo-sms-fail
+rabbitmqadmin queues delete --name dev-opr8r-mo-sms-retry_5s
+rabbitmqadmin queues delete --name dev-opr8r-mo_sms
+rabbitmqadmin queues delete --name dev-opr8r-mo_sms_fail
+rabbitmqadmin queues delete --name dev-opr8r-mo_sms_retry_5s
+rabbitmqadmin queues delete --name dev-sndr-mt-sms
+rabbitmqadmin queues delete --name dev-sndr-mt_sms
+rabbitmqadmin queues delete --name dev-sndr-mt_sms-retry_5s
+rabbitmqadmin queues delete --name dev-sndr-mt_sms_fail
+rabbitmqadmin queues delete --name dev-sndr-mt_sms_retry_5s
+
+Ran 'rabbitmqadmin exchanges list' for the list of exchanges. To delete them all and start fresh
+rabbitmqadmin exchanges delete --name dev-opr8r-mo-sms-fail-x
+rabbitmqadmin exchanges delete --name dev-opr8r-mo-sms-retry-x
+rabbitmqadmin exchanges delete --name dev-opr8r-mo-sms-x
+rabbitmqadmin exchanges delete --name dev-opr8r-mo-sms-xr
+rabbitmqadmin exchanges delete --name dev-opr8r-mo_sms-x
+rabbitmqadmin exchanges delete --name dev-opr8r-mo_sms-xr
+rabbitmqadmin exchanges delete --name dev-sndr-mt-sms-x
+rabbitmqadmin exchanges delete --name dev-sndr-mt_sms-fail-x
+rabbitmqadmin exchanges delete --name dev-sndr-mt_sms-retry-x
+rabbitmqadmin exchanges delete --name dev-sndr-mt_sms-x
+rabbitmqadmin exchanges delete --name dev-sndr-mt_sms-xr
+
+
+Yep, that was the problem; likely the binding of existing exhanges to queues.
+Ran the usual manual tests with Confab and the automated tests (ChttrClient triggered by curl calling the /chttrStart endpoint.
+Looks good.
+Next steps:
+X generate a commit messages
+_ commit and push
+
+At this point we should probably then merge branch to main. Tag main before the merge?
+Create new branch for the gateway integration prototyping.
+
+------------------
+Getting back to building our prototype third-party gateway integration...
+Telnyx provides documents ready for AI ingestion. Let's try feeding them to our current big model.
+Prompt:
+We're building an integration with Telnyx to be send and receive SMS messages. They provide the following url to help LLMs understand the APIs including

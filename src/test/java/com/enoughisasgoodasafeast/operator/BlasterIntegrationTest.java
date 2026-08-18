@@ -45,7 +45,7 @@ public class BlasterIntegrationTest {
 
     public static final int EXPECTED_SUCCESSES = 10; // matched with the elements in knownUserIds
     public static final int EXPECTED_SKIPPED = 7; // matched with the elements in knownUserIds
-    final static List<UUID> modelUserIds = new ArrayList<>();
+    static final List<UUID> modelUserIds = new ArrayList<>();
 
     @BeforeAll
     static void oneTimeSetUp() {

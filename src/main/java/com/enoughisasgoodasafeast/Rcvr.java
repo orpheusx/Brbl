@@ -72,7 +72,7 @@ public class Rcvr extends WebService {
      */
     private static class HealthCheckHandler extends BaseHandler {
 
-        final static Header OK_CONTENT_LEN_HEADER = HeaderValues.create(HeaderNames.CONTENT_LENGTH, 0);
+        static final Header OK_CONTENT_LEN_HEADER = HeaderValues.create(HeaderNames.CONTENT_LENGTH, 0);
 
         @Override
         public void handle(ServerRequest req, ServerResponse res) throws Exception {

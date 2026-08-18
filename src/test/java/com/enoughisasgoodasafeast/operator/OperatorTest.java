@@ -17,6 +17,7 @@ import static com.enoughisasgoodasafeast.Functions.randomUUID;
 import static com.enoughisasgoodasafeast.Message.newMO;
 import static com.enoughisasgoodasafeast.Message.newMT;
 import static com.enoughisasgoodasafeast.datagen.KnownData.knownNumbersForUsers;
+import static com.enoughisasgoodasafeast.operator.TestingPersistenceManager.*;
 import static java.util.Objects.requireNonNull;
 import static org.junit.jupiter.api.Assertions.*;
 
@@ -66,10 +67,10 @@ public class OperatorTest {
     );
 
     public static final Keyword colorKeyword = new Keyword(
-            TestingPersistenceManager.KEYWORD_ID,
+            KEYWORD_ID,
             "(color|colour|colr).*(quiz|q|kwiz)",
             Platform.SMS,
-            TestingPersistenceManager.SCRIPT_ID,
+            SCRIPT_ID,
             OperatorTest.SHORT_CODE_4); // channel
 
     private static final SessionKey SESSION_KEY_US_SHORT_CODE_1 = SessionKey.newSessionKey(mo1);
@@ -84,6 +85,12 @@ public class OperatorTest {
     private Node endConversation;
     private Node processAnswer;
 
+    private Node presentQuestion;
+    private Node altOptInNode;
+    private Node optInNode;
+    private Node optOutNode;
+    private Node defaultNode;
+
     @BeforeEach
     void setup() {
         queueProducer = new InMemoryQueueProducer();
@@ -95,7 +102,7 @@ public class OperatorTest {
         persistenceManager.addKeyword(Pattern.compile(colorKeyword.wordPattern()), colorKeyword);
 
         // Construct a script for testing purposes
-        Node presentQuestion = new Node(COLOR_QUIZ_START_TEXT, NodeType.PRESENT_MULTI, "ColorQuizStart");
+        presentQuestion = new Node(SCRIPT_ID, COLOR_QUIZ_START_TEXT, NodeType.PRESENT_MULTI, null, "ColorQuizStart");
         processAnswer = new Node(COLOR_QUIZ_UNEXPECTED_INPUT, NodeType.PROCESS_MULTI, "ColorQuizProcessResponse");
         presentQuestion.edges().add(
                 new Edge(List.of("n/a"), "n/a", processAnswer)
@@ -111,7 +118,7 @@ public class OperatorTest {
 
         // Add the test script to the fixture's script "cache."
         persistenceManager.addNodeGraph(
-                TestingPersistenceManager.SCRIPT_ID, presentQuestion);
+                SCRIPT_ID, presentQuestion);
 
         Node confirmChangeTopic = new Node(
                 "Oh, you want to talk about something else? 1) yes 2) no, let's continue with the current conversation.",
@@ -129,7 +136,7 @@ public class OperatorTest {
         Edge confirmChange = new Edge(List.of("yes"), "Ok, cool.", presentTopics);
 
         // Include a placeholder that the Operator will replace when setting up the 'change topic' conversation.
-        Node continueCurrentPlaceholder = new Node("N/A",	NodeType.END_OF_CHAT, "ContinueCurrentPlaceholder");
+        Node continueCurrentPlaceholder = new Node("N/A", NodeType.END_OF_CHAT, "ContinueCurrentPlaceholder");
         Edge stayOnCurrent = new Edge(List.of("no"), "Ok, I'll repeat the last question.", continueCurrentPlaceholder);
 
         processChangeResponse.edges().addAll(List.of(confirmChange, stayOnCurrent));
@@ -141,17 +148,17 @@ public class OperatorTest {
                     edge.matchText(), edge.responseText(), edge.targetNode().label(), edge.targetNode().type());
         });
 
-        Node optInNode = new Node(WELCOME_OPT_IN_MESSAGE, NodeType.SEND_MESSAGE, "OptIn");
+        optInNode = new Node(WELCOME_OPT_IN_MESSAGE, NodeType.SEND_MESSAGE, "OptIn");
         optInNode.edges().add(new Edge(null));
 
-        Node altOptInNode = new Node(CHINESE_OPT_IN_MESSAGE, NodeType.SEND_MESSAGE, "ChineseOptIn");
+        altOptInNode = new Node(CHINESE_OPT_IN_MESSAGE, NodeType.SEND_MESSAGE, "ChineseOptIn");
         altOptInNode.edges().add(new Edge(null));
 
-        Node optOutNode = new Node("You have been opted out. Thanks for all the fish", NodeType.SEND_MESSAGE, "OptOut");
+        optOutNode = new Node("You have been opted out. Thanks for all the fish", NodeType.SEND_MESSAGE, "OptOut");
         optOutNode.edges().add(new Edge(null));
 
         // Define a default conversation graph for the platform-channel, adding it with the default route.
-        Node defaultNode = new Node("Welcome! You can talk to us about the following topics...", NodeType.END_OF_CHAT, "CustomerTopicStarter");
+        defaultNode = new Node("Welcome! You can talk to us about the following topics...", NodeType.END_OF_CHAT, "CustomerTopicStarter");
         Route route1 = new Route(Platform.SMS, mo1.to(), defaultNode.id(), randomUUID(), confirmChangeTopic.id(), optInNode.id(), optOutNode.id());
         Route route2 = new Route(Platform.SMS, SHORT_CODE_2, defaultNode.id(), randomUUID(), confirmChangeTopic.id(), optInNode.id(), optOutNode.id());
         Route route3 = new Route(Platform.SMS, SHORT_CODE_3, defaultNode.id(), randomUUID(), confirmChangeTopic.id(), altOptInNode.id(), optOutNode.id());
@@ -189,6 +196,11 @@ public class OperatorTest {
         persistenceManager.setActiveRoutes(allRoutes);
     }
 
+    @Test
+    void checkScriptCacheLoaderReturningNull() {
+        assertNotNull(operator.scriptCache.get(SCRIPT_ID));
+        assertThrows(IllegalStateException.class, () -> operator.scriptCache.get(randomUUID()));
+    }
 
     @Test
     void processAndCheckResponse() {
@@ -211,6 +223,7 @@ public class OperatorTest {
 
         assertDoesNotThrow(() -> {
             operator.process(mo1);
+            hackyForcedFlush(mo1);
         });
 
         //IO.println("------ Messages queued for mo1 ------");
@@ -224,7 +237,11 @@ public class OperatorTest {
         assertEquals(mt1.type(), queueProducer.enqueued().getFirst().type());
         queueProducer.enqueued().clear(); // Need to manually clear the enqueued message list between process() calls.
 
-        assertDoesNotThrow(() -> { operator.process(mo2); });
+        assertDoesNotThrow(() -> {
+                    operator.process(mo2);
+                    hackyForcedFlush(mo2);
+                }
+        );
         //println("------ Messages queued for mo2 ------");
         //queueProducer.enqueued().forEach(System.out::println);
 
@@ -236,7 +253,11 @@ public class OperatorTest {
         queueProducer.enqueued().clear();
 
         // The opt-in message for the route specified by mo3 is different.
-        assertDoesNotThrow(() -> { operator.process(mo3); });
+        assertDoesNotThrow(() -> {
+                    operator.process(mo3);
+                    hackyForcedFlush(mo3);
+                }
+        );
         //IO.println("------ Messages queued for mo3 ------");
         //queueProducer.enqueued().forEach(System.out::println);
 
@@ -252,6 +273,12 @@ public class OperatorTest {
         assertEquals(mt3.text(), queueProducer.enqueued().get(1).text());
         assertEquals(mt3.type(), queueProducer.enqueued().get(1).type());
         queueProducer.enqueued().clear();
+    }
+
+    private void hackyForcedFlush(Message mo) {
+        // OperatorConsumer typically calls flush on the Session, but we don't have one here so we need to simulate it.
+        var session = operator.sessionCache.get(SessionKey.newSessionKey(mo));
+        session.flushMQ();
     }
 
 
@@ -318,7 +345,9 @@ public class OperatorTest {
 
         // Initiate the conversation
         assertDoesNotThrow(() -> {
-            operator.process(mo4);
+            final var processStateSession = operator.process(mo4);
+            assertSame(ProcessState.OK, processStateSession.processState());
+            hackyForcedFlush(mo4);
         });
 
         // The lookup from scriptCache will have the effect of populating scriptByKeywordCache
@@ -333,7 +362,7 @@ public class OperatorTest {
         assertEquals(MOBILE_MX, userPhoneNumber);
 
         assertNotNull(session.getCurrentNode());
-        Node.printGraph(session.getCurrentNode(), session.getCurrentNode(), 2);
+        //Node.printGraph(session.getCurrentNode(), session.getCurrentNode(), 2);
 
         final List<Message> queuedMessages = queueProducer.enqueued();
 
@@ -342,12 +371,12 @@ public class OperatorTest {
         assertTrue(requireNonNull(queuedMessages.get(1)).text().contains("favorite color"), "Expected text not found in first queued message.");
 
         // The session's currentNode should be awaiting a response.
-        // Arguably this is a bad test since it makes assumption about the internal state of the Operator/Session.
         assertEquals(NodeType.PROCESS_MULTI, session.getCurrentNode().type(), "Session node state has unexpected type.");
 
         // Send a valid response
         assertDoesNotThrow(() -> {
             operator.process(mo5); // answer given should select "flort"
+            hackyForcedFlush(mo5);
         });
 
         //queuedMessages.forEach(message -> {
@@ -368,7 +397,8 @@ public class OperatorTest {
         // Check that the Session's currentNode is now the last node in the conversation
         assertNull(session.getCurrentNode(), "Session's currentNode is unexpectedly not null.");
 
-        assertEquals(0, operator.sessionCache.estimatedSize(), "Session wasn't cleared at end of conversation.");
+        // The following check isn't expected to work without going through an OperatorConsumer
+        //assertEquals(0, operator.sessionCache.estimatedSize(), "Session wasn't cleared at end of conversation.");
     }
 
 
@@ -381,6 +411,7 @@ public class OperatorTest {
         // Initiate the conversation
         assertDoesNotThrow(() -> {
             operator.process(mo4);
+            hackyForcedFlush(mo4);
         });
 
         // The lookup from scriptCache will have the effect of populating scriptByKeywordCache
@@ -404,7 +435,10 @@ public class OperatorTest {
 
         // Now provide bad input to the question posed
         for (int i = 0; i < 3; i++) { // TODO At some point we should add handling for repeated failures. Until then we continue to handle bad input the same way.
-            assertDoesNotThrow(() -> { operator.process(unexpected); });
+            assertDoesNotThrow(() -> {
+                operator.process(unexpected);
+                hackyForcedFlush(unexpected);
+            });
             final Message errorMessage = queuedMessages.get(i);
             LOG.info("Bad input response: {}", errorMessage.text());
             assertTrue(errorMessage.text().contains(processAnswer.text()), "Expected error response not found.");
@@ -413,7 +447,10 @@ public class OperatorTest {
         }
 
         // Now provide good input to the question posed and check that we advance to the end of the conversation.
-        assertDoesNotThrow(() -> { operator.process(mo5); });
+        assertDoesNotThrow(() -> {
+            operator.process(mo5);
+            hackyForcedFlush(mo5);
+        });
         //producer.enqueued().forEach(message -> LOG.info(message.text()));
         assertEquals(5, queuedMessages.size(), "Unexpected number of messages queued.");
         assertEquals(processAnswer.text(), queuedMessages.get(1).text(), "Expected text not found in 1st queued message.");
@@ -447,6 +484,7 @@ public class OperatorTest {
         // Initiate the conversation
         assertDoesNotThrow(() -> {
             operator.process(mo4);
+            hackyForcedFlush(mo4);
         });
 
         var session = operator.sessionCache.get(SessionKey.newSessionKey(mo4));
@@ -467,8 +505,11 @@ public class OperatorTest {
         queuedMessages.clear();
         // Now provide bad input to the question posed
 
-        for (int i = 0; i < 3; i++) { // TODO At some point we should add handling for repeated failures. Until then we continue to handle bad input the same way.
-            assertDoesNotThrow(() -> { operator.process(unexpected); });
+        for (int i = 0; i < 3; i++) {
+            assertDoesNotThrow(() -> {
+                operator.process(unexpected);
+                hackyForcedFlush(unexpected);
+            });
             final Message errorMessage = queuedMessages.get(i);
             assertTrue(errorMessage.text().contains(processAnswer.text()), "Wrong error: " + errorMessage.text());
             // Since we don't advance when there's an error we should still be on the ProcessMulti
@@ -480,7 +521,10 @@ public class OperatorTest {
         LOG.info("Session label prior to interrupt: {}", session.getCurrentNode().label());
 
         // Now request a change of topic
-        assertDoesNotThrow(() -> { operator.process(changeTopic); });
+        assertDoesNotThrow(() -> {
+            operator.process(changeTopic);
+            hackyForcedFlush(changeTopic);
+        });
         queueProducer.enqueued().forEach(message -> LOG.info("Enqueued: {}", message.text()));
 
         assertEquals(4, queuedMessages.size(), "Unexpected number of messages queued.");
@@ -493,7 +537,8 @@ public class OperatorTest {
         assertEquals(2, session.getCurrentNode().edges().size());
 
         session.getCurrentNode().edges().forEach(edge -> {
-            LOG.info("Available responses: {}: {} [{}]", edge.responseText(), edge.targetNode().label(), edge.targetNode().type());});
+            LOG.info("Available responses: {}: {} [{}]", edge.responseText(), edge.targetNode().label(), edge.targetNode().type());
+        });
 
         // FIXME still need to formalize how we know which edge was the placeholder. For now, it's the last one in the list.
         LOG.info("Replaced node: {}", session.getCurrentNode().edges().getLast().targetNode().label());
@@ -501,6 +546,93 @@ public class OperatorTest {
         assertNotNull(session.getCurrentNode());
     }
 
+
+    /**
+     * Test case added to verify copyGraphAppending() handles graphs longer than a single link.
+     * NB: This method is total garbage created by Gemma 4 E4B Q4_K_M.
+     */
+    @Test
+    void copyGraphAppendingCorrectness() {
+        // Set up a somewhat complex graphs ---
+
+        // The "original" Node is typically an opt-in notice though it doesn't usually have multiple nodes.
+        // The function under test should copy it and add the appendedNode to the end of it.
+        Node originalStart = new Node("OriginalStart", NodeType.OPT_IN, "OriginalStart");
+        Node originalSecond = new Node("OriginalSecond", NodeType.SEND_MESSAGE, "OriginalSecond");
+
+        Edge origStartToSecond = new Edge(originalSecond);
+        originalStart.edges().add(origStartToSecond);
+
+        Edge origSecondToEnd = new Edge(null);
+        originalSecond.edges().add(origSecondToEnd);
+
+        originalSecond.edges().addLast(origSecondToEnd);
+
+        // The Node graph that should be appended to the end of the original
+        Node appendedStart = new Node("AppendStart: Pick 1 or 2", NodeType.PRESENT_MULTI, "AppendStart");
+
+        Node appendedFirstChoice = new Node("AppendFirstChoice selected", NodeType.PROCESS_MULTI, "AppendFirstChoice");
+        Node appendedSecondChoice = new Node("AppendSecondChoice selected", NodeType.PROCESS_MULTI, "AppendSecondChoice");
+
+        Edge appendedStartToFirstChoice = new Edge(appendedFirstChoice);
+        appendedStart.edges().add(appendedStartToFirstChoice);
+
+        Edge appendedStartToSecondChoice = new Edge(appendedSecondChoice);
+        appendedStart.edges().add(appendedStartToSecondChoice);
+
+        Edge appendedFirstChoiceToEnd = new Edge(null);
+        appendedFirstChoice.edges().add(appendedFirstChoiceToEnd);
+
+        Edge appendedSecondChoiceToEnd = new Edge(null);
+        appendedSecondChoice.edges().add(appendedSecondChoiceToEnd);
+
+
+        // Execute Copy and Append ---
+        Node copiedStart = operator.copyGraphAppending(originalStart, appendedStart);
+
+        // Verify structure and linking...
+
+        // 1. Check the root of the copied graph (it should be a copy of originalStart and its connected elements)
+        assertNotNull(copiedStart);
+        assertEquals(originalStart, copiedStart, "copiedStart mismatch.");
+        assertEquals(originalStart.edges().size(), copiedStart.edges().size());
+        assertNotSame(originalStart, copiedStart, "originalStart wasn't copied as required.");
+
+        // The first edge should link to the copy of origStartToSecond
+        Edge copiedStartToSecond = copiedStart.edges().getFirst();
+        assertNotNull(copiedStartToSecond);
+
+        Node copiedSecond = copiedStartToSecond.targetNode();
+        assertNotNull(copiedSecond);
+        assertEquals(originalSecond, copiedSecond); // same values...
+        assertNotSame(originalSecond, copiedSecond, "originalSecond wasn't copied as required."); // but different instance.
+
+        // 2. The next edge must be the appended segment, replacing the original graph's null link.
+        Edge copiedSecondToAppendedStart = copiedSecond.edges().getFirst();
+        assertNotNull(copiedSecondToAppendedStart);
+
+        Node copiedAppendedStart = copiedSecondToAppendedStart.targetNode();
+        assertSame(appendedStart, copiedAppendedStart);
+
+        assertEquals(2, copiedAppendedStart.edges().size());
+
+        Node copiedAppendedFirstChoice = copiedAppendedStart.edges().getFirst().targetNode();
+        assertNotNull(copiedAppendedFirstChoice);
+        assertEquals(appendedFirstChoice, copiedAppendedFirstChoice);
+        assertSame(appendedFirstChoice, copiedAppendedFirstChoice);
+
+        // SequencedSet doesn't offer an indexed get so we get tricky
+        Node copiedAppendedSecondChoice = copiedAppendedStart.edges().reversed().getFirst().targetNode();
+        assertNotNull(copiedAppendedSecondChoice);
+        assertEquals(appendedSecondChoice, copiedAppendedSecondChoice);
+        assertSame(appendedSecondChoice, copiedAppendedSecondChoice);
+
+        Edge copiedAppendedFirstChoiceToEnd = copiedAppendedFirstChoice.edges().getFirst();
+        assertNull(copiedAppendedFirstChoiceToEnd.targetNode()); // end of graph
+
+        Edge copiedAppendedSecondChoiceToEnd = copiedAppendedSecondChoice.edges().getFirst();
+        assertNull(copiedAppendedSecondChoiceToEnd.targetNode()); // end of graph
+    }
 
     @Test
     void findOrCreateUserUncachedCached() {
@@ -533,4 +665,55 @@ public class OperatorTest {
         assertEquals("US", Telecom.deriveCountryCodeFromId(MOBILE_US));
     }
 
+    /**
+     * Test case added to verify copyGraphAppending() handles specific graph sequences
+     * when using altOptInNode and presentQuestion. Generated locally using Gemma 4 E4B.
+     */
+    @Test
+    void copyGraphAppendingOptInUseCase() {
+
+        // The collection elements of a record can be changed so track the id so we know if it was altered.
+        UUID presentToProcessEdgeId =  presentQuestion.edges().getFirst().id();
+        UUID flortAnswerEdgeId = processAnswer.edges().getLast().id();
+        UUID endOfConversationNodeId = endConversation.id();
+
+        // Execute copy-and-append
+        Node copiedGraphStart = operator.copyGraphAppending(altOptInNode, presentQuestion);
+        assertNotNull(copiedGraphStart);
+
+        // The original altOptInNode must be successfully copied into the new graph structure.
+        assertEquals(altOptInNode, copiedGraphStart, "copiedStart mismatch. The root node must match the original altOptInNode.");
+        // Important: Ensure that the returned node is a new object, proving it was copied, not merely referenced.
+        assertNotSame(altOptInNode, copiedGraphStart, "The root node of the new graph must be a distinct copy.");
+
+        // Check link to the appended graph.
+        // The first edge should link to the copy of altOptInNode's next node, demonstrating successful copying through the graph.
+        // The edge itself is also expected to be a copy.
+        Edge copiedGraphStartEdge = copiedGraphStart.edges().getFirst();
+        assertNotNull(copiedGraphStartEdge, "The root node must have at least one outgoing edge.");
+        assertNotSame(altOptInNode.edges().getFirst(), copiedGraphStartEdge);
+
+        Node referencedNode = copiedGraphStartEdge.targetNode();
+        // The opt-in graph points to null whereas the new graph is expected to point to the presentQuestion node.
+        assertNotEquals(altOptInNode.edges().getFirst().targetNode(), referencedNode); // i.e. null != referencedNode
+
+        // Check the referencedNode itself:
+        assertNotNull(referencedNode);
+        assertEquals(presentQuestion, referencedNode); // Verify the values/properties match the original.
+        assertSame(presentQuestion, referencedNode, "The second node in the new graph should not be a copy.");
+
+        // Check the edge connecting to the second Node of the appended graph.
+        Edge referencedNodeEdge = referencedNode.edges().getFirst();
+        assertNotNull(referencedNodeEdge, "Referenced Node's edge must not be null.");
+        assertEquals(presentToProcessEdgeId, referencedNodeEdge.id(), "Referenced Node's edge was altered");
+
+        Node referencedNodeSuccessor = referencedNodeEdge.targetNode(); // This should be the processAnswer created in setup().
+        assertSame(processAnswer, referencedNodeSuccessor,
+                "The edge must correctly point to the appended starting node.");
+        assertEquals(3, referencedNodeSuccessor.edges().size());
+        assertEquals(flortAnswerEdgeId, referencedNodeSuccessor.edges().getLast().id(), "The processAnswer node's edges were altered"); // must still point to null
+        Node lastNodeInGraph = referencedNodeSuccessor.edges().getLast().targetNode();
+        assertEquals(endConversation, lastNodeInGraph, "Expected endConversation node");
+        assertTrue(lastNodeInGraph.edges().isEmpty(), "Appended graph must preserve terminating edge."); //
+    }
 }

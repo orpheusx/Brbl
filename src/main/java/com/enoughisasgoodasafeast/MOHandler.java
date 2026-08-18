@@ -4,7 +4,7 @@ import java.util.Properties;
 
 public interface MOHandler {
 
-    boolean handle(Message payload);
+    StatusException send(Message payload);
 
     static MOHandler newHandler(Properties properties) {
         return null;

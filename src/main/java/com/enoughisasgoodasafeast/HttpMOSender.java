@@ -10,14 +10,14 @@ import java.util.Properties;
  * A thin wrapper around the Helidon WebClient that configures itself via Properties file.
  * "chttr.*" properties are for our customer simulator.
  */
-public class HttpMOHandler extends HttpMessageHandler implements MOHandler {
+public class HttpMOSender extends HttpMessageSender implements MOHandler {
 
-    private static final Logger LOG = LoggerFactory.getLogger(HttpMOHandler.class);
+    private static final Logger LOG = LoggerFactory.getLogger(HttpMOSender.class);
     static {
         ((ch.qos.logback.classic.Logger) LOG).setLevel(Level.ERROR);
     }
 
-    public HttpMOHandler(String endpoint) {
+    public HttpMOSender(String endpoint) {
         super(endpoint);
     }
 
@@ -29,9 +29,9 @@ public class HttpMOHandler extends HttpMessageHandler implements MOHandler {
 
         // Check for leading slash in the provided pathInfo
         if (pathInfo.endsWith("/")) {
-            return new HttpMOHandler(String.format("%s://%s:%d%s", protocol, host, port, pathInfo));
+            return new HttpMOSender(String.format("%s://%s:%d%s", protocol, host, port, pathInfo));
         } else {
-            return new HttpMOHandler(String.format("%s://%s:%d/%s", protocol, host, port, pathInfo));
+            return new HttpMOSender(String.format("%s://%s:%d/%s", protocol, host, port, pathInfo));
         }
     }
 }

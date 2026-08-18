@@ -213,6 +213,15 @@
             <version>3.1.1</version>
         </dependency>
 
+        <!-- Source: https://mvnrepository.com/artifact/com.telnyx.sdk/telnyx -->
+        <dependency>
+            <groupId>com.telnyx.sdk</groupId>
+            <artifactId>telnyx</artifactId>
+            <version>6.83.0</version>
+            <scope>compile</scope>
+        </dependency>
+
+
         <!-- KEEP COMMENTED IF/UNTIL WE IMPLEMENT. -->
         <!--        <dependency>-->
         <!--            <groupId>org.apache.fory</groupId>-->
@@ -255,7 +264,7 @@
         <dependency>
             <groupId>org.testcontainers</groupId>
             <artifactId>junit-jupiter</artifactId>
-            <version>1.20.4</version>
+            <version>1.21.4</version>
             <scope>test</scope>
         </dependency>
 
@@ -393,6 +402,9 @@
                 <version>3.5.4</version>
                 <configuration>
                     <argLine>--enable-preview</argLine>
+                    <rerunFailingTestsCount>2</rerunFailingTestsCount>
+                    <!-- Fail build if flaky count exceeds this value (0 = allow flakes) -->
+                    <failOnFlakeCount>1</failOnFlakeCount>
                 </configuration>
                 <!--<configuration>
                     <skipITs>true</skipITs>

@@ -196,7 +196,7 @@ public class ScriptInterpreter {
     public boolean writeNodeGraphToFile(UUID nodeId, String outputPath) {
         Node rootNode = persistenceManager.getNodeGraph(nodeId);
         LOG.info("Writing Node {} to {}", nodeId, outputPath);
-        Node.printGraph(rootNode, rootNode, 2);
+        //Node.printGraph(rootNode, rootNode, 2);
 
         return writeNodeGraphToFile(rootNode, outputPath);
     }

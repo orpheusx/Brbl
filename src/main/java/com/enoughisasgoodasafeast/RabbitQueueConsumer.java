@@ -9,11 +9,10 @@ import org.slf4j.LoggerFactory;
 
 import java.io.IOException;
 import java.util.Map;
-import java.util.Properties;
+    import java.util.Properties;
 import java.util.concurrent.TimeoutException;
 
 import static com.enoughisasgoodasafeast.RabbitQueueFunctions.*;
-import static com.enoughisasgoodasafeast.RetryDelayRoutingKey.*;
 import static com.enoughisasgoodasafeast.SharedConstants.*;
 
 public class RabbitQueueConsumer implements QueueConsumer {
@@ -31,15 +30,15 @@ public class RabbitQueueConsumer implements QueueConsumer {
     public static final String X_MESSAGE_TTL_HEADER = "x-message-ttl";
 
     // Maintain clear associations between primary and supporting queues
-    public static final String RETRY_QUEUE_SUFFIX = "_retry";
-    public static final String FAILED_QUEUE_SUFFIX = "_fail";
+    public static final String EXCHANGE_SUFFIX = "-x";
+    public static final String RETRY_QUEUE_SUFFIX = "-retry";
+    public static final String FAILED_QUEUE_SUFFIX = "-fail";
 
     private final Connection connection;
     private final Channel channel;
     private final String failedQueueName;
-
-    private final AMQP.Queue.DeclareOk primaryQueueInfo;
-    private final AMQP.Queue.DeclareOk failedQueueInfo;
+    private final String failedExchangeName;
+    private final String retryExchangeName;
 
     public static QueueConsumer createQueueConsumer(String configFileName, MessageProcessor processor) throws IOException, TimeoutException {
         Properties props = ConfigLoader.readConfig(configFileName);
@@ -60,7 +59,7 @@ public class RabbitQueueConsumer implements QueueConsumer {
 
     private RabbitQueueConsumer(String queueHost,
                                 int queuePort,
-                                String queueName,
+                                String queueName, // e.g. dev-opr8r-mo-sms
                                 String routingKey,
                                 boolean durable,
                                 MessageProcessor processor,
@@ -83,39 +82,45 @@ public class RabbitQueueConsumer implements QueueConsumer {
 
         // Setup socket connection, negotiate protocol version and authentication
         this.connection = factory.newConnection();
-
         this.channel = connection.createChannel();
 
-        // Create the exchanges, the primary and the retry.
-        String exchangeName = exchangeForQueueName(queueName); // e.g. x.opr8r.mo
+        // Declare the primary and retry exchanges.
+        String exchangeName = exchangeForQueueName(queueName); // dev-opr8r-mo-sms-x
         channel.exchangeDeclare(exchangeName, BuiltinExchangeType.DIRECT, durable);
-        String retryExchangeName = retryForExchangeName(exchangeName); // e.g. rtx.opr8r.mo
+        retryExchangeName = retryExchangeForQueueName(queueName); // dev-opr8r-mo-sms-retry-x
         channel.exchangeDeclare(retryExchangeName, BuiltinExchangeType.DIRECT, durable);
 
+        // Declare "final resting place" exchange and queue, the bind them together.
+        failedQueueName = failQueueForQueue(queueName); // dev-opr8r-mo-sms-fail
+        failedExchangeName = exchangeForQueueName(failedQueueName); // dev-opr8r-mo-sms-fail-x
+        channel.exchangeDeclare(failedExchangeName, BuiltinExchangeType.DIRECT, durable);
+        channel.queueDeclare(failedQueueName, QUEUE_DURABILITY, QUEUE_EXCLUSIVE, QUEUE_AUTO_DELETE, null);
+        channel.queueBind(failedQueueName, failedExchangeName, routingKey);
+        LOG.info("Bound dead-letter queue {} to DLX {} with routing key {}", failedQueueName, failedExchangeName, routingKey);
+
         // Declare the primary input queue
-        primaryQueueInfo = channel.queueDeclare(queueName, QUEUE_DURABILITY, QUEUE_EXCLUSIVE, QUEUE_AUTO_DELETE, null);
+        channel.queueDeclare(queueName, QUEUE_DURABILITY, QUEUE_EXCLUSIVE, QUEUE_AUTO_DELETE, null);
         // ...and connect the primary exchange with its queue
         channel.queueBind(queueName, exchangeName, routingKey);
-        LOG.info("Bound exchange, {}, to queue, {} with routing key, {}.", exchangeName, queueName, routingKey);
+        LOG.info("Bound primary queue, {}, to exchange, {} with routing key, {}.", queueName, exchangeName, routingKey);
 
-        // Declare "final resting place" queue
-        failedQueueName = failQueueForQueue(queueName);
-        failedQueueInfo = channel.queueDeclare(failedQueueName, QUEUE_DURABILITY, QUEUE_EXCLUSIVE, QUEUE_AUTO_DELETE, null);
+        for (RetryDelayRoutingKey value : RetryDelayRoutingKey.values()) {
+            long delayMs = value.delayMs();
+            String retryQueue = delayQueueForRoutingKey(queueName, value);
+            String retryRoutingKey = value.name();
 
-        String baseRetryQueueName = queueName + RETRY_QUEUE_SUFFIX;
+            Map<String, Object> args = Map.of(
+                    X_MESSAGE_TTL_HEADER, delayMs,
+                    // All delay buckets expire their messages back into the primary queue
+                    X_DLX_HEADER, exchangeName,
+                    X_DL_RK_HEADER, routingKey
+            );
 
-        // 4. Declare 5-Second Delay Bucket Queue
-        String retryAfter5sQueueName = delayQueueForRoutingKey(baseRetryQueueName, DELAY_5S);
-        channel.queueDeclare(retryAfter5sQueueName, QUEUE_DURABILITY, QUEUE_EXCLUSIVE, QUEUE_AUTO_DELETE,
-                Map.of(X_DLX_HEADER, exchangeName,
-                        X_DL_RK_HEADER, routingKey,
-                        X_MESSAGE_TTL_HEADER, DELAY_5S.delayMs())
-                );
-        // ...and connect the retry exchange with its delay specific queue
-        channel.queueBind(retryAfter5sQueueName, retryExchangeName, DELAY_5S.name());
-
-        // 5. Declare additional delay bucket queues with longer TTLs
-        // ...
+            LOG.info("Declared timed retry queue: {}", retryQueue);
+            channel.queueDeclare(retryQueue, true, false, false, args);
+            channel.queueBind(retryQueue, retryExchangeName, retryRoutingKey);
+            LOG.info("Bound timed retry queue {} to exchange {} with routing key: {}", retryQueue, retryExchangeName, retryRoutingKey);
+        }
 
         // FIXME Convert prefetchCount to be a configuration property.
         // This is an important number where retrying/re-queueing is concerned.
@@ -123,7 +128,6 @@ public class RabbitQueueConsumer implements QueueConsumer {
         channel.basicQos(3);
 
         final BrblConsumer brblConsumer = getBrblConsumer(processor, consumerClassImpl);
-
         final String consumerTag = channel.basicConsume(queueName, QUEUE_CONSUME_AUTO_ACK, brblConsumer);
 
         LOG.info("Negotiated heartbeat: {} seconds", connection.getHeartbeat());
@@ -131,9 +135,14 @@ public class RabbitQueueConsumer implements QueueConsumer {
     }
 
     private @NonNull BrblConsumer getBrblConsumer(MessageProcessor processor, String consumerClassImpl) {
+        // Poor man's Reflection...
         return switch (consumerClassImpl) {
-            case "com.enoughisasgoodasafeast.SndrConsumer" -> new SndrConsumer((SndrMessageProcessor) processor, channel);
-            case "com.enoughisasgoodasafeast.OperatorConsumer" -> new OperatorConsumer((SessionAwareMessageProcessor) processor, channel, failedQueueName);
+            case "com.enoughisasgoodasafeast.SndrConsumer" -> new SndrConsumer(
+                    (SndrMessageProcessor) processor, channel);
+
+            case "com.enoughisasgoodasafeast.OperatorConsumer" -> new OperatorConsumer(
+                    (SessionAwareMessageProcessor) processor, channel, failedExchangeName, retryExchangeName);
+
             default -> throw new IllegalArgumentException(
                     "RabbitQueueConsumer cannot use unsupported consumerClass: " + consumerClassImpl);
         };

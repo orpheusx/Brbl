@@ -42,6 +42,7 @@ import static java.io.IO.println;
  * brbl_logs  . messages_mt
  * brbl_logs  . messages_mt_dlvr
  */
+@Deprecated
 public class BrblUsersSqlGenerator {
 
     private final Faker faker;

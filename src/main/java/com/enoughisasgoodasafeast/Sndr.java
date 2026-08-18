@@ -17,20 +17,19 @@ public class Sndr implements SndrMessageProcessor {
 
     private QueueConsumer queueConsumer;
     private PersistenceManager persistenceManager;
-    private HttpMTHandler httpMtHandler;
+    private HttpMTSender httpMtHandler;
 
     public void init(Properties properties) throws IOException, TimeoutException, PersistenceManagerException {
         LOG.info("Initializing SNDR");
-        httpMtHandler = (HttpMTHandler) HttpMTHandler.newHandler(properties);
-        queueConsumer = RabbitQueueConsumer.createQueueConsumer(
-                properties, this);
+        httpMtHandler = (HttpMTSender) HttpMTSender.newHandler(properties);
+        queueConsumer = RabbitQueueConsumer.createQueueConsumer(properties, this);
         persistenceManager = PostgresPersistenceManager.createPersistenceManager(properties);
     }
 
     @Override
-    public boolean process(Message message) {
+    public StatusException process(Message message) {
         LOG.info("Processing outbound message: {}", message);
-        boolean delivered = httpMtHandler.handle(message);
+        StatusException delivered = httpMtHandler.send(message);
         LOG.info("Message delivery: {}: {}", delivered, message);
         return delivered;
     }

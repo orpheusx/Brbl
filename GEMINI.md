@@ -4,7 +4,7 @@ This project, internally named "Burble," is a robust, data-driven messaging plat
 
 ## Project Overview
 
-- **Main Technologies:** Java 23 (utilizing preview features like Virtual Threads and Structured Concurrency), Helidon SE (Web Server & Client), RabbitMQ (Messaging Broker), PostgreSQL (Persistence).
+- **Main Technologies:** Java 23 (utilizing preview features like Virtual Threads and Structured Concurrency as well as making heavy use Records and pattern matching), Helidon SE (Web Server & Client), RabbitMQ (Messaging Broker), PostgreSQL (Persistence).
 - **Architecture:**
   - **Rcvr (Receiver):** Entry point for incoming messages (MO). Enqueues to RabbitMQ.
   - **Opr8r (Operator):** Core logic engine. Dequeues MOs, processes them based on stateful "Scripts" (conversational graphs), and enqueues responses (MTs).
@@ -50,6 +50,9 @@ This project, internally named "Burble," is a robust, data-driven messaging plat
 - **Coding Standards & Style Guide:** 
   - Follow existing style conventions like camelCase method names. 
   - Use 4 spaces for indentation. 
+  - Avoid using Java Reflection.
+  - Use Java Records to model immutable data structures wherever possible. (FYI, records are a special type of class in which members are immutable after the instance has been constructed. If the member is a Collection type (List, Map, Set) the elements may be added or removed but the collection object itself may not be replaced. Likewise, using Java Reflection will not allow an instance of a Record to have its members altered.)
+  - Prefer switch statements to if-else wherever logic requires more than two possibilities.
   - If a method can return null annotate it with the JSpecify @Nullable. 
   - If a method always returns a non-null value annotate with JSpecify @NonNull.
   - If a method parameter is used without checking for null, annotate its declaration with @NonNull. Otherwise, annotate it with @Nullable.

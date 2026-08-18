@@ -1,8 +1,6 @@
 package com.enoughisasgoodasafeast.integration;
 
 import com.enoughisasgoodasafeast.Message;
-import com.enoughisasgoodasafeast.RabbitQueueProducer;
-import com.enoughisasgoodasafeast.SharedConstants;
 import com.rabbitmq.client.*;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -15,12 +13,11 @@ import java.util.concurrent.TimeoutException;
 
 import static com.enoughisasgoodasafeast.RabbitQueueFunctions.failQueueForQueue;
 import static com.enoughisasgoodasafeast.SharedConstants.*;
-import static com.enoughisasgoodasafeast.SharedConstants.CONSUMER_QUEUE_NAME;
 
 public class DLQLogger extends DefaultConsumer {
 
     private static final Logger LOG = LoggerFactory.getLogger(DLQLogger.class);
-    private static final boolean autoAck = true;
+    private static final boolean autoAck = false;
 
     private final String consumerTag;
     private final List<Message> deadMessages;
@@ -38,14 +35,25 @@ public class DLQLogger extends DefaultConsumer {
     }
 
     public static DLQLogger createDLQLogger(Properties p) throws IOException, TimeoutException {
+        var expectedFailQueue = failQueueForQueue(p.getProperty(CONSUMER_QUEUE_NAME));
+        return createDLQLogger(p, expectedFailQueue);
+    }
+
+    /**
+     * Creates a {@link DLQLogger} consuming from {@code queueName} rather than the auto-derived fail queue.
+     * Useful for tests that need to monitor a specific queue (e.g., a retry delay-bucket queue).
+     *
+     * @param p         properties containing broker host/port
+     * @param queueName the exact queue name to consume from
+     */
+    public static DLQLogger createDLQLogger(Properties p, String queueName) throws IOException, TimeoutException {
         ConnectionFactory factory = new ConnectionFactory();
         factory.setHost(p.getProperty(CONSUMER_QUEUE_HOST));
         factory.setPort(Integer.parseInt(p.getProperty(CONSUMER_QUEUE_PORT)));
-        var expectedFailQueue = failQueueForQueue(p.getProperty(CONSUMER_QUEUE_NAME));
 
         var channel = factory.newConnection().createChannel();
 
-        return new DLQLogger(channel, expectedFailQueue);
+        return new DLQLogger(channel, queueName);
     }
 
     @Override
@@ -57,11 +65,12 @@ public class DLQLogger extends DefaultConsumer {
         getChannel().basicAck(envelope.getDeliveryTag(), false);
 
         try {
-            LOG.info("handleDelivery thread before: {}", Thread.currentThread().getName());
+            //LOG.info("handleDelivery thread before: {}", Thread.currentThread().getName());
             var message = Message.fromBytes(body);
             deadMessages.add(message);
-            LOG.info("handleDelivery: one-time only {}", deadMessages.getLast());
-            LOG.info("handleDelivery thread after: {}", Thread.currentThread().getName());
+            LOG.info("DLQLogger received: {}", message);
+            //LOG.info("handleDelivery: one-time only {}", deadMessages.getLast());
+            //LOG.info("handleDelivery thread after: {}", Thread.currentThread().getName());
         } catch (ClassNotFoundException e) {
             throw new RuntimeException(e);
         }

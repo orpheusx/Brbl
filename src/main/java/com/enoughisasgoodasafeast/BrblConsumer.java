@@ -4,6 +4,7 @@ import com.rabbitmq.client.AMQP;
 import com.rabbitmq.client.Channel;
 import com.rabbitmq.client.DefaultConsumer;
 import com.rabbitmq.client.ShutdownSignalException;
+import org.jspecify.annotations.Nullable;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -14,6 +15,7 @@ import java.util.Map;
 public abstract class BrblConsumer extends DefaultConsumer {
 
     private static final Logger LOG = LoggerFactory.getLogger(BrblConsumer.class);
+    public static final String BRBL_RETRY_COUNT_HEADER = "x-brbl-retry-count";
 
     /**
      * Constructs a new instance and records its association to the passed-in channel.
@@ -45,13 +47,14 @@ public abstract class BrblConsumer extends DefaultConsumer {
     }
 
     /**
-     * Called when the consumer is cancelled for reasons <i>other than</i> by a call to
+     * Called when the consumer is canceled for reasons <i>other than</i> by a call to
      * {@link Channel#basicCancel}. For example, the queue has been deleted.
      * See {@link #handleCancelOk} for notification of consumer
      * cancellation due to {@link Channel#basicCancel}.
      * @param consumerTag the <i>consumer tag</i> associated with the consumer
-     * @throws IOException
+     * @throws IOException stub implementation
      */
+    @Override
     public void handleCancel(String consumerTag) throws IOException {
         LOG.warn("handleCancel called with consumerTag {}", consumerTag);
     }
@@ -77,28 +80,15 @@ public abstract class BrblConsumer extends DefaultConsumer {
     }
 
     /**
-     * Extracts and counts the total instances of death history using native headers.
+     *  RabbitMQ's nested x-death structure is complex; ours is simpler...
      */
-    static long getRetriedCount(AMQP.BasicProperties properties) {
-        if (properties == null || properties.getHeaders() == null) {
-            return 0;
-        }
-
+    static int getBrblRetryCount(AMQP.BasicProperties properties) {
         Map<String, Object> headers = properties.getHeaders();
-        if (headers.containsKey("x-death")) {
-            List<Map<String, Object>> xDeathList = (List<Map<String, Object>>) headers.get("x-death");
-            if (xDeathList != null) {
-                // Every transition through a DLX adds to or increments the count inside x-death
-                long totalCount = 0;
-                for (Map<String, Object> deathLog : xDeathList) {
-                    Object countObj = deathLog.get("count");
-                    if (countObj instanceof Long) totalCount += (Long) countObj;
-                    else if (countObj instanceof Integer) totalCount += ((Integer) countObj).longValue();
-                }
-                return totalCount;
-            }
+        if (headers != null && headers.containsKey(BRBL_RETRY_COUNT_HEADER)) {
+            Object countObj = headers.get(BRBL_RETRY_COUNT_HEADER);
+            return Integer.parseInt(countObj.toString());
         }
-        return 0;
+        return 0; // First attempt
     }
 
     /**
@@ -108,21 +98,27 @@ public abstract class BrblConsumer extends DefaultConsumer {
     static void routeToDelayBucket(Channel channel, String exchangeName, long deliveryTag,
                                            AMQP.BasicProperties properties, byte[] body,
                                            String routingKey) throws IOException {
-        // Forward existing headers (so we don't lose the x-death count state tracking)
-        AMQP.BasicProperties.Builder propsBuilder = new AMQP.BasicProperties.Builder()
-                .contentType("text/plain")
-                .deliveryMode(2); // Persistent
-
-        // Is Rabbit updating the x-death header count?
-        if (properties != null && properties.getHeaders() != null) {
-            propsBuilder.headers(properties.getHeaders());
-        }
-
         // Publish to the specific delay exchange path
-        channel.basicPublish(exchangeName, routingKey, propsBuilder.build(), body);
+        channel.basicPublish(exchangeName, routingKey, properties/*propsBuilder.build()*/, body);
 
         // Acknowledge the old placement so it leaves the primary queue
         channel.basicAck(deliveryTag, false);
+    }
+
+
+    // Determines both the number of retries supported by the consumer and the delay for each.
+    // TODO Extract this into an interface so it can be replaced easily.
+    @Nullable String computeDelayRoutingKey(int numFailed) {
+        return switch (numFailed) {
+            case 0 -> RetryDelayRoutingKey.DELAY_5S.name();
+            case 1 -> RetryDelayRoutingKey.DELAY_10S.name();
+            case 2 -> RetryDelayRoutingKey.DELAY_30S.name();
+            case 3 -> RetryDelayRoutingKey.DELAY_1M.name();
+            default -> {
+                LOG.error("Max retries exceeded: {}", numFailed);
+                yield null;
+            }
+        };
     }
 
 }

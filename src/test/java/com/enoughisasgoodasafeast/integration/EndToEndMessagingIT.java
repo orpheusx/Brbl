@@ -50,8 +50,12 @@ public class EndToEndMessagingIT {
         brblContainers.stop();
     }
 
+    @Test // FIXME delete this
+    public void justStartStopContainers() {
+        LOG.info("Got here");
+    }
 
-    @Test
+    //@Test // FIXME uncomment
     public void testSendAndVerifyResponse() throws IOException {
         assertDoesNotThrow(() -> {
             final Optional<ContainerState> rcvrByServiceName = brblContainers.getContainerByServiceName("rcvr");

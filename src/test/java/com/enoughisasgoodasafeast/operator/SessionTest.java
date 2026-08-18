@@ -45,7 +45,7 @@ public class SessionTest {
                 Message mo = Message.newMO(FROM, TO, String.valueOf(i));
                 session.registerInput(mo);
             }
-            session.flush(false); // adds all the inputs to the inputHistory
+            session.flushMQ(); // adds all the inputs to the inputHistory
 
             assertEquals(MAX_INPUT_HISTORY, session.getInputHistory().size());
             assertEquals("1", session.getInputHistory().getFirst().text());

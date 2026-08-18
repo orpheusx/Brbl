@@ -25,9 +25,11 @@ import java.util.regex.Pattern;
 
 import static com.enoughisasgoodasafeast.Message.newMO;
 import static com.enoughisasgoodasafeast.RabbitQueueFunctions.*;
+import static com.enoughisasgoodasafeast.RetryDelayRoutingKey.*;
 import static com.enoughisasgoodasafeast.SharedConstants.*;
 import static com.enoughisasgoodasafeast.integration.IntegrationTestFunctions.loadPropertiesWithContainerOverrides;
 import static com.enoughisasgoodasafeast.operator.TestingPersistenceManager.SCRIPT_ID;
+import static java.util.concurrent.TimeUnit.MILLISECONDS;
 import static java.util.concurrent.TimeUnit.SECONDS;
 import static org.awaitility.Awaitility.await;
 import static org.junit.jupiter.api.Assertions.*;
@@ -60,6 +62,9 @@ public class OperatorMessageFlowIT {
     );
     public static final Message changeTopicMO = newMO(
             MOBILE_MX, SHORT_CODE, "change topic"
+    );
+    public static final Message confirmChangeMO = newMO(
+            MOBILE_MX, SHORT_CODE, "yes"
     );
     public static final Message selectWolverinesMO = newMO(
             MOBILE_MX, SHORT_CODE, "wolverines"
@@ -115,11 +120,79 @@ public class OperatorMessageFlowIT {
     }
 
     @Test
+    public void messageFlow() {
+        var startNode = buildNodeGraph();
+        var startNodeId = startNode.id();
+        persistenceManager.addNodeGraph(startNode.id(), startNode);
+
+        var optInNode = buildOptInNode();
+        var optInNodeId = optInNode.id();
+        persistenceManager.addNodeGraph(optInNodeId, optInNode);
+
+        // for now, use same Node referenced by keyword
+        var defaultNodeId = startNodeId; // TODO make a separate one to distinguish processing behavior.
+
+        final Route[] routes = registerCompatibleRoute(routableMessage, defaultNodeId, optInNodeId, null);
+
+        assertEquals(routes.length, persistenceManager.getActiveRoutes().length);
+        var activeRoute = persistenceManager.getActiveRoutes()[0];
+        assertSame(routes[0], activeRoute);
+        assertEquals(optInNodeId, activeRoute.optInNodeId());
+
+        var pattern = Pattern.compile("(color|colour|colr).*(quiz|q|kwiz)");
+        var keyword = registerMatchingKeyword(pattern, startNode, routableMessage.to());
+
+        assertSame(startNode, persistenceManager.getNodeGraph(startNodeId));
+        assertSame(optInNode, persistenceManager.getNodeGraph(optInNodeId));
+        assertSame(startNode, persistenceManager.getNodeGraph(defaultNodeId)); // keyword and default are the same
+
+        var fetchedKeyword = persistenceManager.getKeywords().get(pattern);
+        assertSame(keyword, fetchedKeyword);
+
+        rcvrSurrogate.enqueue(routableMessage); // Ok, start the conversation.
+        await().atMost(2, SECONDS).until(anyMTResponsesEnqueued(operatorProducer));
+
+        List<Message> queuedMessages = operatorProducer.enqueued();
+        assertEquals(2, queuedMessages.size());
+
+        var optInMT = queuedMessages.get(0); // new user expects opt-in first...
+        assertNotNull(optInMT);
+        assertEquals(routableMessage.from(), optInMT.to());
+        assertEquals(routableMessage.to(), optInMT.from());
+        assertTrue(optInMT.text().contains("opted in"));
+        //LOG.info("New session opt-in: {}", optInMT.text());
+
+        var responseMT = queuedMessages.get(1); // ...then the actual scripted response
+        assertNotNull(responseMT);
+        assertEquals(routableMessage.from(), responseMT.to());
+        assertEquals(routableMessage.to(), responseMT.from());
+        assertTrue(responseMT.text().contains("favorite color"), "Unexpected response: " + responseMT.text());
+        //LOG.info("Second message: {}", responseMT.text());
+
+        queuedMessages.clear();
+
+        rcvrSurrogate.enqueue(flortMO); // user answers the question
+        await().atMost(2, SECONDS).until(anyMTResponsesEnqueued(operatorProducer));
+        Message flortMT = operatorProducer.enqueued().getFirst();
+        assertNotNull(flortMT);
+        //LOG.info("flortMT: {}", flortMT);
+        assertEquals(flortMO.from(), flortMT.to());
+        assertEquals(flortMO.to(), flortMT.from());
+        assertTrue(flortMT.text().contains("for the cool kids"));
+
+        queuedMessages.clear();
+
+        // Add the cases from messageFlowWithUnexpectedInputAndChangeTopicRequested
+        //  and messageFlowWithUnexpectedInputAndChangeTopicRequested
+        // ...
+    }
+
+    @Test
     public void basicConfig() throws IOException, TimeoutException {
         var expectedQueueName = testProps.getProperty(CONSUMER_QUEUE_NAME);
         var expectedFailQueue = failQueueForQueue(expectedQueueName);
         var expectedExchangeName = exchangeForQueueName(expectedQueueName);
-        var expectedRetryExchangeName = retryForExchangeName(expectedExchangeName);
+        var expectedRetryExchangeName = retryExchangeForQueueName(expectedQueueName);
 
         var channel = getChannel();
 
@@ -159,7 +232,7 @@ public class OperatorMessageFlowIT {
             // A message specifying a keyword/route that doesn't exist will trigger an error, causing it to be sent to dead-letter-queue.
             // We're using this case just to test queue handling. If/when we find another case where messages are failed w/out first retrying
             // we can test them here.
-            // Note: In practice, the Rcvr should guard against this situation by rejecting unknown routes. This is TBD.
+            // Note: In practice, the Rcvr should guard against this situation by rejecting unknown routes but this is still TBD.
             rcvrSurrogate.enqueue(unexpectedMO);
             // Wait until we see a message show up in the failed (aka dead-letter) queue
             await().atMost(3, SECONDS).until(anyDeadLettersEnqueued(dlqLogger));
@@ -189,7 +262,7 @@ public class OperatorMessageFlowIT {
             var defaultNodeId = startNodeId; // TODO make separate to exercise keyword vs route default selection.
 
             persistenceManager.addNodeGraph(optInNode.id(), optInNode);
-            final Route[] routes = registerCompatibleRoute(routableMessage, defaultNodeId, optInNodeId);
+            final Route[] routes = registerCompatibleRoute(routableMessage, defaultNodeId, optInNodeId, null);
             assertEquals(routes.length, persistenceManager.getActiveRoutes().length); // dupe
             assertSame(routes[0], persistenceManager.getActiveRoutes()[0]); // dupe
 
@@ -203,7 +276,7 @@ public class OperatorMessageFlowIT {
             // Make sure it's the one we just sent.
             assertEquals(routableMessage.text(), dlqLogger.getDeadMessages().getFirst().text(), "Wrong message in failed queue.");
 
-        }  finally {
+        } finally {
             dlqLogger.clearDeadMessages();
         }
     }
@@ -221,7 +294,7 @@ public class OperatorMessageFlowIT {
         var defaultNodeId = startNodeId; // TODO make separate to exercise keyword vs route default selection.
 
         persistenceManager.addNodeGraph(optInNode.id(), optInNode);
-        final Route[] routes = registerCompatibleRoute(routableMessage, defaultNodeId, optInNodeId);
+        final Route[] routes = registerCompatibleRoute(routableMessage, defaultNodeId, optInNodeId, null);
         assertEquals(routes.length, persistenceManager.getActiveRoutes().length);
         assertSame(routes[0], persistenceManager.getActiveRoutes()[0]);
 
@@ -238,79 +311,10 @@ public class OperatorMessageFlowIT {
 
     }
 
-    @Test
-    public void messageFlow() {
-        var startNode = buildNodeGraph();
-        var startNodeId = startNode.id();
-        persistenceManager.addNodeGraph(startNode.id(), startNode);
-
-        var optInNode = buildOptInNode();
-        var optInNodeId = optInNode.id();
-        persistenceManager.addNodeGraph(optInNodeId, optInNode);
-
-        // for now, use same Node referenced by keyword
-        var defaultNodeId = startNodeId; // TODO make a separate one to distinguish processing behavior.
-
-        final Route[] routes = registerCompatibleRoute(routableMessage, defaultNodeId, optInNodeId);
-
-        assertEquals(routes.length, persistenceManager.getActiveRoutes().length);
-        var activeRoute = persistenceManager.getActiveRoutes()[0];
-        assertSame(routes[0], activeRoute);
-        assertEquals(optInNodeId, activeRoute.optInNodeId());
-
-        var pattern = Pattern.compile("(color|colour|colr).*(quiz|q|kwiz)");
-        var keyword = registerMatchingKeyword(pattern, startNode, routableMessage.to());
-
-        assertSame(startNode, persistenceManager.getNodeGraph(startNodeId));
-        assertSame(optInNode, persistenceManager.getNodeGraph(optInNodeId));
-        assertSame(startNode, persistenceManager.getNodeGraph(defaultNodeId)); // keyword and default are the same
-
-        var fetchedKeyword = persistenceManager.getKeywords().get(pattern);
-        assertSame(keyword, fetchedKeyword);
-
-        rcvrSurrogate.enqueue(routableMessage); // Ok, start the conversation.
-        await().atMost(2, SECONDS).until(anyMTResponsesEnqueued(operatorProducer));
-
-        List<Message> queuedMessages = operatorProducer.enqueued();
-        assertEquals(2, queuedMessages.size());
-
-        var optInMT = queuedMessages.get(0); // new user expects opt-in first...
-        assertNotNull(optInMT);
-        assertEquals(routableMessage.from(), optInMT.to());
-        assertEquals(routableMessage.to(), optInMT.from());
-        assertTrue(optInMT.text().contains("opted in"));
-        //LOG.info("New session opt-in: {}", optInMT.text());
-
-        var responseMT = queuedMessages.get(1); // ...then the actual scripted response
-        assertNotNull(responseMT);
-        assertEquals(routableMessage.from(), responseMT.to());
-        assertEquals(routableMessage.to(), responseMT.from());
-        assertTrue(responseMT.text().contains("favorite color"));
-        //LOG.info("Second message: {}", responseMT.text());
-
-        queuedMessages.clear();
-
-        rcvrSurrogate.enqueue(flortMO); // user answers the question
-        await().atMost(2, SECONDS).until(anyMTResponsesEnqueued(operatorProducer));
-        Message flortMT = operatorProducer.enqueued().getFirst();
-        assertNotNull(flortMT);
-        //LOG.info("flortMT: {}", flortMT);
-        assertEquals(flortMO.from(), flortMT.to());
-        assertEquals(flortMO.to(), flortMT.from());
-        assertTrue(flortMT.text().contains("for the cool kids"));
-
-        queuedMessages.clear();
-
-        // Add the cases from messageFlowWithUnexpectedInputAndChangeTopicRequested
-        //  and messageFlowWithUnexpectedInputAndChangeTopicRequested
-        // ...
-    }
-
     /**
-     * Currently there are places in the Operator processing that return ProcessState.RETRY.
-     * This is left as a placeholder in case we
+     * Verify that Messages with retriable errors are, in fact, retried according to the schedule defined in computeDelayRoutingKey.
      */
-    // @Test
+    @Test
     public void retriableMessage() {
         var startNode = buildNodeGraph();
         persistenceManager.addNodeGraph(startNode.id(), startNode);
@@ -318,7 +322,7 @@ public class OperatorMessageFlowIT {
         var optInNode = buildOptInNode();
         persistenceManager.addNodeGraph(optInNode.id(), optInNode);
 
-        final var routes = registerCompatibleRoute(routableMessage, startNode.id(), optInNode.id());
+        final var routes = registerCompatibleRoute(routableMessage, startNode.id(), optInNode.id(), null);
         final var keyword = registerMatchingKeyword(Pattern.compile("color"), startNode, routableMessage.to());
 
         assertEquals(routes.length, persistenceManager.getActiveRoutes().length);
@@ -326,42 +330,66 @@ public class OperatorMessageFlowIT {
         assertSame(routes[0], activeRoute);
         assertEquals(optInNode.id(), activeRoute.optInNodeId());
 
+        persistenceManager.setUserNotNew(true); // Use the fixture to always consider the user as existing, not new...
+        persistenceManager.failLoadSession(true); // and set it so the session load method will always fail.
+
+        long start = System.currentTimeMillis(); // record the time before the enqueue
         rcvrSurrogate.enqueue(routableMessage);
+
+        // Wait for all the retries defined in BrblConsumer.computeDelayRoutingKey()...
+        long expectedWaitTime = DELAY_5S.delayMs() + DELAY_10S.delayMs() + DELAY_30S.delayMs() + DELAY_1M.delayMs();
+        await().atMost(expectedWaitTime + 3_000, MILLISECONDS).until(anyDeadLettersEnqueued(dlqLogger));
+
+        long delta = System.currentTimeMillis() - start;
+        assertTrue(delta >= expectedWaitTime); // verify that we retried with the expected sum of delay time.
+
+        final var deadMessages = dlqLogger.getDeadMessages();
+        assertFalse(deadMessages.isEmpty());
+        assertEquals(routableMessage.text(), deadMessages.getFirst().text(), "Wrong message in failed queue.");
     }
 
-    //    @Test
+    @Test
     public void messageFlowWithUnexpectedInput() {
         assertDoesNotThrow(() -> {
+            registerRequiredConfiguration(/*keywordMO*/);
+
             rcvrSurrogate.enqueue(keywordMO);
             await().atMost(5, SECONDS).until(anyMTResponsesEnqueued(operatorProducer));
 
-            List<Message> queuedMessages = operatorProducer.enqueued();
+            var queuedMessages = operatorProducer.enqueued();
 
-            Message colorQuizMT = operatorProducer.enqueued().getFirst();
+            var colorQuizMT = operatorProducer.enqueued().getFirst();
             assertNotNull(colorQuizMT);
             assertEquals(keywordMO.from(), colorQuizMT.to());
             assertEquals(keywordMO.to(), colorQuizMT.from());
-            assertTrue(colorQuizMT.text().contains("What's you favorite color?"));
+            LOG.info("Response text: {}", colorQuizMT.text());
+            assertTrue(colorQuizMT.text().contains("Welcome"));
 
             queuedMessages.clear();
 
             rcvrSurrogate.enqueue(unexpectedMO);
+
             await().atMost(5, SECONDS).until(anyMTResponsesEnqueued(operatorProducer));
 
-            Message errorMessage = operatorProducer.enqueued().getFirst();
+            var errorMessage = operatorProducer.enqueued().getFirst();
             assertNotNull(errorMessage);
             assertEquals(keywordMO.from(), errorMessage.to());
             assertEquals(keywordMO.to(), errorMessage.from());
-            assertTrue(errorMessage.text().contains("Try again"));
+            LOG.info("Unexpected response text: {}", errorMessage.text());
+            assertTrue(errorMessage.text().contains(OperatorTest.COLOR_QUIZ_UNEXPECTED_INPUT));
 
             queuedMessages.clear();
 
         });
     }
 
-    //    @Test
+    @Test
     public void messageFlowWithUnexpectedInputAndChangeTopicRequested() {
         assertDoesNotThrow(() -> {
+            registerRequiredConfiguration();
+
+            persistenceManager.setUserNotNew(true); // avoid generating an opt-in message.
+
             rcvrSurrogate.enqueue(keywordMO);
             await().atMost(5, SECONDS).until(anyMTResponsesEnqueued(operatorProducer));
 
@@ -371,7 +399,7 @@ public class OperatorMessageFlowIT {
             assertNotNull(colorQuizMT);
             assertEquals(keywordMO.from(), colorQuizMT.to());
             assertEquals(keywordMO.to(), colorQuizMT.from());
-            assertTrue(colorQuizMT.text().contains("What's you favorite color?"));
+            assertTrue(colorQuizMT.text().contains("favorite color"), "Unexpected response: " + colorQuizMT.text());
 
             queuedMessages.clear();
 
@@ -382,39 +410,55 @@ public class OperatorMessageFlowIT {
             assertNotNull(errorMessage);
             assertEquals(keywordMO.from(), errorMessage.to());
             assertEquals(keywordMO.to(), errorMessage.from());
-            assertTrue(errorMessage.text().contains("Try again"));
+            assertTrue(errorMessage.text().contains("please pick one of the choices by name or"),
+                    "Unexpected response: " + errorMessage.text());
 
             queuedMessages.clear();
 
             rcvrSurrogate.enqueue(changeTopicMO);
             await().atMost(5, SECONDS).until(anyMTResponsesEnqueued(operatorProducer));
 
+            // Expect to be asked to confirm the change of topic.
             Message acknowledgeTopicChange = queuedMessages.getFirst();
             assertNotNull(acknowledgeTopicChange);
             assertEquals(keywordMO.from(), acknowledgeTopicChange.to());
             assertEquals(keywordMO.to(), acknowledgeTopicChange.from());
-            assertTrue(acknowledgeTopicChange.text().contains("You want to talk about something else? OK"));
+            assertTrue(acknowledgeTopicChange.text().contains("want to talk about something else"));
 
+            queuedMessages.clear();
+
+            rcvrSurrogate.enqueue(confirmChangeMO);
+            await().atMost(5, SECONDS).until(anyMTResponsesEnqueued(operatorProducer));
+
+            assertEquals(2, queuedMessages.size(), "Expected two messages queued.");
+            Message confirmChange = queuedMessages.getFirst();
+            assertNotNull(confirmChange);
+            assertEquals(keywordMO.from(), confirmChange.to());
+            assertEquals(keywordMO.to(), confirmChange.from());
+            assertTrue(confirmChange.text().contains("no problem"));
+
+            // Next MT presents the list of topics.
             Message availableTopicMessage = queuedMessages.get(1);
             assertNotNull(availableTopicMessage);
             assertEquals(keywordMO.from(), availableTopicMessage.to());
             assertEquals(keywordMO.to(), availableTopicMessage.from());
-
-            queuedMessages.clear();
+            LOG.info("Next MT text: {}", availableTopicMessage.text());
 
             String topicText = availableTopicMessage.text();
-            assertTrue(topicText.contains("topics I can talk about"));
+            assertTrue(topicText.contains("the other topics"));
             assertTrue(topicText.contains("wolverines"));
-            assertTrue(topicText.contains("international monetary policy"));
+            assertTrue(topicText.contains("policy"));
+
+            queuedMessages.clear();
 
             rcvrSurrogate.enqueue(selectWolverinesMO);
             await().atMost(5, SECONDS).until(anyMTResponsesEnqueued(operatorProducer));
 
-            Message confirmWolverineMO = queuedMessages.getFirst();
-            assertNotNull(confirmWolverineMO);
-            assertEquals(keywordMO.from(), confirmWolverineMO.to());
-            assertEquals(keywordMO.to(), confirmWolverineMO.from());
-            assertTrue(confirmWolverineMO.text().contains("pointy teeth"));
+            Message confirmWolverine = queuedMessages.getFirst();
+            assertNotNull(confirmWolverine);
+            assertEquals(keywordMO.from(), confirmWolverine.to());
+            assertEquals(keywordMO.to(), confirmWolverine.from());
+            assertTrue(confirmWolverine.text().contains("badass"));
 
         });
     }
@@ -427,20 +471,20 @@ public class OperatorMessageFlowIT {
         return () -> !dlqLogger.getDeadMessages().isEmpty();
     }
 
-    private Callable<Boolean> anyMessagesInRetryQueue(AMQP.Queue.DeclareOk declareOk) {
-        return () -> !(declareOk.getMessageCount() == 0);
-    }
-
-    private AMQP.Queue.DeclareOk getRetryQueueInfo() throws IOException, TimeoutException {
-        var expectedRetryExchangeName =
-                retryForExchangeName(
-                        exchangeForQueueName(
-                                testProps.getProperty(CONSUMER_QUEUE_NAME)
-                        )
-                );
-
-        return getChannel().queueDeclarePassive(expectedRetryExchangeName);
-    }
+    //private Callable<Boolean> anyMessagesInRetryQueue(AMQP.Queue.DeclareOk declareOk) {
+    //    return () -> !(declareOk.getMessageCount() == 0);
+    //}
+    //
+    //private AMQP.Queue.DeclareOk getRetryQueueInfo() throws IOException, TimeoutException {
+    //    var expectedRetryExchangeName =
+    //            retryExchangeForQueueName(
+    //                    exchangeForQueueName(
+    //                            testProps.getProperty(CONSUMER_QUEUE_NAME)
+    //                    )
+    //            );
+    //
+    //    return getChannel().queueDeclarePassive(expectedRetryExchangeName);
+    //}
 
     private Channel getChannel() throws IOException, TimeoutException {
         ConnectionFactory factory = new ConnectionFactory();
@@ -448,7 +492,6 @@ public class OperatorMessageFlowIT {
         factory.setPort(Integer.parseInt(testProps.getProperty(SharedConstants.PRODUCER_QUEUE_PORT)));
         return factory.newConnection().createChannel();
     }
-
 
     /**
      * Construct a single message, opt-in graph. Operator assumes (fairly) that every Route will define an opt-in graph.
@@ -461,6 +504,33 @@ public class OperatorMessageFlowIT {
         return optInNow;
     }
 
+    private Node buildChangeTopicNode() {
+        var presentChangeRequest = new Node("Oh, you want to talk about something else? 1) yes 2) no, let's continue with the current conversation.",
+                NodeType.PRESENT_MULTI, "PresentChangeTopic");
+        var confirmChange = new Node("Sorry. I'm confused. The options are 1) yes, change topics or 2) continue with what we were talking about before.",
+                NodeType.PROCESS_MULTI, "ConfirmChangeTopic");
+        var availableTopics = new Node("Here are the other topics: 1) international monetary policy, 2) wolverines",
+                NodeType.PRESENT_MULTI, "AvailableTopics");
+        var topicSelected = new Node("Sorry that's not a valid choice.",
+                NodeType.PROCESS_MULTI, "TopicSelection");
+        var endConversation = new Node(OperatorTest.COLOR_QUIZ_END_CONVERSATION,
+                NodeType.END_OF_CHAT, "ColorQuizEnd");
+
+        var yesChangeTopic = new Edge(List.of("1", "yes"), "Sure, no problem.", availableTopics);
+        var noChangeTopic = new Edge(List.of("2", "no", "continue"), "Ok, I'll repeat the last question.", null); // Operator will replace the targetNode
+
+        var monetaryPolicy = new Edge(List.of("policy"), "So dull but if you insist.", endConversation);
+        var wolverineTalk = new Edge(List.of("wolverines"), "Wolverines are badass.", endConversation);
+
+        presentChangeRequest.edges().add(new Edge(List.of("n/a"), "n/a", confirmChange));
+        confirmChange.edges().addAll(List.of(yesChangeTopic, noChangeTopic));
+        topicSelected.edges().addAll(List.of(monetaryPolicy, wolverineTalk));
+        availableTopics.edges().add(new Edge(List.of("n/a"), "n/a", topicSelected));
+        endConversation.edges().add(new Edge(List.of("n/a"), "n/a", null)); // required trailing unlinked edge
+
+        return presentChangeRequest;
+    }
+
     /**
      * Construct a short graph of nodes for testing purposes
      * Following the principles of Don't Repeat Yourself, we should merge this with the very similar method that exists in OperatorTest.
@@ -469,20 +539,36 @@ public class OperatorMessageFlowIT {
      */
     private Node buildNodeGraph() {
 
-        Node presentQuestion = new Node(SCRIPT_ID, OperatorTest.COLOR_QUIZ_START_TEXT, NodeType.PRESENT_MULTI); // label: "ColorQuizStart"
-        Node processAnswer = new Node(OperatorTest.COLOR_QUIZ_UNEXPECTED_INPUT, NodeType.PROCESS_MULTI, "ColorQuizProcessResponse");
+        var presentQuestion = new Node(SCRIPT_ID, OperatorTest.COLOR_QUIZ_START_TEXT, NodeType.PRESENT_MULTI); // label: "ColorQuizStart"
+        var processAnswer = new Node(OperatorTest.COLOR_QUIZ_UNEXPECTED_INPUT, NodeType.PROCESS_MULTI, "ColorQuizProcessResponse");
         presentQuestion.edges().add(
                 new Edge(List.of("n/a"), "n/a", processAnswer)
         );
 
         Node endConversation = new Node(OperatorTest.COLOR_QUIZ_END_CONVERSATION, NodeType.END_OF_CHAT, "ColorQuizEnd");
 
-        Edge answerRed = new Edge(List.of("red"), "Red is the color of life.", endConversation);
-        Edge answerBlue = new Edge(List.of("blue"), "Blue is my fave, as well.", endConversation);
-        Edge answerFlort = new Edge(List.of("flort"), "Flort is for the cool kids.", endConversation);
+        var answerRed = new Edge(List.of("red"), "Red is the color of life.", endConversation);
+        var answerBlue = new Edge(List.of("blue"), "Blue is my fave, as well.", endConversation);
+        var answerFlort = new Edge(List.of("flort"), "Flort is for the cool kids.", endConversation);
 
         processAnswer.edges().addAll(List.of(answerRed, answerBlue, answerFlort));
         return presentQuestion;
+    }
+
+    private void registerRequiredConfiguration() {
+
+        var startNode = buildNodeGraph();
+        var startNodeId = startNode.id();
+        persistenceManager.addNodeGraph(startNode.id(), startNode);
+        var optInNode = buildOptInNode();
+        var optInNodeId = optInNode.id();
+        persistenceManager.addNodeGraph(optInNodeId, optInNode);
+
+        var changeTopicNode = buildChangeTopicNode();
+        persistenceManager.addNodeGraph(changeTopicNode.id(), changeTopicNode);
+
+        registerCompatibleRoute(keywordMO, startNodeId, optInNodeId, changeTopicNode.id());
+        registerMatchingKeyword(Pattern.compile("welcome"), startNode, keywordMO.to());
     }
 
     // Consider moving this into the TestingPersistenceManager itself.
@@ -493,14 +579,14 @@ public class OperatorMessageFlowIT {
     }
 
     // Consider moving this into the TestingPersistenceManager itself.
-    private @NonNull Route[] registerCompatibleRoute(Message message, UUID defaultNodeId, UUID optInNodeId) {
+    private @NonNull Route[] registerCompatibleRoute(Message message, UUID defaultNodeId, UUID optInNodeId, UUID interruptNodeId) {
         Route[] routes = {
                 new Route(
                         message.platform(),
                         message.to(),
                         defaultNodeId,
                         UUID.fromString(KnownData.knownCompanyId),
-                        /*interruptNodeId*/null, // should never be null in practice
+                        interruptNodeId,
                         optInNodeId,
                         /*optOutNodeId*/null)    // should never be null in practice
         };

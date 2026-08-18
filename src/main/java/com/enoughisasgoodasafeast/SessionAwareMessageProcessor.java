@@ -2,6 +2,9 @@ package com.enoughisasgoodasafeast;
 
 import com.enoughisasgoodasafeast.operator.MessageProcessor;
 import com.enoughisasgoodasafeast.operator.Session;
+import com.enoughisasgoodasafeast.operator.SessionKey;
+import com.enoughisasgoodasafeast.operator.UserStatus;
+import org.jspecify.annotations.Nullable;
 
 public interface SessionAwareMessageProcessor extends MessageProcessor {
 
@@ -19,4 +22,11 @@ public interface SessionAwareMessageProcessor extends MessageProcessor {
      * Log the processed Message using the Session context.
      */
     boolean log(Session session, Message message);
+
+    void complete(Message message, Session session);
+
+    default void complete(Message message, Session session, boolean isNewUser, @Nullable UserStatus updatedUserStatus) {
+        complete(message, session);
+    }
 }
+

@@ -2,6 +2,8 @@ package com.enoughisasgoodasafeast.operator;
 
 import com.enoughisasgoodasafeast.Message;
 import com.enoughisasgoodasafeast.QueueProducer;
+import com.enoughisasgoodasafeast.StatusException;
+import io.helidon.http.Status;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -16,10 +18,10 @@ public class TestingMessageProcessor implements SndrMessageProcessor {
     }
 
     @Override
-    public boolean process(Message message) {
-        producer.enqueue(message);
+    public StatusException process(Message message) {
+        var enqueuedOk = producer.enqueue(message);
         LOG.info("Processed {}", message);
-        return true;
+        return enqueuedOk ? new StatusException(Status.OK_200, null) : new StatusException(Status.BAD_REQUEST_400, null);
     }
 
     @Override

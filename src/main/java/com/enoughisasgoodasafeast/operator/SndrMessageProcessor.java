@@ -1,6 +1,7 @@
 package com.enoughisasgoodasafeast.operator;
 
 import com.enoughisasgoodasafeast.Message;
+import com.enoughisasgoodasafeast.StatusException;
 
 public interface SndrMessageProcessor extends MessageProcessor {
 
@@ -11,7 +12,7 @@ public interface SndrMessageProcessor extends MessageProcessor {
      * @param message the message being processed.
      * @return true if processing was complete, false if incomplete.
      */
-    boolean process(Message message);
+    StatusException process(Message message);
 
     /**
      * Log the processed Message as appropriate.
