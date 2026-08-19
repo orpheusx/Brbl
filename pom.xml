@@ -48,7 +48,7 @@
         <dependency>
             <groupId>com.rabbitmq</groupId>
             <artifactId>amqp-client</artifactId>
-            <version>5.23.0</version>
+            <version>5.33.1</version>
         </dependency>
 
         <!-- Source: https://mvnrepository.com/artifact/com.rabbitmq/http-client -->
