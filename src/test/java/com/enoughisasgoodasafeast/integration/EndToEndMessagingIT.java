@@ -4,7 +4,6 @@ import com.enoughisasgoodasafeast.Message;
 import com.enoughisasgoodasafeast.PlatformGateway;
 import org.junit.jupiter.api.AfterAll;
 import org.junit.jupiter.api.BeforeAll;
-import org.junit.jupiter.api.Test;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.testcontainers.containers.ComposeContainer;
@@ -48,11 +47,6 @@ public class EndToEndMessagingIT {
     static void stopContainer() {
         LOG.info("Shutting down the RabbitMQ and Burble containers from {}", COMPOSE_FILE_UNDER_TEST);
         brblContainers.stop();
-    }
-
-    @Test // FIXME delete this
-    public void justStartStopContainers() {
-        LOG.info("Got here");
     }
 
     //@Test // FIXME uncomment
