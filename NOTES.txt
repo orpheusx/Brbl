@@ -6329,7 +6329,7 @@ This seems to suggest that DLQLogger is setup to consume from dev-opr8r-mo_sms_f
 Ok, got it working. Failed messages (e.g. ones sent to unconfigured route) are getting pushed into dev-opr8r-mo_sms_fail and then drained by DLQLogger.
 
 Moved onto to fixing the long busted simpleMessageFlow test...
-Started replacing some of the fixures with KnownData which got very confusing. Combined with the boredom of a unit test, I couldn't seem to get past a configuration error. Finally decied I'd give Google's Gemini replacement, Antigravity, a chance to impress me. I gave it the following prompt:
+Started replacing some of the fixures with KnownData which got very confusing. Combined with the boredom of a unit test, I couldn't seem to get past a configuration error. Finally decided I'd give Google's Gemini replacement, Antigravity, a chance to impress me. I gave it the following prompt:
     > @src/test/java/com/enoughisasgoodasafeast/integration/OperatorMessageFlowIT.java
       Why isn't the simpleMessage test method passing? An IllegalStateException is getting thrown from line 378 of the Operator class
       (@src/main/java/com/enoughisasgoodasafeast/operator/Operator.java.)
@@ -6932,7 +6932,7 @@ Not a great experience. Gemma is a pretty careless student. It kept claiming vic
 re: LM studio it has some settings that are unhelpful; by default it was unloading models after a timeout expired leading to "Error: LM Link connection entered error state peer_keepalive_timeout"
 To hopefully avoid this I've turned off "JIT models auto-evict."
 
-As bad as Gemma 4 E4B was, the more targeted variant, gemm-4-12b-coder-fable5-composer2.5-v1, was *way* worse. It clearly had no idea how to write Java, at all.
+As bad as Gemma 4 E4B was, the more targeted variant, gemma-4-12b-coder-fable5-composer2.5-v1, was *way* worse. It clearly had no idea how to write Java, at all.
 
 Last test (for now) Qwen's qwen3-coder-30b (a 14.6gb model.)
 
@@ -7219,15 +7219,351 @@ rabbitmqadmin exchanges delete --name dev-sndr-mt_sms-xr
 Yep, that was the problem; likely the binding of existing exhanges to queues.
 Ran the usual manual tests with Confab and the automated tests (ChttrClient triggered by curl calling the /chttrStart endpoint.
 Looks good.
+
 Next steps:
-X generate a commit messages
-_ commit and push
+    X generate a commit messages
+    X commit and push
 
 At this point we should probably then merge branch to main. Tag main before the merge?
 Create new branch for the gateway integration prototyping.
 
-------------------
+=== 2026/08/18 ===
+
 Getting back to building our prototype third-party gateway integration...
-Telnyx provides documents ready for AI ingestion. Let's try feeding them to our current big model.
-Prompt:
-We're building an integration with Telnyx to be send and receive SMS messages. They provide the following url to help LLMs understand the APIs including
+
+To start, we need a test server that can be configured to return all the HTTP error codes that the vendor(s) specify.
+Then we can generate lots of integration test cases. Possibly using by pseudo random seed driven fuzzing.
+
+Let's start with Telnyx.
+
+The format of the POST payload for sending a message is really simple:
+    {
+        "from": "+15551234567",
+        "to": "+15559876543",
+        "text": "Hello, world!"
+    }
+The phone numbers must be in E.164 format.
+The POST must include an Authorization header with Bearer OUR_API_KEY. For example:
+    "Authorization: Bearer YOUR_API_KEY"
+Also the Content-Type header must be "application/json"
+
+The response is annoyingly verbose. It looks like this:
+    {
+      "data": {
+        "record_type": "message",
+        "direction": "outbound",
+        "id": "b0c7e8cb-6227-4c74-9f32-c7f80c30934b",
+        "type": "SMS",
+        "messaging_profile_id": "16fd2706-8baf-433b-82eb-8c7fada847da",
+        "from": {
+          "phone_number": "+15551234567",
+          "carrier": "Telnyx",
+          "line_type": "Wireless"
+        },
+        "to": [
+          {
+            "phone_number": "+15559876543",
+            "status": "queued",
+            "carrier": "<Name-of-carrier>",
+            "line_type": "Wireless"
+          }
+        ],
+        "text": "Hello, world!",
+        "encoding": "GSM-7",
+        "parts": 1,
+        "cost": {
+          "amount": 0.0051,
+          "currency": "USD"
+        }
+      }
+    }
+
+The returned messaging_profile_id appears to be the UUID that we have previously associated with the sent MT's "from" field.
+Presumably if the MT included emoticons or Chinese characters the reported encoding will be other than GSM-7 and cost amount will be higher.
+
+FWIW the POST payload MMS version is the same apart from adding two additional fields: "subject" and "media_urls": [url,url,...]
+The URLs have to be publically available, of course.
+
+For errors:
+    {
+      "errors": [
+        {
+          "code": "40300",
+          "title": "Forbidden",
+          "detail": "The from number +15551234567 is not assigned to a messaging profile.",
+          "meta": {
+            "url": "https://developers.telnyx.com/docs/messaging/messages/error-codes"
+          }
+        }
+      ]
+    }
+
+They don't specify what HTTP code is returned for successful sends directly. At one point they suggest its a 200.
+(Use Helidon's code families?)
+
+For errors, check https://developers.telnyx.com/docs/messaging/messages/send-message#http-error-codes.
+
+    +-------------------------------------------------------------------------------------------------------------------------
+    | HTTP |	Meaning	           | Retryable	| Action
+    +------|-----------------------|------------|----------------------------------------------------------------------------
+    | 400  | Bad Request	       | No	        | Fix the request body — malformed JSON or missing required fields.
+    | 401  | Unauthorized	       | No	        | Check your API key is correct and active.
+    | 402  | Payment Required	   | No	        | Add funds to your account balance.
+    | 403  | Forbidden	           | No	        | Number not assigned to a messaging profile, or sender registration required.
+    | 404  | Not Found	           | No	        | The resource (message ID, profile ID) does not exist.
+    | 422  | Unprocessable Entity  | No	        | Validation failed — see error detail for the specific field.
+    | 429  | Too Many Requests	   | Yes	    | Rate limited — wait for the retry-after header value, then retry.
+    | 500  | Internal Server Error | Yes	    | Telnyx server error — retry with exponential backoff.
+    | 503  | Service Unavailable   | Yes	    | Temporary outage — retry with exponential backoff.
+    +------|-----------------------|------------|----------------------------------------------------------------------------
+
+Additionally the 5 digit errors referenced in the code property of the errors array provide additional detail for messaging related errors:
+    +------------------------------------------------------------------------------------------------------------------------
+    | Code  | Description                              |   Resolution
+    +------------------------------------------------------------------------------------------------------------------------
+    | 40001 | Phone number not in E.164 format         | Format as +[country code][number] with no spaces or punctuation
+    | 40002 | Missing required field                   | Include all required fields: from, to, and text (or media_urls)
+    | 40300 | Number not assigned to messaging profile | Go to My Numbers and assign a messaging profile
+    | 40301 | Sender registration required             | Register for 10DLC, toll-free verification, or another sender type
+    | 40302 | Messaging profile disabled	           | Re-enable the profile in the portal
+    | 42200 | Invalid from number	                   | Verify the number belongs to your account and supports messaging
+    | 42201 | Invalid to number                        | Verify the destination is a valid, active phone number
+    | 42202 | Message body too long	                   | SMS max: 1,600 characters (concatenated). Reduce content or split
+    |       |                                          |  into multiple messages
+    | 42203 | Invalid media URL                        | Ensure media_urls are publicly accessible HTTPS URLs
+    | 42204 | Too many media attachments               | MMS supports up to 10 media URLs per message
+    | 42205 | Media file too large                     | Individual media files must be under 1 MB; total under 2 MB
+    +------------------------------------------------------------------------------------------------------------------------
+
+Rate-limiting is signalled with an HTTP 429 and a set of related headers in the response:
+
+    +-------------------------+--------------------------------------------------------
+    |  Header	              | Description
+    +-------------------------|---------------------------------------------------------
+    |  x-ratelimit-limit	  | Maximum requests allowed in the current window
+    |  x-ratelimit-remaining  | Requests remaining in the current window
+    |  x-ratelimit-reset	  | Unix timestamp when the window resets
+    |  retry-after            | Seconds to wait before retrying (only on 429 responses)
+    +-------------------------|---------------------------------------------------------
+The obvious questions:
+    What is the length of a window?
+    How many messages are allowed within a single window?
+
+=== 2026/08/19 ===
+
+https://developers.telnyx.com/docs/messaging/messages/rate-limiting defines message delivery throughput. Actual numbers here.
+https://developers.telnyx.com/docs/development/api-fundamentals/reliability/rate-limiting says there are static limits but doesn't disclose them. Instead they talk about using the headers.
+
+I guess we could simply consider the delivery numbers as our top line limit and otherwise do as they recommend w/r/t headers.
+
+Per account (aka per Brbl customer account assuming we create accounts on their behalf.):
+    +---------------|-----------------------|----------------------
+    | Message Type  |   Default Rate Limit  |   Max Queue Length
+    +---------------|-----------------------|----------------------
+    | SMS           |   50 messages/second	|   720,000
+    | MMS           |   15 messages/second	|   216,000
+    | RCS           |   1 message/second	|   14,400
+    +---------------|-----------------------|----------------------
+
+"When using US long codes for A2P messaging, throughput is determined by mobile network operators (MNOs) based on your registered 10DLC campaign. Each carrier has different throughput systems."
+
+Of course, they do and, of course, they rely on an opaque "vetting score." Hopefully if we do a good job of avoiding spammy messages we'll be rewarded with a better score. That said, I hadn't planned on doing number lookups so we don't actually know which carrier they're on. The differences between the AT&T and T-Mobile are pretty extreme. Verizon doesn't provide any guestimates.
+
+The final(?) wrinkle is that Telnyx will queue messages that exceed the carrier rate limits rather than rejecting it, up to some queue max. The status listed for such messages will be "queued" and they'll hold the messages for up to 4 hours.
+
+----------------
+Github Dependabot reported a slew of security issues today. Fortunately they were all addressed by patch releases.
+They included rabbitmq:amqp-client, the postgresql client, logback, and c3p0. I applied all the updated via Github then pulled into my local main and reran the unit and integration tests. Those were all fine so I ran ChttrClient and Confab tests per usual. Also worked find.
+----------------
+
+=== 2026/08/20 ===
+
+Discovered that in addition to support for OpenAPI code generation, Helidon (MP) supports "MicroProfile Long Running Actions" which is basically the Saga pattern implemented with special annotations. I think the work we did to move all the session updates/persistence to the end of the processing pipeline is sufficient but it's good to know.
+
+re: the Datastar hypermedia framework we looked at re: writing our own chat client, Helidon also supports Server Sent Events (SSE) along with WebSockets. Datastar might also fit for the customer service site.
+
+It took it hours to achieve partial victory but I did get prism ml/bonsai-27b to extract the relevant portions of the monolithic Telnyx OpenAPI spec document. I had to manually cut-and-paste component.responses and component.schemas it missed but was able to run the "industry standard" OpenAPITools generator (https://openapi-generator.tech/) on the (vastly smaller) result.
+
+The new project is SndrGatewaySim.
+
+    openapi-generator-cli.sh generate -i telnyx-messaging-spec3.json --generator-name java-helidon-server --library se --skip-validate-spec
+
+The validation step pointed out a mass of consistency/correctness problems with Telnyx's spec so had to turn it off with the trailing flag.
+
+The results compile and start but none of the endpoints respond. Exploring the problem...
+
+The generator included the following in the generated Main class that is deprecated in the latest version of Helidon:
+
+    Config.global(config);
+
+In fixing this I broke the config. Fixed now.
+
+Added the deps that provide the Swagger UI but had to downgrade the declared version of the OpenApi spec from 3.1.0 to 3.0.0. because the UI won't recognize the newer version. I also changed servers.url in the spec file so that the UI invokes calls on our local server (instead of the actual Telnyx server) and servers.description to call out that we're viewing the local service.
+All the actual endpoint handlers (e.g. http://localhost:8080/messages/long_code) currently return a 501 Not Implemented which is what we expect.
+
+So what to do next? Generate a matching client?
+Decided to try to get one of the endpoints working in some capacity before doing more code generation.
+
+Looks like there's the classic mismatch between OpenApi params that use snake-case for their names and Java's conventions for camel-case.
+
+    openapi-generator-cli.sh generate -i telnyx-messaging-spec3.json --generator-name java-helidon-server --library se --skip-validate-spec --additional-properties=modelPropertyNaming=original
+
+Adding modelPropertyNaming=original doesn't seem to have done anything to the models.
+It might be better to simply add @JsonProperty("your_snake_case_name") to the properties that have this issue.
+Yep, that works. On to the next step...
+
+==== 2026/08/22 ====
+
+Lots of struggles getting OpenAPITools to do what we want/need. Particularly in configuring Helidon to use an instance of Jackson's ObjectMapper that can handle snake-case propery names.
+
+
+==== 2026/08/25 ====
+
+Need a Message converter for each third-party messaging gateway. Telnyx uses the following:
+
+    {
+      "from": "+18445550001",
+      "messaging_profile_id": "abc85f64-5717-4562-b3fc-2c9600000000",
+      "to": "XXX+18445550001",
+      "text": "Hello, World!",
+      "subject": "From Telnyx!",
+      "media_urls": [
+        "http://example.com"
+      ],
+      "webhook_url": "http://example.com/webhooks",
+      "webhook_failover_url": "https://backup.example.com/hooks",
+      "use_profile_webhooks": true,
+      "type": "SMS"
+    }
+
+Of these, the spec says only the "to" property is required. Practically speaking, this isn't true but Telnyx appears to use it as their generic message definition. Additional requirements would get in the way of that, I assume. For our purposes (SMS) the truly optional bits are:
+    media_urls --> omit entirely for SMS. (Required for MMS.)
+    webhook_url and webhook_failover_url --> omit entirely assuming we set these in the profile we setup (identified by messaging_profile_id)
+    use_profile_webhooks --> this defaults to true so omit it entirely in our messages.
+    subject --> Omit entirely. This is only used by MMS. Setting it for an SMS will either be ignored or (possibly) cause it to be upgraded to an MMS.
+Note that the Jackson deserializer will produce an object where the omitted fields are present but null.
+
+Prompt given to qwen3.6-35b-a3b-coding-reap50 (newly downloaded):
+
+    Implement the sendMessage method in TelnyxMessageService (@src/main/java/com/enoughisasgoodasafeast/sndr/sim/server/TelnyxMessageService.java) to do the following:
+    1. Check that request.content().hasEntity() is true. Log an error message if it is not.
+    2. Deserialize the JSON message: request.content().as(CreateMessageRequest.class)
+        This may throw a JacksonRuntimeException that wraps other exceptions.
+        If an exception is thrown then skip step 3 because no further validations can be performed.
+    3. Validate the members of the created CreateMessageRequest (@target/generated-sources/src/main/java/com/enoughisasgoodasafeast/sndr/server/model/CreateMessageRequest.java) object:
+        - Check the "from" and "to" members using the static method isValidE164.
+        - Check that messaging_profile_id is a valid UUID.
+        - Check that subject, media_urls, webhook_url, webhook_failover_url, and use_profile_webhooks are null
+        - Check that the type is "SMS"
+        - Check that autoDetect is false
+    4. For any and all exceptions or validation errors (or if the check in step 1 is false), create a MessagingError (@target/generated-sources/src/main/java/com/enoughisasgoodasafeast/sndr/server/model/MessagingErrorSource.java). Where possible include an embedded MessagingErrorSource (@target/generated-sources/src/main/java/com/enoughisasgoodasafeast/sndr/server/model/MessagingErrorSource.java)  that provides information about the cause/source of the error.
+    5. Collect each MessagingError in an instance of MessagingErrors and pass it to the ServerResponse.send() method.
+
+    NOTE: The file under target/generated-sources are generated and may not be altered.
+
+
+Ask for it simplify the method to make it easier to test:
+
+    Refactor the sendMessage method in TelnyxMessageService (@src/main/java/com/enoughisasgoodasafeast/sndr/sim/server/TelnyxMessageService.java) so that once the CreateMessageRequest object has been successfully created the rest of the validation work is performed in a new method called validateMessage that takes the CreateMessageRequest object as its argument. This will make it easier to unit test the validation code.
+
+
+I asked for it to produce unit tests:
+
+    Create a set of unit tests for the validateMessage method. The needed dependencies for JUnit 5 are already included in the project. You should be able to run the tests by executing the following:
+        mvn test -Dtest=TheUnitTestClassName
+
+A mere 67(!) minutes later it had written, debugged and fixed a reasonable set of tests.
+
+    All **28 tests pass**. Here's a summary of the test file:
+
+    **`src/test/java/com/enoughisasgoodasafeast/sndr/sim/server/TelnyxMessageServiceTest.java`** — 28 tests covering every validation rule in `validateMessage`:
+
+    | Category                 | Tests | What they verify                                                                            |
+    |--------------------------|-------|---------------------------------------------------------------------------------------------|
+    | **Happy path**           | 1     | A fully valid request returns zero errors                                                   |
+    | **from / to (E.164)**    | 4     | Invalid string and null each produce errors                                                 |
+    | **messaging_profile_id** | 3     | Null → error; invalid UUID → error; valid UUID → no error                                   |
+    | **subject**              | 2     | Null is OK; non-null produces an error                                                      |
+    | **media_urls**           | 3     | Empty list is OK; non-empty or null each produce errors                                     |
+    | **webhook_url**          | 2     | Null is OK; non-null produces an error                                                      |
+    | **webhook_failover_url** | 2     | Null is OK; non-null produces an error                                                      |
+    | **use_profile_webhooks** | 2     | Null is OK; true produces an error                                                          |
+    | **type**                 | 3     | SMS → no error; null or MMS each produce errors                                             |
+    | **auto_detect**          | 3     | false/null → no error; true produces an error                                               |
+    | **Multiple fields**      | 3     | All 5 disallowed fields together, two errors together, and alphabetical ordering of results |
+
+
+The qwen3.6-35b-a3b-coding-reap50 model seems pretty good overall. It would be better if it ran faster. Maybe spend some time getting it to run under llama.cpp? That would also require getting the networking between PoG and Yakko working.
+
+Interesting project that might be useful:
+    https://pgbot.dev
+    Looks like it prefers Gemini or OpenAI but supports local LLMs, too.
+
+==== 2026/08/26 ====
+
+TODO
+ X In SndrGatewaySim: Refactor the sendMessage(ServerRequest, ServerResponse) method again to pull out the first two steps for easier unit testing.
+    Running now...
+ _ In Brlb/sndrRcvr: Start setting up the integration test that uses Sndr to init queues, a testing QueueProducer (simulating Opr8r.) Model this after OperatorMessageFlowIT.
+
+ SndrMessageFlowIT
+
+The Sndr
+    will consume from
+        dev-sndr-mt_sms
+    will send retries to
+        dev-sndr-mt_sms-retry_10m
+        dev-sndr-mt_sms-retry_10s
+        dev-sndr-mt_sms-retry_1m
+        dev-sndr-mt_sms-retry_20m
+        dev-sndr-mt_sms-retry_2m
+        dev-sndr-mt_sms-retry_30s
+        dev-sndr-mt_sms-retry_5m
+        dev-sndr-mt_sms-retry_5s
+    will send failures to
+        dev-sndr-mt_sms-fail
+
+Seems to be connecting to the expected queues.
+Having trouble connecting the Sndr component to Postgres...wait, we're using a TestPersistenceManager so we don't need Postgres.
+
+==== 2026/08/28 ====
+
+Using Confab as the sink/Telnyx proxy just to verify that the IT can trasmit messages.
+Works fine; I updated Confab to use the '+' required by the E.164 standard for the expected set of user/10DLC numbers.
+
+Now we need to teach Sndr how to convert a Message to the vendor specific model which opens up questions over segmenting traffic by gateway, tracking retries and running totals by customer/10DLC, etc.
+
+The full set of properties for an SMS/MMS message (per the OpenAPITools-generated CreateMessageRequest class)
+    Required:
+     --> @param from
+            Sending address (+E.164 formatted phone number, alphanumeric sender ID, or short code).  **Required if sending with a phone number, short code, or alphanumeric sender ID.**
+     --> @param messagingProfileId
+            Unique identifier for a messaging profile.  **Required if sending via number pool or with an alphanumeric sender ID.** Twilio uses a conceptually similar identifier.
+     --> @param to
+            Receiving address (+E.164 formatted phone number or short code).
+     --> @param text
+            Message body (i.e., content) as a non-empty string.  **Required for SMS**
+     --> @param type The protocol for sending the message, either SMS or MMS.
+
+     Required for MMS-only
+     --> @param subject Subject of multimedia message
+     --> @param mediaUrls A list of media URLs. The total media size must be less than 1 MB.  **Required for MMS**
+
+     Optional:
+     --> @param webhookUrl The URL where webhooks related to this message will be sent. Registered value used if not specified.
+     --> @param webhookFailoverUrl The failover URL where webhooks related to this message will be sent if sending to the primary URL fails.
+     --> @param useProfileWebhooks If the profile this number is associated with has webhooks, use them for delivery notifications. If webhooks are also specified on the message itself, they will be attempted first, then those on the profile.
+     --> @param autoDetect Automatically detect if an SMS message is unusually long and exceeds a recommended limit of message parts. We want to have a full understanding of message size impacts available before sending it.
+     --> @param sendAt ISO 8601 formatted date indicating when to send the message - accurate up till a minute. We expect to have a scheduler of our own but this might be useful for coordinated blasts assuming other vendors support the feature.
+     --> @param encoding Encoding to use for the message.
+            --> "gsm7" forces GSM-7 encoding (returns 400 if message contains characters that cannot be encoded).
+            --> "ucs2" forces UCS-2 encoding and disables smart encoding. When set, this overrides the messaging profile setting.
+            --> "auto" (default) uses smart encoding to automatically select the most efficient encoding.
+
+
+NB: https://telnyx.com/twexit supposedly describes a compatibility API that makes it easy to adapt code written for Twilio. The Documentation link returns 404, however.
+
+The final jar size of the SndrGatewaySim project is not huge (1MB) because, the pom.xml doesn't embed all the depedencies; their separate in the libs/ dir.) So it seems reasonable to install it locally then add it to sndrRcvr/Brbl's poml.xml to get access to the com.enoughisasgoodasafeast.sndr.server.model package.
+
+com.enoughisasgoodasafeast.sndr-gateway-sim
+

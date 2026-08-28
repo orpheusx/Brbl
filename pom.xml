@@ -95,7 +95,7 @@
         <dependency>
             <groupId>ch.qos.logback</groupId>
             <artifactId>logback-classic</artifactId>
-            <version>1.5.32</version>
+            <version>1.5.34</version>
         </dependency>
 
         <!-- https://mvnrepository.com/artifact/ch.qos.logback/logback-core -->
@@ -144,36 +144,18 @@
             <version>0.14.0</version>
         </dependency>
 
-        <dependency>
-            <groupId>info.picocli</groupId>
-            <artifactId>picocli</artifactId>
-            <version>4.7.6</version>
-        </dependency>
-
-        <dependency>
-            <groupId>info.picocli</groupId>
-            <artifactId>picocli-shell-jline3</artifactId>
-            <version>4.7.6</version>
-        </dependency>
-
-        <dependency>
-            <groupId>org.jline</groupId>
-            <artifactId>jline</artifactId>
-            <version>3.28.0</version>
-        </dependency>
-
-        <!-- https://mvnrepository.com/artifact/org.fusesource.jansi/jansi -->
-        <dependency>
-            <groupId>org.fusesource.jansi</groupId>
-            <artifactId>jansi</artifactId>
-            <version>2.4.1</version>
-        </dependency>
-
         <!-- https://mvnrepository.com/artifact/jakarta.persistence/jakarta.persistence-api -->
         <dependency>
             <groupId>jakarta.persistence</groupId>
             <artifactId>jakarta.persistence-api</artifactId>
             <version>3.2.0</version>
+        </dependency>
+
+        <!-- For now this is available only by building and installing SndrGatewaySim repo locally. -->
+        <dependency>
+            <groupId>com.enoughisasgoodasafeast</groupId>
+            <artifactId>sndr-gateway-sim</artifactId>
+            <version>1.0-SNAPSHOT</version>
         </dependency>
 
         <!-- The next two includes are only used to generate testing data. No need to include in packaged artifacts. -->

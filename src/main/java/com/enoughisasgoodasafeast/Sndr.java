@@ -19,11 +19,30 @@ public class Sndr implements SndrMessageProcessor {
     private PersistenceManager persistenceManager;
     private HttpMTSender httpMtHandler;
 
+    public Sndr() {
+    }
+
+    public Sndr(QueueConsumer queueConsumer ) {
+        this.queueConsumer = queueConsumer;
+    }
+
+    public Sndr(PersistenceManager persistenceManager) {
+        this.persistenceManager = persistenceManager;
+    }
+    public Sndr(QueueConsumer queueConsumer, PersistenceManager persistenceManager) {
+        this.queueConsumer = queueConsumer;
+        this.persistenceManager = persistenceManager;
+    }
+
     public void init(Properties properties) throws IOException, TimeoutException, PersistenceManagerException {
         LOG.info("Initializing SNDR");
         httpMtHandler = (HttpMTSender) HttpMTSender.newHandler(properties);
-        queueConsumer = RabbitQueueConsumer.createQueueConsumer(properties, this);
-        persistenceManager = PostgresPersistenceManager.createPersistenceManager(properties);
+        if(queueConsumer == null) {
+            queueConsumer = RabbitQueueConsumer.createQueueConsumer(properties, this);
+        }
+        if(persistenceManager == null) {
+            persistenceManager = PostgresPersistenceManager.createPersistenceManager(properties);
+        }
     }
 
     @Override
@@ -36,11 +55,19 @@ public class Sndr implements SndrMessageProcessor {
 
     public boolean log(Message message) {
         boolean isInserted = persistenceManager.insertDeliveredMT(message);
-        if(isInserted){
+        if (isInserted) {
             LOG.info("Delivered {}", message);
         }
 
         return isInserted;
+    }
+
+    public void shutdown() throws IOException, TimeoutException {
+        if (queueConsumer != null) {
+            queueConsumer.shutdown();
+            LOG.info("Shutdown queueConsumer.");
+        }
+        LOG.info("Shutdown Sndr");
     }
 
     public static void main(String[] args) throws IOException, TimeoutException, PersistenceManagerException {
