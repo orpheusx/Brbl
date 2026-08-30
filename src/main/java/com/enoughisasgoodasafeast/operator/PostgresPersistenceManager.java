@@ -2,6 +2,8 @@ package com.enoughisasgoodasafeast.operator;
 
 import com.enoughisasgoodasafeast.ConfigLoader;
 import com.enoughisasgoodasafeast.Message;
+import com.enoughisasgoodasafeast.sndr.GatewayMeta;
+import com.enoughisasgoodasafeast.sndr.GatewayProvider;
 import com.mchange.v2.c3p0.ComboPooledDataSource;
 import org.jspecify.annotations.NonNull;
 import org.jspecify.annotations.Nullable;
@@ -1255,6 +1257,10 @@ PostgresPersistenceManager implements PersistenceManager {
 //        }
 //
 //    }
+
+    public @Nullable GatewayMeta fetchGatewayMeta(GatewayProvider gatewayProvider, Company company, Platform platform, Route route) {
+        return null; // FIXME implement!!!
+    }
 
     public @NonNull Collection<CampaignUser> getPushCampaignUsers(@NonNull UUID campaignId, DeliveryStatus byStatus) {
         try (Connection connection = fetchConnection()) {

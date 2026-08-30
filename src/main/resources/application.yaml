@@ -1,0 +1,37 @@
+telnyx-sender:
+  # The target server URL
+  base-uri: "http://localhost:2424/messages"
+
+  # Connection properties
+  connect-timeout-millis: 5000
+  read-timeout-millis: 10000
+
+  # Connection pool configuration
+  connection-pool:
+    max-size: 3
+    queue-size: 10
+
+  # Optional: Security and TLS configuration
+  #tls:
+  #  trust-all: false
+  # tls:
+  #   # 1. Trust configuration (Verifying the remote server's cert)
+  #   trust:
+  #     keystore:
+  #       passphrase: "truststore-password"
+  #       trust-store: true
+  #       resource:
+  #         # Option A: From application classpath
+  #         resource-path: "client-truststore.p12"
+  #         # Option B: Absolute path on the file system (uncomment to use)
+  #         # path: "/etc/ssl/certs/client-truststore.p12"
+  #
+  #   # 2. Client Identity / Private Key (Only required for mTLS)
+  #   private-key:
+  #     keystore:
+  #       passphrase: "keystore-password"
+  #       resource:
+  #         # Option A: From application classpath
+  #         resource-path: "client-identity.p12"
+  #         # Option B: Absolute path on the file system (uncomment to use)
+  #         # path: "/var/private/keys/client-identity.p12"

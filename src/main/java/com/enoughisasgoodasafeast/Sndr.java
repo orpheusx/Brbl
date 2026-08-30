@@ -4,6 +4,7 @@ import com.enoughisasgoodasafeast.operator.PersistenceManager;
 import com.enoughisasgoodasafeast.operator.PersistenceManager.PersistenceManagerException;
 import com.enoughisasgoodasafeast.operator.PostgresPersistenceManager;
 import com.enoughisasgoodasafeast.operator.SndrMessageProcessor;
+import com.enoughisasgoodasafeast.sndr.TelnyxSender;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -18,6 +19,7 @@ public class Sndr implements SndrMessageProcessor {
     private QueueConsumer queueConsumer;
     private PersistenceManager persistenceManager;
     private HttpMTSender httpMtHandler;
+    private TelnyxSender telnyxSender;
 
     public Sndr() {
     }
@@ -42,6 +44,7 @@ public class Sndr implements SndrMessageProcessor {
         }
         if(persistenceManager == null) {
             persistenceManager = PostgresPersistenceManager.createPersistenceManager(properties);
+            telnyxSender = new TelnyxSender(persistenceManager);
         }
     }
 
@@ -52,6 +55,8 @@ public class Sndr implements SndrMessageProcessor {
         LOG.info("Message delivery: {}: {}", delivered, message);
         return delivered;
     }
+
+
 
     public boolean log(Message message) {
         boolean isInserted = persistenceManager.insertDeliveredMT(message);

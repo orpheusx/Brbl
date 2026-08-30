@@ -158,4 +158,8 @@ public class KnownData {
             "brbl_users_rw_role"
     };
 
+    public static String[] TELNYX_MESSAGING_PROFILE_IDS = {
+            "01a04ddd-624b-77ef-baac-e628266ff986" // TODO associate with other bits of data.
+    };
+
 }

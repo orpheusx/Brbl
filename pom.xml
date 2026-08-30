@@ -152,6 +152,7 @@
         </dependency>
 
         <!-- For now this is available only by building and installing SndrGatewaySim repo locally. -->
+        <!-- Contains the OpenAPI defined, generated models used by Telnyx. -->
         <dependency>
             <groupId>com.enoughisasgoodasafeast</groupId>
             <artifactId>sndr-gateway-sim</artifactId>
@@ -182,33 +183,18 @@
         </dependency>
 
         <!-- https://mvnrepository.com/artifact/io.github.dvgaba/easy-random-bean-validation -->
-        <dependency>
-            <groupId>io.github.dvgaba</groupId>
-            <artifactId>easy-random-bean-validation</artifactId>
-            <version>7.1.1</version>
-        </dependency>
+        <!--        <dependency>-->
+        <!--            <groupId>io.github.dvgaba</groupId>-->
+        <!--            <artifactId>easy-random-bean-validation</artifactId>-->
+        <!--            <version>7.1.1</version>-->
+        <!--            <scope>test</scope>-->
+        <!--        </dependency>-->
 
         <!-- https://mvnrepository.com/artifact/jakarta.validation/jakarta.validation-api -->
-        <dependency>
-            <groupId>jakarta.validation</groupId>
-            <artifactId>jakarta.validation-api</artifactId>
-            <version>3.1.1</version>
-        </dependency>
-
-        <!-- Source: https://mvnrepository.com/artifact/com.telnyx.sdk/telnyx -->
-        <dependency>
-            <groupId>com.telnyx.sdk</groupId>
-            <artifactId>telnyx</artifactId>
-            <version>6.83.0</version>
-            <scope>compile</scope>
-        </dependency>
-
-
-        <!-- KEEP COMMENTED IF/UNTIL WE IMPLEMENT. -->
         <!--        <dependency>-->
-        <!--            <groupId>org.apache.fory</groupId>-->
-        <!--            <artifactId>fory-core</artifactId>-->
-        <!--            <version>0.13.0</version>-->
+        <!--            <groupId>jakarta.validation</groupId>-->
+        <!--            <artifactId>jakarta.validation-api</artifactId>-->
+        <!--            <version>3.1.1</version>-->
         <!--        </dependency>-->
 
         <!-- Testing libraries -->

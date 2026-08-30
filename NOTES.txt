@@ -7535,35 +7535,52 @@ Now we need to teach Sndr how to convert a Message to the vendor specific model 
 
 The full set of properties for an SMS/MMS message (per the OpenAPITools-generated CreateMessageRequest class)
     Required:
-     --> @param from
-            Sending address (+E.164 formatted phone number, alphanumeric sender ID, or short code).  **Required if sending with a phone number, short code, or alphanumeric sender ID.**
-     --> @param messagingProfileId
-            Unique identifier for a messaging profile.  **Required if sending via number pool or with an alphanumeric sender ID.** Twilio uses a conceptually similar identifier.
-     --> @param to
-            Receiving address (+E.164 formatted phone number or short code).
-     --> @param text
-            Message body (i.e., content) as a non-empty string.  **Required for SMS**
-     --> @param type The protocol for sending the message, either SMS or MMS.
+        --> @param from
+               Sending address (+E.164 formatted phone number, alphanumeric sender ID, or short code).  **Required if sending with a phone number, short code, or alphanumeric sender ID.**
+        --> @param messagingProfileId
+               Unique identifier for a messaging profile.  **Required if sending via number pool or with an alphanumeric sender ID.** Twilio uses a conceptually similar identifier.
+        --> @param to
+               Receiving address (+E.164 formatted phone number or short code).
+        --> @param text
+               Message body (i.e., content) as a non-empty string.  **Required for SMS**
+        --> @param type The protocol for sending the message, either SMS or MMS.
 
-     Required for MMS-only
-     --> @param subject Subject of multimedia message
-     --> @param mediaUrls A list of media URLs. The total media size must be less than 1 MB.  **Required for MMS**
+    Required for MMS-only
+        --> @param subject Subject of multimedia message
+        --> @param mediaUrls A list of media URLs. The total media size must be less than 1 MB.  **Required for MMS**
 
-     Optional:
-     --> @param webhookUrl The URL where webhooks related to this message will be sent. Registered value used if not specified.
-     --> @param webhookFailoverUrl The failover URL where webhooks related to this message will be sent if sending to the primary URL fails.
-     --> @param useProfileWebhooks If the profile this number is associated with has webhooks, use them for delivery notifications. If webhooks are also specified on the message itself, they will be attempted first, then those on the profile.
-     --> @param autoDetect Automatically detect if an SMS message is unusually long and exceeds a recommended limit of message parts. We want to have a full understanding of message size impacts available before sending it.
-     --> @param sendAt ISO 8601 formatted date indicating when to send the message - accurate up till a minute. We expect to have a scheduler of our own but this might be useful for coordinated blasts assuming other vendors support the feature.
-     --> @param encoding Encoding to use for the message.
-            --> "gsm7" forces GSM-7 encoding (returns 400 if message contains characters that cannot be encoded).
-            --> "ucs2" forces UCS-2 encoding and disables smart encoding. When set, this overrides the messaging profile setting.
-            --> "auto" (default) uses smart encoding to automatically select the most efficient encoding.
+    Optional:
+        --> @param webhookUrl The URL where webhooks related to this message will be sent. Registered value used if not specified.
+        --> @param webhookFailoverUrl The failover URL where webhooks related to this message will be sent if sending to the primary URL fails.
+        --> @param useProfileWebhooks If the profile this number is associated with has webhooks, use them for delivery notifications. If webhooks are also specified on the message itself, they will be attempted first, then those on the profile.
+        --> @param autoDetect Automatically detect if an SMS message is unusually long and exceeds a recommended limit of message parts. We want to have a full understanding of message size impacts available before sending it.
+        --> @param sendAt ISO 8601 formatted date indicating when to send the message - accurate up till a minute. We expect to have a scheduler of our own but this might be useful for coordinated blasts assuming other vendors support the feature.
+        --> @param encoding Encoding to use for the message.
+               --> "gsm7" forces GSM-7 encoding (returns 400 if message contains characters that cannot be encoded).
+               --> "ucs2" forces UCS-2 encoding and disables smart encoding. When set, this overrides the messaging profile setting.
+               --> "auto" (default) uses smart encoding to automatically select the most efficient encoding.
 
 
-NB: https://telnyx.com/twexit supposedly describes a compatibility API that makes it easy to adapt code written for Twilio. The Documentation link returns 404, however.
+NB: https://telnyx.com/twexit supposedly describes a compatibility API that makes it easy to adapt code written for Twilio, however, the documentation link returns 404.
 
-The final jar size of the SndrGatewaySim project is not huge (1MB) because, the pom.xml doesn't embed all the depedencies; their separate in the libs/ dir.) So it seems reasonable to install it locally then add it to sndrRcvr/Brbl's poml.xml to get access to the com.enoughisasgoodasafeast.sndr.server.model package.
 
-com.enoughisasgoodasafeast.sndr-gateway-sim
+
+The final jar size of the SndrGatewaySim project is reasonably small (272 KB) because, the pom.xml doesn't embed all the depedencies; they're separate jars in the libs dir.) So it seems reasonable to install it locally then add it to our poml.xml to get access to the com.enoughisasgoodasafeast.sndr.server.model package.
+
+
+==== 2026/08/29 ====
+
+Building blocks:
+
+[X] new: interface GatewayMeta
+        public Object toGatewayMessage(Message);
+[X] new: record TelnyxMeta(String messagingProfileId) implements GatewayMeta
+[X]     public CreateMessageRequest toGatewayMessage(Message);
+[X] new: enum GatewayProvider {TELNYX, TWILIO, AWS}
+[X] PersistenceManager:
+        public GatewayMeta fetchGatewayMeta(GatewayProvider, Company, Platform, Route);
+
+The Opr8r could attach the information to the Message though this would require it to understand which gateway would be handling the send.
+If one of them was down and we had a backup Sndr need to get a different chunk of data.
+So I think we are better off doing a (cached) lookup in Sndr.
 

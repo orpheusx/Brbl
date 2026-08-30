@@ -2,6 +2,9 @@ package com.enoughisasgoodasafeast.operator;
 
 import com.enoughisasgoodasafeast.Message;
 import com.enoughisasgoodasafeast.datagen.KnownData;
+import com.enoughisasgoodasafeast.sndr.GatewayMeta;
+import com.enoughisasgoodasafeast.sndr.GatewayProvider;
+import com.enoughisasgoodasafeast.sndr.TelnyxMeta;
 import org.jspecify.annotations.NonNull;
 import org.jspecify.annotations.Nullable;
 import org.slf4j.Logger;
@@ -248,6 +251,10 @@ public class TestingPersistenceManager implements PersistenceManager {
         Map<Platform, UserStatus> userStatuses = new LinkedHashMap<>();
         userStatuses.put(sessionKey.platform(), UserStatus.IN);
         return new User(platformIds, randomUUID(), platformNumbers, platformCreatedAt, "US", Set.of(LanguageCode.ENG), CLAIMANT_ID, null, userNickNames, null, userStatuses);
+    }
+
+    public @Nullable GatewayMeta fetchGatewayMeta(GatewayProvider gatewayProvider, Company company, Platform platform, Route route) {
+        return new TelnyxMeta("01a04ddd-624b-77ef-baac-e628266ff986", "PLACEHOLDER_API_KEY");
     }
 
     public Collection<CampaignUser> getPushCampaignUsers(@NonNull UUID campaignId, DeliveryStatus byStatus) {
