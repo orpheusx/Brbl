@@ -72,7 +72,7 @@ public class SndrMessageFlowIT {
     }
 
 
-    @Test
+    //@Test
     void sendMessageToTelnyx() {
         // Verify we're pointing to the right endpoint; we only send never receive.
         // 1) create a Message

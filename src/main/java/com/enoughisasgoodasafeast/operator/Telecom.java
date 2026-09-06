@@ -111,7 +111,7 @@ public class Telecom {
     }
 
     public static void main() {
-        System.out.println(Telecom.isCA("17815551234")); // false
-        System.out.println(Telecom.isCA("15815551234")); // true
+        //System.out.println(Telecom.isCA("17815551234")); // false
+        //System.out.println(Telecom.isCA("15815551234")); // true
     }
 }

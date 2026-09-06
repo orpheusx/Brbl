@@ -32,6 +32,6 @@ public enum Platform {
 
     public static void main(String[] args) {
         final Platform sms = Enum.valueOf(Platform.class, "S");
-        System.out.println(sms);
+        //System.out.println(sms);
     }
 }

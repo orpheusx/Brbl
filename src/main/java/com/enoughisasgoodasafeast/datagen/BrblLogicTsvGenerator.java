@@ -10,7 +10,7 @@ import java.util.List;
 import java.util.UUID;
 
 import static com.enoughisasgoodasafeast.datagen.KnownData.*;
-import static java.io.IO.println;
+import static java.lang.IO.println;
 import static java.lang.String.join;
 import static java.lang.System.out;
 import static java.time.Instant.now;

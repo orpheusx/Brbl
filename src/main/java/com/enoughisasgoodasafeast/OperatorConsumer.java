@@ -110,23 +110,23 @@ public class OperatorConsumer extends BrblConsumer {
         }
     }
 
-    private AMQP.BasicProperties incrementBrblRetryCount(AMQP.BasicProperties props, int numRetries) {
-        int counter = numRetries + 1;
-        LOG.info("Incrementing brbl retry count to {}", counter);
-        // Create new properties with the updated header
-        Map<String, Object> headers = props.getHeaders();
-        if (headers == null) {
-            headers = new HashMap<>();
-        }
-
-        headers.put(BRBL_RETRY_COUNT_HEADER, counter);
-
-        return new AMQP.BasicProperties.Builder()
-                .headers(headers)
-                .contentType(props.getContentType())
-                .deliveryMode(2) // Persistent
-                .build();
-    }
+//    private AMQP.BasicProperties incrementBrblRetryCount(AMQP.BasicProperties props, int numRetries) {
+//        int counter = numRetries + 1;
+//        LOG.info("Incrementing brbl retry count to {}", counter);
+//        // Create new properties with the updated header
+//        Map<String, Object> headers = props.getHeaders();
+//        if (headers == null) {
+//            headers = new HashMap<>();
+//        }
+//
+//        headers.put(BRBL_RETRY_COUNT_HEADER, counter);
+//
+//        return new AMQP.BasicProperties.Builder()
+//                .headers(headers)
+//                .contentType(props.getContentType())
+//                .deliveryMode(2) // Persistent
+//                .build();
+//    }
 
 }
 

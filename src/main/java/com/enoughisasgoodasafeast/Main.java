@@ -2,8 +2,9 @@ package com.enoughisasgoodasafeast;
 
 import java.util.UUID;
 
+//import static java.io.IO.println;
 import static com.enoughisasgoodasafeast.Functions.randomUUID;
-import static java.io.IO.println;
+import static java.lang.IO.println;
 
 public class Main {
     static void main() {

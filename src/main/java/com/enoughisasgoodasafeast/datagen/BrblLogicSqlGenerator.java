@@ -8,8 +8,9 @@ import java.nio.file.Files;
 import java.nio.file.Paths;
 import java.util.*;
 
+
 import static com.enoughisasgoodasafeast.datagen.Functions.adjustPlatformId;
-import static java.io.IO.println;
+import static java.lang.IO.println;
 
 /**
  * This is a fairly gross class, full of nasty string munging and hackery.
@@ -163,7 +164,7 @@ public class BrblLogicSqlGenerator {
     //     final List<String> sql = cg.dataToSQL(nodeEdgeMap);
     //     var outPath  = Paths.get("dml", "logic.sql");
     //     Files.write(outPath, sql, StandardCharsets.UTF_8);
-    //     IO.println("Done.");
+    //     println("Done.");
     // }
 }
 

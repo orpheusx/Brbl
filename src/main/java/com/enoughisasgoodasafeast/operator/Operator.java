@@ -395,13 +395,13 @@ public class Operator implements SessionAwareMessageProcessor {
 
         var start = now();
 
-        try (var scope = new StructuredTaskScope.ShutdownOnFailure()) {
+        try (var scope = StructuredTaskScope.open()) {
             Supplier<User> suppliedUser = scope.fork(() -> userCache.get(sessionKey));
             Supplier<Node> keywordScript = scope.fork(() -> scriptByKeywordCache.get(KeywordCacheKey.newKey(sessionKey)));
             Supplier<Node> defaultScript = scope.fork(() -> findDefaultScriptByRoute(sessionKey));
 
             // If userCache loading method throws the join will re-throw it wrapped in an ExecutionException
-            scope.join().throwIfFailed(); // TODO consider using joinUntil() to enforce a collective timeout.
+            scope.join(); // TODO consider using joinUntil() to enforce a collective timeout.
 
             var selectedGraph = (keywordScript.get() != null) ? keywordScript.get() : defaultScript.get();
 
@@ -476,7 +476,7 @@ public class Operator implements SessionAwareMessageProcessor {
                     return session.postDeserialize(getQueueProducer(sessionKey.platform()), persistenceManager);
                 }
 
-            } catch (PersistenceManagerException e) {
+            } catch (PersistenceManagerException | StructuredTaskScope.FailedException e) {
                 LOG.error("Error loading session for user {}", user.groupId(), e);
                 userCache.invalidate(sessionKey); // FIXME DRY dammit!
                 throw e;

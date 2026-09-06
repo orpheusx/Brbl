@@ -1,7 +1,10 @@
 package com.enoughisasgoodasafeast.migration;
 
 import com.enoughisasgoodasafeast.ConfigLoader;
+import com.enoughisasgoodasafeast.datagen.BrblUsersSqlGenerator;
 import com.mchange.v2.c3p0.ComboPooledDataSource;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 import java.beans.PropertyVetoException;
 import java.io.BufferedReader;
@@ -12,7 +15,6 @@ import java.sql.SQLException;
 import java.util.*;
 
 import static com.enoughisasgoodasafeast.datagen.KnownData.APPLICATION_SCHEMAS;
-import static java.io.IO.println;
 
 /**
  * Used in conjunction with the pgroll, Postgres database migration tool.
@@ -22,6 +24,8 @@ import static java.io.IO.println;
  * not the underlying tables.)
  */
 public class RoleMigrator {
+
+    private static final Logger LOG = LoggerFactory.getLogger(RoleMigrator.class);
 
     private static ComboPooledDataSource dataSource;
 
@@ -69,7 +73,7 @@ public class RoleMigrator {
 
             final ResultSet rs = ps.executeQuery();
             if (!rs.next()) {
-                println("Error: No results for schema: " + schemaName);
+                LOG.info("Error: No results for schema: {}", schemaName);
                 throw new IllegalStateException("No results for schema: " + schemaName);
             }
 
@@ -113,7 +117,7 @@ public class RoleMigrator {
             ++numGrants;
         }
         grantBuilder.append("\nCOMMIT;");
-        println("Generated " + numGrants + " grants");
+        LOG.info("Generated " + numGrants + " grants");
         return grantBuilder.toString();
     }
 
@@ -125,7 +129,7 @@ public class RoleMigrator {
               * this seems to fail silently.
               */
         } catch (SQLException e) {
-            println("ERROR: executeGrants failed: " + e.getMessage());
+            LOG.info("ERROR: executeGrants failed: " + e.getMessage());
             return false;
         }
         return true;
@@ -149,7 +153,7 @@ public class RoleMigrator {
 
                 if (process.waitFor() == 0) {
                     if(migrationSchema==null) {
-                        println("ERROR: pgroll returned w/out error but without a migration schema for " + schemaName);
+                        LOG.info("ERROR: pgroll returned w/out error but without a migration schema for " + schemaName);
                     } else {
                         migrationSchemas.add(migrationSchema.trim());
                     }
@@ -160,7 +164,7 @@ public class RoleMigrator {
                 }
 
             } catch (IOException | InterruptedException e) {
-                System.err.println("Error executing pgroll status command: " + e.getMessage());
+                //System.err.LOG.info("Error executing pgroll status command: " + e.getMessage());
                 Thread.currentThread().interrupt(); // Restore interrupted status
             }
         }
@@ -170,36 +174,36 @@ public class RoleMigrator {
 
     static void main(String[] args) throws IOException, SQLException {
         if(args.length < 2) {
-            println("Usage: <originalSchema> <migrationSchema> [--dry-run]");
+            LOG.info("Usage: <originalSchema> <migrationSchema> [--dry-run]");
             System.exit(1);
         }
         String originalSchema = args[0].trim();
         String migrationSchema = args[1].trim();
-        println("OriginalSchema: " + originalSchema);
-        println("MigrationSchema: " + migrationSchema);
+        LOG.info("OriginalSchema: " + originalSchema);
+        LOG.info("MigrationSchema: " + migrationSchema);
 
         //  if (Arrays.stream(KnownData.APPLICATION_SCHEMAS).noneMatch(originalSchema::equals)) {
-        //      println("Error: originalSchema '" + originalSchema + "' is not a supported application schema.");
+        //      LOG.info("Error: originalSchema '" + originalSchema + "' is not a supported application schema.");
         //      System.exit(1);
         //  }
 
         RoleMigrator rm = new RoleMigrator(ConfigLoader.readConfig("migrations.properties"));
 
-        println("Gathering current grants on tables in schema, " + originalSchema);
+        LOG.info("Gathering current grants on tables in schema, " + originalSchema);
         var ptngList = rm.getPrivilegeTableNameGrantee(originalSchema);
 
-        println("Granting equivalent privileges on migration schema, " + migrationSchema);
+        LOG.info("Granting equivalent privileges on migration schema, " + migrationSchema);
         String grants = rm.generateGrants(migrationSchema, ptngList);
-        println(grants);
+        LOG.info(grants);
 
         if (grants.isEmpty()) {
-            println("ERROR: No grants to execute.");
+            LOG.info("ERROR: No grants to execute.");
             System.exit(1);
         } else {
             boolean ok = rm.executeGrants(grants);
-            println("Grants executed: " + (ok ? "OK" : "FAIL"));
+            LOG.info("Grants executed: " + (ok ? "OK" : "FAIL"));
             if(!ok) {
-                println("ERROR: Failed to execute grants. Exiting...");
+                LOG.info("ERROR: Failed to execute grants. Exiting...");
             }
         }
 
@@ -209,6 +213,6 @@ public class RoleMigrator {
 
         List<String> currentSchemas = rm.findLatestMigrationSchemaByBase(baseSchemas);
 
-        println("\n" + OUTPUT_PREFIX + String.join(",", currentSchemas));
+        LOG.info("\n" + OUTPUT_PREFIX + String.join(",", currentSchemas));
     }
 }

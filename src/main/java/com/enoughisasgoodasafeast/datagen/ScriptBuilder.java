@@ -3,6 +3,8 @@ package com.enoughisasgoodasafeast.datagen;
 import com.enoughisasgoodasafeast.operator.LanguageCode;
 import com.enoughisasgoodasafeast.operator.NodeType;
 import com.enoughisasgoodasafeast.operator.ScriptStatus;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 import java.io.IOException;
 import java.nio.file.Path;
@@ -13,12 +15,13 @@ import java.util.UUID;
 
 import static com.enoughisasgoodasafeast.Functions.randomUUID;
 import static com.enoughisasgoodasafeast.datagen.KnownData.knownCompanyId;
-import static java.io.IO.println;
 import static java.nio.file.Files.write;
 import static java.nio.file.Path.of;
 import static java.time.Instant.now;
 
 public class ScriptBuilder {
+
+    private static final Logger LOG = LoggerFactory.getLogger(ScriptBuilder.class);
 
     static String SECTION_DELIMITER = "\n\n";
     static String LINE_DELIMITER = "\\^";
@@ -166,8 +169,8 @@ public class ScriptBuilder {
             }
         }
         if (!errors.isEmpty()) {
-            println("ERROR: The following edges have dstNode that are missing: ");
-            errors.forEach(error -> println("\t" + error));
+            LOG.error("ERROR: The following edges have dstNode that are missing: ");
+            errors.forEach(error -> LOG.info("{}", error));
             return false;
         }
         return true;
@@ -214,18 +217,18 @@ public class ScriptBuilder {
             // TODO another place to change the int to a NodeType enum.
             switch (lines.length) { // FIXME assumes first line of the block is the node and all subsequent lines are edges
                 case 1 -> {
-                    println("EndOfChat");
+                    LOG.info("EndOfChat");
                     var eocNode = sc.newNodeStruct(lines[0], NodeType.END_OF_CHAT);
                     nodes.add(eocNode);
                     edges.add(sc.linkNodes(eocNode, null));
                 }
                 case 2 -> {
-                    println("SendMessage");
+                    LOG.info("SendMessage");
                     NodeType type = NodeType.SEND_MESSAGE;
                     // TODO implement
                 }
                 default -> {
-                    println("Present/ProcessMulti");
+                    LOG.info("Present/ProcessMulti");
                     var presentNode = sc.newNodeStruct(lines[0], NodeType.PRESENT_MULTI);
                     nodes.add(presentNode);
                     var processNode = sc.newNodeStruct(randomUUID().toString(), NADA, NodeType.PROCESS_MULTI);
@@ -239,11 +242,11 @@ public class ScriptBuilder {
         }
 
         // debug
-        nodes.forEach(node -> println(node));
-        edges.forEach(edge -> println(edge));
+        nodes.forEach(node -> LOG.info(node.toString()));
+        edges.forEach(edge -> LOG.info(edge.toString()));
 
         if (!sc.validateIdReferences(nodes, edges)) {
-            println("ERROR: Validation errors were present. No output will be produced.");
+            LOG.info("ERROR: Validation errors were present. No output will be produced.");
             return;
         }
 
@@ -257,10 +260,10 @@ public class ScriptBuilder {
                     ScriptStatus.PROD, LanguageCode.ENG, now, now, knownCompanyId);
             sc.writeScriptToFile(referencingScript, of("scripts_batch_2.tsv"));
 
-            println("Success: Data written to nodes_batch_2.tsv, edges_batch_2.tsv, and scripts_batch_2.tsv.");
+            LOG.info("Success: Data written to nodes_batch_2.tsv, edges_batch_2.tsv, and scripts_batch_2.tsv.");
 
         } catch (IOException e) {
-            println("ERROR: Failed to write output files: " + e.getMessage());
+            LOG.info("ERROR: Failed to write output files: " + e.getMessage());
         }
     }
 }

@@ -2,6 +2,7 @@ package com.enoughisasgoodasafeast.operator;
 
 import com.enoughisasgoodasafeast.Message;
 import com.enoughisasgoodasafeast.StatusException;
+import com.enoughisasgoodasafeast.sndr.ProcessStateRoutingKey;
 
 public interface SndrMessageProcessor extends MessageProcessor {
 
@@ -10,9 +11,9 @@ public interface SndrMessageProcessor extends MessageProcessor {
      * Process the given Message.
      *
      * @param message the message being processed.
-     * @return true if processing was complete, false if incomplete.
+     * @return duple of the ProcessState and, if a retry is needed, the routing key to be used.
      */
-    StatusException process(Message message);
+    ProcessStateRoutingKey process(Message message);
 
     /**
      * Log the processed Message as appropriate.

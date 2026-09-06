@@ -1,6 +1,6 @@
 telnyx-sender:
   # The target server URL
-  base-uri: "http://localhost:2424/messages"
+  base-uri: "http://localhost:8080/messages"
 
   # Connection properties
   connect-timeout-millis: 5000

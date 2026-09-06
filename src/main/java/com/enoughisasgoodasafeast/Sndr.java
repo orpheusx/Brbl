@@ -4,6 +4,7 @@ import com.enoughisasgoodasafeast.operator.PersistenceManager;
 import com.enoughisasgoodasafeast.operator.PersistenceManager.PersistenceManagerException;
 import com.enoughisasgoodasafeast.operator.PostgresPersistenceManager;
 import com.enoughisasgoodasafeast.operator.SndrMessageProcessor;
+import com.enoughisasgoodasafeast.sndr.ProcessStateRoutingKey;
 import com.enoughisasgoodasafeast.sndr.TelnyxSender;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -24,38 +25,48 @@ public class Sndr implements SndrMessageProcessor {
     public Sndr() {
     }
 
-    public Sndr(QueueConsumer queueConsumer ) {
-        this.queueConsumer = queueConsumer;
-    }
+//    public Sndr(QueueConsumer queueConsumer) {
+//        this.queueConsumer = queueConsumer;
+//    }
 
     public Sndr(PersistenceManager persistenceManager) {
         this.persistenceManager = persistenceManager;
+        this.telnyxSender = new TelnyxSender(persistenceManager);
     }
+
     public Sndr(QueueConsumer queueConsumer, PersistenceManager persistenceManager) {
         this.queueConsumer = queueConsumer;
         this.persistenceManager = persistenceManager;
+        this.telnyxSender = new TelnyxSender(persistenceManager);
+
     }
 
     public void init(Properties properties) throws IOException, TimeoutException, PersistenceManagerException {
         LOG.info("Initializing SNDR");
         httpMtHandler = (HttpMTSender) HttpMTSender.newHandler(properties);
-        if(queueConsumer == null) {
+        if (queueConsumer == null) {
             queueConsumer = RabbitQueueConsumer.createQueueConsumer(properties, this);
         }
-        if(persistenceManager == null) {
+        if (persistenceManager == null) {
             persistenceManager = PostgresPersistenceManager.createPersistenceManager(properties);
-            telnyxSender = new TelnyxSender(persistenceManager);
         }
+
+        telnyxSender = new TelnyxSender(persistenceManager);
     }
 
     @Override
-    public StatusException process(Message message) {
+    public ProcessStateRoutingKey process(Message message) {
         LOG.info("Processing outbound message: {}", message);
-        StatusException delivered = httpMtHandler.send(message);
-        LOG.info("Message delivery: {}: {}", delivered, message);
-        return delivered;
+        return telnyxSender.send(message);
     }
 
+    //@Override
+    //public StatusException process(Message message) {
+    //    LOG.info("Processing outbound message: {}", message);
+    //    StatusException delivered = httpMtHandler.send(message);
+    //    LOG.info("Message delivery: {}: {}", delivered, message);
+    //    return delivered;
+    //}
 
 
     public boolean log(Message message) {
@@ -76,7 +87,7 @@ public class Sndr implements SndrMessageProcessor {
     }
 
     public static void main(String[] args) throws IOException, TimeoutException, PersistenceManagerException {
-        Sndr sndr = new Sndr();
+        final Sndr sndr = new Sndr();
         final Properties properties = ConfigLoader.readConfig("sndr.properties");
         sndr.init(properties);
 

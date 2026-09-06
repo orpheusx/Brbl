@@ -6,7 +6,6 @@ import org.jspecify.annotations.NonNull;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
-import java.io.IO;
 import java.io.IOException;
 import java.sql.SQLException;
 import java.time.Duration;
@@ -237,9 +236,9 @@ public class Blaster {
         blaster.init(ConfigLoader.readConfig("persistence_manager_test.properties"));
         final var report = blaster.exec(UUID.fromString("019bd1ff-c890-7a28-9758-7ce559af5e0b"));
         queueProducer.enqueued().forEach( message -> {
-            IO.println(message);
+            LOG.info("{}", message);
         });
-        IO.println(report);
+        LOG.info("{}", report);
     }
 
 }

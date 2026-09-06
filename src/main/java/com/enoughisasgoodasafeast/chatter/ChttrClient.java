@@ -229,7 +229,7 @@ public class ChttrClient {
             pushCampaignId = UUID.fromString(args[1]);
             nodeId = UUID.fromString(args[2]);
         } catch (IllegalArgumentException e) {
-            System.err.println("Invalid UUID format.");
+            //System.err.println("Invalid UUID format.");
             return;
         }
 

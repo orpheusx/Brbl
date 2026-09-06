@@ -54,7 +54,7 @@ public class SessionTest {
     }
 
     @Test
-    void serializeSession() {
+    void serializeSession() throws IOException, ClassNotFoundException {
 
         final int numSessions = 100;
         final int numMessages = 20;
@@ -62,7 +62,7 @@ public class SessionTest {
         File file = new File(fileName);
         LOG.info("Test file = {}", file.getAbsolutePath());
 
-        assertDoesNotThrow(() -> {
+//        assertDoesNotThrow(() -> {
             FileOutputStream fos
                     = new FileOutputStream(file);
             ObjectOutputStream oos
@@ -108,7 +108,7 @@ public class SessionTest {
 
             final long size = Files.size(file.toPath());
             LOG.info("Size of file in bytes: {}", size);
-        });
+//        });
 
     }
 
@@ -259,7 +259,7 @@ public class SessionTest {
             PostgresPersistenceManager ppm = (PostgresPersistenceManager) PostgresPersistenceManager.createPersistenceManager(
                     ConfigLoader.readConfig("persistence_manager_test.properties"));
 
-            final UUID sessionId = randomUUID();
+            final UUID sessionId = UUID.fromString("019d2055-9235-7ce6-bfc6-4ccbb9c16a89"); //randomUUID();
 
             // FIXME add the new method to the interface so the cast isn't needed.
             final Session session = newSession(sessionId);
@@ -270,8 +270,8 @@ public class SessionTest {
             // Now fetch it back and check values
             final Session clone = ppm.loadSession(session.getUser().groupId());
             /* FIXME
-               Need to be able set the queueProducer and persistenceManager unless we prefer to move those out of Session
-               class and use independent functions.
+                Need to be able set the queueProducer and persistenceManager unless we prefer to move those out of Session
+                class and use independent functions.
             */
             LOG.info(session.toString());
             LOG.info(clone.toString());

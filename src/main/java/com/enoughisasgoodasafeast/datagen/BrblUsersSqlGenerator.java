@@ -5,6 +5,8 @@ import com.enoughisasgoodasafeast.operator.UserStatus;
 import net.datafaker.Faker;
 import org.jeasy.random.EasyRandom;
 import org.jeasy.random.EasyRandomParameters;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 import java.io.IOException;
 import java.util.ArrayList;
@@ -12,7 +14,6 @@ import java.util.List;
 import java.util.Locale;
 
 import static com.enoughisasgoodasafeast.datagen.Functions.adjustPlatformId;
-import static java.io.IO.println;
 
 /**
  * @deprecated a little *too* quick and dirty. Also, outputting SQL is problematic. Prefer TSV data instead.
@@ -44,6 +45,8 @@ import static java.io.IO.println;
  */
 @Deprecated
 public class BrblUsersSqlGenerator {
+
+    private static final Logger LOG = LoggerFactory.getLogger(BrblUsersSqlGenerator.class);
 
     private final Faker faker;
     private final Faker chFaker; // for Chinese data
@@ -201,9 +204,9 @@ public class BrblUsersSqlGenerator {
         int numCustomers = (int) (numProfiles * (prcntCustomers / 100f));
         int numCompanies = (int) (numCustomers * (prcntCompanies / 100f));
 
-        println("Generating user graphs for " + numUsers + " users.");
-        println("Generating profile records for " + numProfiles + " users.");
-        println("Generating customer records for " + numCustomers + " customers and " + numCompanies + " companies.");
+        LOG.info("Generating user graphs for {} users", numUsers);
+        LOG.info("Generating profile records for {} users.", numProfiles);
+        LOG.info("Generating customer records for {} customers and {} companies.", numCustomers, numCompanies);
 
         return generate(numUsers, numProfiles, numCustomers, numCompanies);
     }
