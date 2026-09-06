@@ -16,9 +16,6 @@ public class SessionSerde {
         try (ByteArrayInputStream bais = new ByteArrayInputStream(data);
              ObjectInputStream ois = new ObjectInputStream(bais)) {
             return (Session) ois.readObject();
-        } /*catch (IOException | ClassNotFoundException e) {
-            LOG.error("Exception in bytesToSession", e);
-            return null;
-        }*/
+        }
     }
 }

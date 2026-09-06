@@ -2,7 +2,7 @@ package com.enoughisasgoodasafeast.datagen;
 
 import com.enoughisasgoodasafeast.operator.CountryCode;
 
-import java.io.IO;
+import static java.lang.IO.println;
 
 public class Functions {
 
@@ -24,6 +24,6 @@ public class Functions {
 
     static void main() {
         var phoneNumber = "1(862) 646-2877";
-        IO.println(Functions.adjustPlatformId(CountryCode.US, phoneNumber));
+        println(Functions.adjustPlatformId(CountryCode.US, phoneNumber));
     }
 }

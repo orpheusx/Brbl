@@ -20,12 +20,12 @@ public class RMQMgmt {
         // List all queues and their configurations in a specific vhost
         List<QueueInfo> queues = client.getQueues("/");
         for (QueueInfo q : queues) {
-            System.out.println("Queue: " + q.getName() + " | Durable: " + q.isDurable());
+            //System.out.println("Queue: " + q.getName() + " | Durable: " + q.isDurable());
         }
 
         final List<ExchangeInfo> exchanges = client.getExchanges();
         for (ExchangeInfo exchange : exchanges) {
-            System.out.println("Exchange: " + exchange.getName());
+            //System.out.println("Exchange: " + exchange.getName());
         }
 
     }

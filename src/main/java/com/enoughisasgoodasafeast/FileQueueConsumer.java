@@ -46,12 +46,12 @@ public class FileQueueConsumer implements QueueConsumer {
         Object message = rcvr.dequeue();
         while (message != null) {
             message = rcvr.dequeue();
-            System.out.println(message);
+            //System.out.println(message);
         }
-        System.out.println(FileQueueConsumer.testSwitchCase(42));
-        System.out.println(FileQueueConsumer.testSwitchCase(13));
-        System.out.println(FileQueueConsumer.testSwitchCase(-5));
-        System.out.println(FileQueueConsumer.testSwitchCase(null));
+        //System.out.println(FileQueueConsumer.testSwitchCase(42));
+        //System.out.println(FileQueueConsumer.testSwitchCase(13));
+        //System.out.println(FileQueueConsumer.testSwitchCase(-5));
+        //System.out.println(FileQueueConsumer.testSwitchCase(null));
     }
 
     @Override

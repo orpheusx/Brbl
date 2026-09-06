@@ -17,7 +17,6 @@ import java.util.stream.Collectors;
 
 import static com.enoughisasgoodasafeast.MessageType.MO;
 import static com.enoughisasgoodasafeast.MessageType.MT;
-import static java.io.IO.println;
 
 public class ScriptInterpreter {
     private static final Logger LOG = LoggerFactory.getLogger(ScriptInterpreter.class);
@@ -278,7 +277,7 @@ public class ScriptInterpreter {
     }
 
     void printPath(List<Node> path) {
-        System.out.println("Path: " + formatPath(path));
+        //System.out.LOG.info("Path: " + formatPath(path));
     }
 
     private String formatPath(List<Node> path) {
@@ -304,10 +303,10 @@ public class ScriptInterpreter {
     }
 
     static void printId(Node node) {
-        println("Node:" + node.id());
+        LOG.info("Node: {}", node.id());
     }
     static void printId(Edge edge) {
-        println("Edge:" + edge.id());
+        LOG.info("Edge: {}", edge.id());
     }
 
     static void main() throws IOException, PersistenceManagerException {
@@ -331,27 +330,27 @@ public class ScriptInterpreter {
             Set<String> edgeList = new LinkedHashSet<>();
             nodeList.add(dbNode.id().toString());
             collectGraphIds(dbNode, dbNode,  nodeList, edgeList);
-            println("-------- Nodes --------");
-            nodeList.forEach( node -> {println(String.format("'%s'", node));});
-            println("\n");
-            println("-------- Edges --------");
-            edgeList.forEach( edge -> {println(String.format("'%s'", edge));});
+            LOG.info("-------- Nodes --------");
+            nodeList.forEach( node -> {LOG.info(String.format("'%s'", node));});
+            LOG.info("\n");
+            LOG.info("-------- Edges --------");
+            edgeList.forEach( edge -> {LOG.info(String.format("'%s'", edge));});
 //        }
         var interpreter = new ScriptInterpreter(ppm);
 
         String fileName = "./data/testMultiNodeGraph.ser";
         var ok = interpreter.writeNodeGraphToFile(dbNode, fileName);
         if (!ok) {
-            println("Error writing node graph to " + fileName);
+            LOG.info("Error writing node graph to " + fileName);
         }
         var deserializedNode = interpreter.readNodeGraphFromFile(fileName);
         final var chttrScriptList = interpreter.translateNodeGraphToChttrScripts(nodeUuid);
         if (chttrScriptList != null) {
             for (ChttrScript chttrScript : chttrScriptList) {
-                println(chttrScript.toString());
+                LOG.info(chttrScript.toString());
             }
         } else {
-            println("Error translating node graph to scripts.");
+            LOG.info("Error translating node graph to scripts.");
         }
     }
 }

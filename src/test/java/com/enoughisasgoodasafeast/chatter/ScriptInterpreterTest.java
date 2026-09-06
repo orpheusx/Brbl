@@ -99,7 +99,7 @@ class ScriptInterpreterTest {
             //interpreter.printPath(simplePath);
             var events = interpreter.nodePathToEventList(path);
             assertNotNull(events);
-            LOG.info("Events from disk:\n{}", events);
+            LOG.info("Events from disk:: {}", events);
             assertEquals(7, events.size());
         }
 

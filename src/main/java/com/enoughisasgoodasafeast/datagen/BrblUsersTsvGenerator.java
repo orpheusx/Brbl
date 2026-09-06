@@ -8,6 +8,8 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import java.io.BufferedWriter;
+//import java.io.IO;
+//import java.lang.IO;
 import java.io.IOException;
 import java.nio.file.Path;
 import java.time.LocalDate;
@@ -22,7 +24,6 @@ import static com.enoughisasgoodasafeast.operator.CompanyStatus.ACTIVE;
 import static com.enoughisasgoodasafeast.operator.Platform.SMS;
 import static com.enoughisasgoodasafeast.operator.Platform.WAP;
 import static com.enoughisasgoodasafeast.operator.UserStatus.IN;
-import static java.io.IO.println;
 import static java.lang.String.join;
 import static java.nio.file.Files.newBufferedWriter;
 import static java.util.Comparator.comparing;
@@ -191,7 +192,7 @@ public class BrblUsersTsvGenerator {
             companyWriter.write(join(DLM, CompanyRow.headers) + "\n");
 
             for (CompanyAndAmalgamTuples caa : data) {
-                println(caa.companyRow().name + ": " + caa.amalgamTuples().size() + " user elements.");
+                IO.println(caa.companyRow().name + ": " + caa.amalgamTuples().size() + " user elements.");
                 caa.amalgamTuples().sort(comparing(AmalgamTuple::getGroupId)); // make it easy to see the linked users.
 
                 companyWriter.write(join(DLM, caa.companyRow().values()) + "\n");

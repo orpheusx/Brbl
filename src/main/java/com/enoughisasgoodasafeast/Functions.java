@@ -1,12 +1,16 @@
 package com.enoughisasgoodasafeast;
 
+import com.enoughisasgoodasafeast.chatter.ScriptInterpreter;
 import com.fasterxml.uuid.impl.TimeBasedEpochRandomGenerator;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
-import java.io.IO;
 import java.util.Random;
 import java.util.UUID;
 
 public class Functions {
+
+    private static final Logger LOG = LoggerFactory.getLogger(Functions.class);
 
     private static final TimeBasedEpochRandomGenerator UUID_GENERATOR =
             new TimeBasedEpochRandomGenerator(new Random(System.currentTimeMillis()));
@@ -17,7 +21,7 @@ public class Functions {
 
     static void main() {
         for (int i = 0; i < 10; i++) {
-            IO.println(randomUUID());
+            LOG.info("{}", randomUUID());
         }
     }
 }

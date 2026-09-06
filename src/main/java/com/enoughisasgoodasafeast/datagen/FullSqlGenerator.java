@@ -1,6 +1,5 @@
 package com.enoughisasgoodasafeast.datagen;
 
-import java.io.IO;
 import java.io.IOException;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;

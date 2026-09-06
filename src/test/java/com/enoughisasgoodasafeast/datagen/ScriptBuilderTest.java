@@ -1,17 +1,19 @@
 package com.enoughisasgoodasafeast.datagen;
 
 import com.enoughisasgoodasafeast.ConfigLoader;
+import com.enoughisasgoodasafeast.chatter.ScriptInterpreter;
 import com.enoughisasgoodasafeast.operator.PersistenceManager;
 import com.enoughisasgoodasafeast.operator.PostgresPersistenceManager;
 import org.junit.jupiter.api.Test;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 import java.io.IOException;
 import java.util.UUID;
 
-import static java.io.IO.println;
 
 class ScriptBuilderTest {
-
+    private static final Logger LOG = LoggerFactory.getLogger(ScriptBuilderTest.class);
     @Test
     void verifyScript() throws IOException, PersistenceManager.PersistenceManagerException {
 
@@ -20,7 +22,7 @@ class ScriptBuilderTest {
 
         var rootNode = persistenceManager.getNodeGraph(UUID.fromString(ScriptBuilder.NODE_ID_LIST[0].toString()/*"019d3522-ac0e-7e2a-95cc-d2db38b8fafc")*/));
 
-        println(rootNode);
+        LOG.info("{}", rootNode);
         //Node.printGraph(rootNode, rootNode, 2); // This will blow up. It's not written to handle the multiple cycles present in this script
     }
 

@@ -14,7 +14,7 @@ public class LoggingExample {
             LogManager.getLogManager().readConfiguration(
                     LoggingExample.class.getResourceAsStream("/logging.properties"));
         } catch (IOException e) {
-            System.err.println("Could not load logging.properties file");
+            //System.err.println("Could not load logging.properties file");
         }
 
         LOGGER.info("This is an informational message.");

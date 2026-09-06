@@ -89,11 +89,11 @@ public record Node(UUID id, String text, NodeType type, SequencedSet<Edge> edges
     }
 
     private static void printIndent(Object object, int level) {
-        System.out.print(level + " ");
+        //System.out.print(level + " ");
         for (int i = 0; i < level; i++) {
-            System.out.print("\t");
+            //System.out.print("\t");
         }
-        System.out.println(object);
+        //System.out.println(object);
     }
 
     @Override

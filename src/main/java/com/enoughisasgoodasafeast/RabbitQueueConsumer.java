@@ -138,7 +138,7 @@ public class RabbitQueueConsumer implements QueueConsumer {
         // Poor man's Reflection...
         return switch (consumerClassImpl) {
             case "com.enoughisasgoodasafeast.SndrConsumer" -> new SndrConsumer(
-                    (SndrMessageProcessor) processor, channel);
+                    (SndrMessageProcessor) processor, channel, failedExchangeName, retryExchangeName);
 
             case "com.enoughisasgoodasafeast.OperatorConsumer" -> new OperatorConsumer(
                     (SessionAwareMessageProcessor) processor, channel, failedExchangeName, retryExchangeName);

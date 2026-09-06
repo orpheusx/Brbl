@@ -19,13 +19,13 @@ public class RcvrTest {
     static void main(/*String[] args*/) /*throws UnknownHostException*/ {
 //        InetAddress localhost = InetAddress.getLocalHost();
 //        String ipAddress = localhost.getHostAddress();
-//        System.out.println("ipAddress=" + ipAddress);
+//        //System.out.println("ipAddress=" + ipAddress);
 //        long nanos = 1675080820000000000L; // Example nanoseconds since epoch
 //
         final Instant instantUtc = Instant.now();
         final Instant instantEDT = NanoClock.system(ZoneId.of("America/New_York")).instant();
 //
-        System.out.println(instantUtc);
-        System.out.println(instantEDT); // still returns UTC time. Hmm...
+        //System.out.println(instantUtc);
+        //System.out.println(instantEDT); // still returns UTC time. Hmm...
     }
 }

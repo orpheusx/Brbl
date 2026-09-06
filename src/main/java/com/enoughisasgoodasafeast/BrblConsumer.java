@@ -9,6 +9,7 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import java.io.IOException;
+import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 
@@ -87,8 +88,9 @@ public abstract class BrblConsumer extends DefaultConsumer {
         if (headers != null && headers.containsKey(BRBL_RETRY_COUNT_HEADER)) {
             Object countObj = headers.get(BRBL_RETRY_COUNT_HEADER);
             return Integer.parseInt(countObj.toString());
+        } else {
+            return 0; // First attempt
         }
-        return 0; // First attempt
     }
 
     /**
@@ -108,7 +110,7 @@ public abstract class BrblConsumer extends DefaultConsumer {
 
     // Determines both the number of retries supported by the consumer and the delay for each.
     // TODO Extract this into an interface so it can be replaced easily.
-    @Nullable String computeDelayRoutingKey(int numFailed) {
+    public @Nullable String computeDelayRoutingKey(int numFailed) {
         return switch (numFailed) {
             case 0 -> RetryDelayRoutingKey.DELAY_5S.name();
             case 1 -> RetryDelayRoutingKey.DELAY_10S.name();
@@ -119,6 +121,24 @@ public abstract class BrblConsumer extends DefaultConsumer {
                 yield null;
             }
         };
+    }
+
+    public AMQP.BasicProperties incrementBrblRetryCount(AMQP.BasicProperties props, int numRetries) {
+        int counter = numRetries + 1;
+        LOG.info("Incrementing brbl retry count to {}", counter);
+        // Create new properties with the updated header
+        Map<String, Object> headers = props.getHeaders();
+        if (headers == null) {
+            headers = new HashMap<>();
+        }
+
+        headers.put(BRBL_RETRY_COUNT_HEADER, counter);
+
+        return new AMQP.BasicProperties.Builder()
+                .headers(headers)
+                .contentType(props.getContentType())
+                .deliveryMode(2) // Persistent
+                .build();
     }
 
 }

@@ -37,7 +37,7 @@ public class TestingPersistenceManager implements PersistenceManager {
     private boolean isFailLoadSession = false;
 
     public TestingPersistenceManager() {
-        LOG.info("no-arg constructor called");
+        //LOG.info("no-arg constructor called");
 //        Keyword keyword = new Keyword(
 //                KEYWORD_ID,
 //                "(color|colour|colr).*(quiz|q|kwiz)",

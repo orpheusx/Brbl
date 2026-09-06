@@ -1,6 +1,7 @@
 package com.enoughisasgoodasafeast;
 
 import com.enoughisasgoodasafeast.operator.SndrMessageProcessor;
+import com.enoughisasgoodasafeast.sndr.ProcessStateRoutingKey;
 import com.rabbitmq.client.AMQP;
 import com.rabbitmq.client.Channel;
 import com.rabbitmq.client.Envelope;
@@ -13,10 +14,14 @@ public class SndrConsumer extends BrblConsumer {
     private static final Logger LOG = LoggerFactory.getLogger(SndrConsumer.class);
 
     SndrMessageProcessor processor;
+    String failedExchangeName;
+    String retryExchangeName;
 
-    public SndrConsumer(SndrMessageProcessor processor, Channel channel) {
+    public SndrConsumer(SndrMessageProcessor processor, Channel channel, String failedExchangeName, String retryExchangeName) {
         super(channel);
         this.processor = processor;
+        this.failedExchangeName = failedExchangeName;
+        this.retryExchangeName = retryExchangeName;
     }
 
     /**
@@ -27,33 +32,81 @@ public class SndrConsumer extends BrblConsumer {
      * @param body the message body (opaque, client-specific byte array)
      * @throws IOException if unable to deserialize a message.
      */
+
     @Override
     public void handleDelivery(String consumerTag,
                                Envelope envelope,
                                AMQP.BasicProperties properties,
                                byte[] body) throws IOException {
-
-        // Should be able to deserialize directly assuming Rcvr enqueued a Message
         try {
-            long deliveryTag = envelope.getDeliveryTag();
-            final Message message = Message.fromBytes(body);
-            var statusException = processor.process(message); // TODO return something with a ProcessState
-            LOG.info("Processed message: {}", message);
-            // TODO Retry? Throttle? Other situations
-            if(statusException.isSuccess()) {
-                getChannel().basicAck(deliveryTag, false);
-                if (!processor.log(message)) {
-                    LOG.error("Failed to log {}", message);
+            final long deliveryTag = envelope.getDeliveryTag();
+            final var message = Message.fromBytes(body);
+            final var psk = processor.process(message);
+
+            // TODO Need the tracking id from Telnyx
+            switch(psk.processState()) {
+                case OK -> {
+                    // try {
+                        LOG.info("Sent {}", message);
+                        getChannel().basicAck(deliveryTag, false);
+                        // TODO add .complete(Message,correlating_gateway_id) to write a log to a (new) table
+                    // } catch (IOException e) {
+                    //     // This may suggest the broker/exchange/queue is in a bad state. Write the failure to (a different) disk?
+                    //     LOG.info("Failed to ack sent {}", message);
+                    //     getChannel().basicPublish(failedExchangeName, envelope.getRoutingKey(), properties, body);
+                    //     throw new RuntimeException(e);
+                    // }
                 }
-
-            } else {
-                LOG.warn("Rejecting {}", message);
-                getChannel().basicReject(deliveryTag, true);
+                case ERROR -> {
+                    LOG.error("Failed to send {}", message);
+                    getChannel().basicPublish(failedExchangeName, envelope.getRoutingKey(), properties, body);
+                    getChannel().basicAck(deliveryTag, false);
+                }
+                case RETRY -> {
+                    LOG.warn("Retrying with {}: {}", psk.retryDelayRoutingKey(), message);
+                    int numRetries = getBrblRetryCount(properties);
+                    properties = incrementBrblRetryCount(properties, numRetries);
+                    routeToDelayBucket(getChannel(), retryExchangeName, deliveryTag,
+                            properties, body,
+                            psk.retryDelayRoutingKey().name());
+                }
+                case NOOP -> {
+                    LOG.info("FIXME This case makes no sense for Sndr.");
+                }
             }
-
         } catch (ClassNotFoundException e) {
             throw new IOException("Deserialization error: " + e.getMessage(), e);
         }
     }
+
+
+//    @Override
+//    public void handleDelivery(String consumerTag,
+//                               Envelope envelope,
+//                               AMQP.BasicProperties properties,
+//                               byte[] body) throws IOException {
+//
+//        try {
+//             long deliveryTag = envelope.getDeliveryTag();
+//            final Message message = Message.fromBytes(body);
+//            var statusException = processor.process(message); // TODO return something with a ProcessState
+//
+//            LOG.info("Processed message: {}", message);
+//            // TODO Retry? Throttle? Other situations
+//            if(statusException.isSuccess()) {
+//                getChannel().basicAck(deliveryTag, false);
+//                if (!processor.log(message)) {
+//                    LOG.error("Failed to log {}", message);
+//                }
+//
+//            } else {
+//                LOG.warn("Rejecting {}", message);
+//                getChannel().basicReject(deliveryTag, true);
+//            }
+//
+//        } catch (ClassNotFoundException e) {
+//            throw new IOException("Deserialization error: " + e.getMessage(), e);
+//        }
+//    }
 
 }
