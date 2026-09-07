@@ -2,8 +2,11 @@ package com.enoughisasgoodasafeast.integration;
 
 import com.enoughisasgoodasafeast.*;
 import com.enoughisasgoodasafeast.operator.PersistenceManager;
+import com.enoughisasgoodasafeast.operator.ProcessState;
 import com.enoughisasgoodasafeast.operator.TestingPersistenceManager;
-import com.rabbitmq.client.ShutdownSignalException;
+import com.enoughisasgoodasafeast.sndr.sim.server.TelnyxMessageService;
+import com.enoughisasgoodasafeast.sndr.sim.server.TelnyxServerMain;
+import io.helidon.webserver.WebServer;
 import org.junit.jupiter.api.*;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -12,10 +15,14 @@ import org.testcontainers.junit.jupiter.Testcontainers;
 
 import java.io.IOException;
 import java.util.Properties;
+import java.util.concurrent.Callable;
+import java.util.concurrent.ConcurrentLinkedQueue;
 import java.util.concurrent.TimeoutException;
 
 import static com.enoughisasgoodasafeast.integration.IntegrationTestFunctions.loadPropertiesWithContainerOverrides;
-import static org.junit.jupiter.api.Assertions.fail;
+import static java.util.concurrent.TimeUnit.SECONDS;
+import static org.awaitility.Awaitility.await;
+import static org.junit.jupiter.api.Assertions.*;
 
 @Testcontainers
 public class SndrMessageFlowIT {
@@ -25,6 +32,7 @@ public class SndrMessageFlowIT {
     private static final RabbitMQContainer brokerContainer = new RabbitMQContainer(
             "rabbitmq:4.3-management-alpine");
     private static Properties testProps;
+    private static WebServer telnyxGateway;
 
     private QueueProducer opr8rSurrogate;
     private TestingPersistenceManager persistenceManager;
@@ -32,13 +40,15 @@ public class SndrMessageFlowIT {
     private DLQLogger dlqLogger; // Drains the queue of messages that failed to send.
 
     @BeforeAll
-    static void startBrokerForAllTests() throws IOException {
+    static void startServicesForAllTests() throws IOException {
         brokerContainer.start();
         testProps = loadPropertiesWithContainerOverrides(brokerContainer, "sndr_message_flow_it.properties");
+        telnyxGateway = TelnyxServerMain.startServer();
     }
 
     @AfterAll
     static void stopContainer() {
+        telnyxGateway.stop();
         brokerContainer.stop();
     }
 
@@ -71,24 +81,51 @@ public class SndrMessageFlowIT {
         }
     }
 
+    @Test
+    void sendMessageToTelnyxBypassBroker() {
+        var psk1 = sndr.process(
+                new Message(MessageType.MT, "+17814567890", "+17817209452", "test message1")
+        );
+        assertSame(ProcessState.OK, psk1.processState());
 
-    //@Test
-    void sendMessageToTelnyx() {
-        // Verify we're pointing to the right endpoint; we only send never receive.
-        // 1) create a Message
-        final var message1 = new Message(MessageType.MT, "+17814567890", "+17817209452", "test message1");
-        final var message2 = new Message(MessageType.MT, "+17814567890", "+17817209452", "test message2");
-        final var message3 = new Message(MessageType.MT, "+17814567890", "+17817209452", "test message3");
-        // 2) put it on the MT queue. Use the Confab client to
-        sndr.process(message1);
-        sndr.process(message2);
-        sndr.process(message3);
-//        if (statusException.isSuccess()) {
-//            LOG.info("Message sent successfully");
-//        } else {
-//            LOG.error("Failed to send message: {}", statusException);
-//        }
-        // 3) wait for it to appear on the DLQ (if message is expected to fail.)
+        var psk2 = sndr.process(
+                new Message(MessageType.MT, "+17814567890", "+17817209453", "test message2")
+        );
+        assertSame(ProcessState.OK, psk2.processState());
+
+        var psk3 = sndr.process(
+                new Message(MessageType.MT, "+17814567890", "+17817209454", "test message3")
+        );
+        assertSame(ProcessState.OK, psk3.processState());
+    }
+
+    @Test
+    void sendMessageViaBroker() {
+        final var message = new Message(MessageType.MT, "+17814567890", "+17817209452", "test message1");
+        final boolean enqueued = opr8rSurrogate.enqueue(message);
+        assertTrue(enqueued);
+
+        // Wait to find out if the message was sent.
+        final var sentMessages = TelnyxServerMain.getTelnyxMessageService().sentMessages;
+        await().atMost(3, SECONDS).until(anyMtAccepted(sentMessages));
+
+        boolean found = false;
+        for (TelnyxMessageService.IdMessage idMessage : sentMessages) {
+            var cmr = idMessage.createMessageRequest();
+            found = cmr.getTo().equals(message.to()) &&
+                    cmr.getFrom().equals(message.from()) &&
+                    cmr.getText().equals(message.text());
+        }
+        assertTrue(found, "No matching CMR for " + message);
 
     }
+
+    private Callable<Boolean> anyMtAccepted(ConcurrentLinkedQueue<TelnyxMessageService.IdMessage> sentMessages) {
+        return () -> !sentMessages.isEmpty();
+    }
+
+    private Callable<Boolean> anyMtErrors(ConcurrentLinkedQueue<TelnyxMessageService.MessageErrorList> messages) {
+        return () -> !messages.isEmpty();
+    }
+
 }

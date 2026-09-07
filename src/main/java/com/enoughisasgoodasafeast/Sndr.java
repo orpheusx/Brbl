@@ -25,10 +25,6 @@ public class Sndr implements SndrMessageProcessor {
     public Sndr() {
     }
 
-//    public Sndr(QueueConsumer queueConsumer) {
-//        this.queueConsumer = queueConsumer;
-//    }
-
     public Sndr(PersistenceManager persistenceManager) {
         this.persistenceManager = persistenceManager;
         this.telnyxSender = new TelnyxSender(persistenceManager);
@@ -38,20 +34,22 @@ public class Sndr implements SndrMessageProcessor {
         this.queueConsumer = queueConsumer;
         this.persistenceManager = persistenceManager;
         this.telnyxSender = new TelnyxSender(persistenceManager);
-
     }
 
     public void init(Properties properties) throws IOException, TimeoutException, PersistenceManagerException {
         LOG.info("Initializing SNDR");
-        httpMtHandler = (HttpMTSender) HttpMTSender.newHandler(properties);
+
         if (queueConsumer == null) {
             queueConsumer = RabbitQueueConsumer.createQueueConsumer(properties, this);
         }
+
         if (persistenceManager == null) {
             persistenceManager = PostgresPersistenceManager.createPersistenceManager(properties);
         }
 
-        telnyxSender = new TelnyxSender(persistenceManager);
+        if (telnyxSender == null) {
+            telnyxSender = new TelnyxSender(persistenceManager);
+        }
     }
 
     @Override
