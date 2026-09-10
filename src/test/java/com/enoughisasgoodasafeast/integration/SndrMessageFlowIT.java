@@ -20,6 +20,7 @@ import java.util.concurrent.ConcurrentLinkedQueue;
 import java.util.concurrent.TimeoutException;
 
 import static com.enoughisasgoodasafeast.integration.IntegrationTestFunctions.loadPropertiesWithContainerOverrides;
+import static com.enoughisasgoodasafeast.sndr.sim.server.TelnyxMessageService.SIGNAL_429_TOO_MANY_RETRY_AFTER;
 import static java.util.concurrent.TimeUnit.SECONDS;
 import static org.awaitility.Awaitility.await;
 import static org.junit.jupiter.api.Assertions.*;
@@ -120,12 +121,55 @@ public class SndrMessageFlowIT {
 
     }
 
+    @Test
+    void sendFailingMessageViaBroker() {
+        // A message where the "to" and "from" fields are wrong.
+        final var message = new Message(MessageType.MT, "+1781456F0F0", "17817209452", "_");
+        final boolean enqueued = opr8rSurrogate.enqueue(message);
+        assertTrue(enqueued);
+
+        // Wait to find out if the message was sent.
+        final var failedMessages = TelnyxServerMain.getTelnyxMessageService().failedMessages;
+        await().atMost(3, SECONDS).until(anyMtErrors(failedMessages));
+
+        assertEquals(1, failedMessages.size());
+
+        final var messageErrorList = failedMessages.stream().findFirst().orElseGet(Assertions::fail);
+
+        var failedCmr = messageErrorList.createMessageRequest();
+        assertEquals(message.to(), failedCmr.getTo());
+        assertEquals(message.from(), failedCmr.getFrom());
+        assertEquals(message.text(), failedCmr.getText());
+    }
+
+    @Test
+    void sendRetryMessageViaBroker() {
+        var telnyxSignalledDelay = "=2";
+        var msgRequireRetry = new Message(MessageType.MT, "+17814567890", "+17817209452",
+                SIGNAL_429_TOO_MANY_RETRY_AFTER + telnyxSignalledDelay); //
+        final boolean enqueued = opr8rSurrogate.enqueue(msgRequireRetry);
+        assertTrue(enqueued);
+
+        // Wait to find out if the message was sent.
+        final var retriedMessages = TelnyxServerMain.getTelnyxMessageService().retriedMessages;
+        await().atMost(6, SECONDS).until(mtRetryCount(retriedMessages, 1));
+        LOG.info("Check 1");
+        await().atMost(6, SECONDS).until(mtRetryCount(retriedMessages, 2));
+        LOG.info("Check 2");
+        await().atMost(6, SECONDS).until(mtRetryCount(retriedMessages, 3));
+        LOG.info("Check 3");
+    }
+
     private Callable<Boolean> anyMtAccepted(ConcurrentLinkedQueue<TelnyxMessageService.IdMessage> sentMessages) {
         return () -> !sentMessages.isEmpty();
     }
 
     private Callable<Boolean> anyMtErrors(ConcurrentLinkedQueue<TelnyxMessageService.MessageErrorList> messages) {
         return () -> !messages.isEmpty();
+    }
+
+    private Callable<Boolean> mtRetryCount(ConcurrentLinkedQueue<TelnyxMessageService.MessageErrorList> messages, int expected) {
+        return () -> messages.size() >= expected;
     }
 
 }

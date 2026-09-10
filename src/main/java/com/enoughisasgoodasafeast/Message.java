@@ -23,7 +23,7 @@ import static java.time.Instant.now;
 public record Message(UUID id, Instant receivedAt, MessageType type, Platform platform, String from, String to, String text) implements Serializable {
 
     public Message {
-        if (id == null || receivedAt == null || platform == null || from == null || to == null || text == null) { // check for empty string, too?
+        if (id == null || receivedAt == null || platform == null || isInvalid(from) || isInvalid(to) || isInvalid(text)) { // check for empty string, too?
             throw new IllegalArgumentException("All fields are required");
         }
     }
@@ -34,6 +34,10 @@ public record Message(UUID id, Instant receivedAt, MessageType type, Platform pl
 
     public Message(MessageType type, Platform platform, String from, String to, String text) {
         this(randomUUID(), now(), type, platform, from, to, text);
+    }
+
+    public boolean isInvalid(String value) {
+        return value == null || value.isBlank();
     }
 
     // Seems like the place for these methods.

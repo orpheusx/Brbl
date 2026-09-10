@@ -19,6 +19,8 @@ import io.helidon.webclient.api.WebClient;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
+import java.time.Duration;
+import java.time.Instant;
 import java.util.Optional;
 
 public class TelnyxSender {
@@ -72,9 +74,6 @@ public class TelnyxSender {
                 .build();
 
         LOG.info(config.get("telnyx-sender").get("base-uri").toString());
-
-
-
     }
 
         /*
@@ -89,6 +88,18 @@ public class TelnyxSender {
          *
          */
 
+    private Duration expirationForCustomerPlatformNumber(String platformNumber) {
+        // TODO call a new PersistenceManager method to lookup the lifetime configured for the given platformNumber ('owned' by our customer)
+        //  that is read through a time-expired Caffeine cache.
+        return Duration.ofSeconds(10);
+    }
+
+    /**
+     * Attempt to hand off the given Message to the Telnyx service.
+     * @param message the standard Brbl formatted message
+     * @return the tuple combining the result of the send and the routing key to be used if it needs to be retried
+     *  (or null if no retry is needed.)
+     */
     public ProcessStateRoutingKey send(Message message) {
 
         LOG.info("Sending message: {}", message);
@@ -98,8 +109,17 @@ public class TelnyxSender {
         // The SessionKey scope is needed to avoid out-of-order delivery due to transient retries e.g. two messages are enqueued, the first gets a
         // retry delay and put on a delay queue, the second comes along just after the delay expires and is sent immediately, ahead of the first
         // message. A WeakHashMap doesn't quite fit the use case; a time-expired Caffeine cache might...
-
         // Should we think about sending serially? It would certainly make it easier to think about
+
+        // Check for expired messages
+        var configuredLifetime = expirationForCustomerPlatformNumber(message.from());
+        var now = Instant.now();
+        if (now.isAfter(message.receivedAt().plus(configuredLifetime))) {
+            // The message has expired. Don't attempt to send it.
+            LOG.warn("Send time: {}. Configured lifetime: {}. Message expired: {}", now, configuredLifetime, message.receivedAt());
+            return new ProcessStateRoutingKey(ProcessState.NOOP, null);
+        }
+
 
         // FIXME need actual params for the fetch with a real PersistenceManager.
         var gwMeta = persistenceManager.fetchGatewayMeta(GatewayProvider.TELNYX, null, null, null);
@@ -173,14 +193,5 @@ public class TelnyxSender {
         }
         return RetryDelayRoutingKey.DELAY_20M; // Max delay
     }
-
-//        LOG.info("Received response.");
-//        if (mr.status().family() != Status.Family.SUCCESSFUL) {
-//            LOG.error("POST failed: {}: {}", mr.status(), mr.entity());
-//            MessagingOutboundMessagePayload payload = mr.entity().getData();
-//            var errors = payload.getErrors();
-//            errors.getFirst().getCode();
-//        }
-
 
 }

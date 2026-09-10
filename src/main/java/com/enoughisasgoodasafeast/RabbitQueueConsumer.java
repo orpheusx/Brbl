@@ -75,10 +75,12 @@ public class RabbitQueueConsumer implements QueueConsumer {
             throw new IllegalArgumentException("RabbitQueueConsumer missing required configuration (or bad numeric value).");
         }
 
-        ConnectionFactory factory = new ConnectionFactory(); // automaticRecoveryEnabled is true by default.
+        ConnectionFactory factory = new ConnectionFactory();
         factory.setHost(queueHost);
         factory.setPort(queuePort);
         factory.setRequestedHeartbeat(requestedHeartbeatTimeout);
+        factory.setAutomaticRecoveryEnabled(true); // automaticRecoveryEnabled is true by default but just to make it explicit.
+        factory.setNetworkRecoveryInterval(5_000);
 
         // Setup socket connection, negotiate protocol version and authentication
         this.connection = factory.newConnection();

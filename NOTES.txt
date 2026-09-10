@@ -7641,3 +7641,51 @@ Turns out even classes in java.* packages are rejected so I updated the file to 
 That seems to fix the problem. There's a placeholder copy in the SndrGatewaySim project/repo.
 I think we didn't run into this previously because only Opr8r performs any serialization/deserialization and it doesn't create any Helidon servers.
 
+==== 2026/09/09 ====
+
+Last couple of days, been working on the SndrMessageFlowIT integration test and supporting features in TelnyxMessageSender.
+Got them all working now. The retry case is, of course, the most complex.
+
+Questions raised in the course of doing this work...
+
+What are the cases in which we might expect to get repeated retry signals (HTTP 429)?
+    Case: Message rejected with throttle due to accidentally exceeded per-account rate limit; error/bug in our rate-limiter
+      --> Retry as directed by Telnyx header until message is sent.
+
+    Case: Repeated throttle from Telnyx **despite** correct rate limit being applied.
+      --> Retry as directed by Telnyx up to customer-defined-per-number expiration limit
+
+    Case: Telnyx servers are down hard/our network connection is dead causing all MTs to be blocked, spanning all our customer accounts.
+    Case: Telnyx queues are full (because downstream has outages) and they are rejecting outgoing messages.
+        --> https://telnyx.com/release-notes/seti-black-box-health-api-release and https://telnyx.statuspage.io/ provide service status.
+            If their systems are down for an extended period, all the MTs will fail. We need to add connection error handling to TelnyxSender.
+
+    In all cases: If the message expired don't continue to retry. The expiration duration definitely needs to be per-customer number.
+
+Haven't implemented rate-limiting yet but there are (at least) two options:
+    1) Google's com.google.common.util.concurrent.RateLimiter (provided by Guava)
+    2) https://github.com/bucket4j/bucket4j project. Mature and actively supported.
+
+I don't have a strong preference technically at this point; whichever adds less the size of the Brbl jar seems fine. Non-technically, I'd rather not use Google's shit but...
+
+NB: Even without explicit rate limiter we have the Rabbit client config to control the number of threads handling available messages from the queue. As well, there's the Operator's producer that works through a barrier limiter. Neither prevents overages but both will impact our max rate.
+
+=== 2026/09/10 ===
+
+From reading the docs it appears that, by default, a message getting retried after having been on a delay queue gets returned to the original queue as if it was a new message. There are ways to increase its priority but this default seems okay. It does mean that the average depth of the original queue will increase if one of our customers generates a lot of retries. It also makes clear the need to have separate rate-limiter for each customer account we manage with Telnyx. The simplification also requires that we don't provision our customers through a single joint account;  it would need to service them all through a single rate limit. We can apparently request a rate limit increase. Not sure how difficult that is to get.
+
+We should keep a combined count of retries and calculate a per-minute ratio against the total volume processed (or non-error volume?)
+
+What this gets us:
+
+    If it goes over a certain number we could pause the queue consumer...but then how do we know when to un-pause? Also, it doesn't prevent queue build up. The pressure simply moves to a different queue (on the same machine.) Maybe better to "let it fail" (when retries are expired) and build a facility to tap off the failed queue and re-enqueue the ones that were there for rate-limit/outage reasons. When we fail a message to the DLQ we might first wrap it in a record that includes a status field so we can distinguish 429'd messages from the 400/422'd. Also, when we requeue them we need to reset their retry-count.
+
+So here's the plan:
+
+    1) Define a retry-count limit alongside an expiration duration for each customer number. This should be stored in PG.
+    2) Retry messages per Telnyx/gateway provider signal until they exceed the retry-count (or they expire)
+    3) Track the message vs retry rates over time. (Do the same for 400/422 errors while we're at it.)
+    4) Move such messages to the DLQ wrapped in a record that includes the cause that distinguishes them from 400/422 responses.
+    5) Write a queue client (see DLQLogger) that extracts the 429s, clears their retry-counts and re-enqueues them. (For the legit fails, it writes them to CSV that can be moved to external storage and later analyzed by DuckDB?)
+
+

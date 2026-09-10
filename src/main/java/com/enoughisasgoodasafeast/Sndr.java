@@ -55,17 +55,10 @@ public class Sndr implements SndrMessageProcessor {
     @Override
     public ProcessStateRoutingKey process(Message message) {
         LOG.info("Processing outbound message: {}", message);
+        // TODO Check creation date of the Message. We don't want to try sending messages that are outside their window of relevance.
+        //  Requires a lookup of the customer's preference from the database. TBD
         return telnyxSender.send(message);
     }
-
-    //@Override
-    //public StatusException process(Message message) {
-    //    LOG.info("Processing outbound message: {}", message);
-    //    StatusException delivered = httpMtHandler.send(message);
-    //    LOG.info("Message delivery: {}: {}", delivered, message);
-    //    return delivered;
-    //}
-
 
     public boolean log(Message message) {
         boolean isInserted = persistenceManager.insertDeliveredMT(message);
@@ -84,12 +77,10 @@ public class Sndr implements SndrMessageProcessor {
         LOG.info("Shutdown Sndr");
     }
 
+    // Called by Brbl.main
     public static void main(String[] args) throws IOException, TimeoutException, PersistenceManagerException {
         final Sndr sndr = new Sndr();
         final Properties properties = ConfigLoader.readConfig("sndr.properties");
         sndr.init(properties);
-
-        // Test send to verify we can reach the platform
-        // sndr.process(new Message(MessageType.MT, "00000", "17816629773"/* FIXME */, "Reachability Test"));
     }
 }

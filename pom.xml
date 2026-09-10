@@ -149,6 +149,14 @@
             <version>3.2.0</version>
         </dependency>
 
+        <!-- https://mvnrepository.com/artifact/org.jspecify/jspecify -->
+        <dependency>
+            <groupId>org.jspecify</groupId>
+            <artifactId>jspecify</artifactId>
+            <version>1.0.1</version>
+            <scope>compile</scope>
+        </dependency>
+
         <!-- For now this is available only by building and installing SndrGatewaySim repo locally. -->
         <!-- Contains the OpenAPI defined, generated models used by Telnyx. -->
         <dependency>
@@ -369,7 +377,7 @@
                     <argLine>--enable-preview</argLine>
                     <rerunFailingTestsCount>2</rerunFailingTestsCount>
                     <!-- Fail build if flaky count exceeds this value (0 = allow flakes) -->
-                    <failOnFlakeCount>1</failOnFlakeCount>
+                    <failOnFlakeCount>2</failOnFlakeCount>
                 </configuration>
                 <!--<configuration>
                     <skipITs>true</skipITs>

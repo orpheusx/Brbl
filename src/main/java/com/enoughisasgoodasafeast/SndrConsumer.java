@@ -43,19 +43,11 @@ public class SndrConsumer extends BrblConsumer {
             final var message = Message.fromBytes(body);
             final var psk = processor.process(message);
 
-            // TODO Need the tracking id from Telnyx
-            switch(psk.processState()) {
+            switch (psk.processState()) {
                 case OK -> {
-                    // try {
-                        LOG.info("Sent {}", message);
-                        getChannel().basicAck(deliveryTag, false);
-                        // TODO add .complete(Message,correlating_gateway_id) to write a log to a (new) table
-                    // } catch (IOException e) {
-                    //     // This may suggest the broker/exchange/queue is in a bad state. Write the failure to (a different) disk?
-                    //     LOG.info("Failed to ack sent {}", message);
-                    //     getChannel().basicPublish(failedExchangeName, envelope.getRoutingKey(), properties, body);
-                    //     throw new RuntimeException(e);
-                    // }
+                    LOG.info("Sent {}", message);
+                    getChannel().basicAck(deliveryTag, false);
+                    // TODO add .complete(Message,correlating_gateway_id) to write a log to a (new) table
                 }
                 case ERROR -> {
                     LOG.error("Failed to send {}", message);
@@ -70,8 +62,9 @@ public class SndrConsumer extends BrblConsumer {
                             properties, body,
                             psk.retryDelayRoutingKey().name());
                 }
-                case NOOP -> {
+                case NOOP -> { // Change/add enum: EXPIRE ?
                     LOG.info("FIXME This case makes no sense for Sndr.");
+                    getChannel().basicAck(deliveryTag, false);
                 }
             }
         } catch (ClassNotFoundException e) {
