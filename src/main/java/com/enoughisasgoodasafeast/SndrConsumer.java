@@ -1,6 +1,8 @@
 package com.enoughisasgoodasafeast;
 
+import com.enoughisasgoodasafeast.operator.ProcessState;
 import com.enoughisasgoodasafeast.operator.SndrMessageProcessor;
+import com.enoughisasgoodasafeast.sndr.ProcessStateMessage;
 import com.enoughisasgoodasafeast.sndr.ProcessStateRoutingKey;
 import com.rabbitmq.client.AMQP;
 import com.rabbitmq.client.Channel;
@@ -51,16 +53,29 @@ public class SndrConsumer extends BrblConsumer {
                 }
                 case ERROR -> {
                     LOG.error("Failed to send {}", message);
-                    getChannel().basicPublish(failedExchangeName, envelope.getRoutingKey(), properties, body);
+                    getChannel().basicPublish(failedExchangeName, envelope.getRoutingKey(), properties,
+                            /*new ProcessStateMessage(ProcessState.ERROR, message).toBytes()*/ body);
                     getChannel().basicAck(deliveryTag, false);
                 }
                 case RETRY -> {
                     LOG.warn("Retrying with {}: {}", psk.retryDelayRoutingKey(), message);
                     int numRetries = getBrblRetryCount(properties);
-                    properties = incrementBrblRetryCount(properties, numRetries);
-                    routeToDelayBucket(getChannel(), retryExchangeName, deliveryTag,
-                            properties, body,
-                            psk.retryDelayRoutingKey().name());
+
+                    if (numRetries > processor.getRouteRetryLimit(message)) { // found using platform and "from" number
+                        // fail the message
+                        LOG.warn("Retry count {} exceeded limit for {}", numRetries, message);
+                        getChannel().basicPublish(failedExchangeName, envelope.getRoutingKey(), properties,
+                                /*new ProcessStateMessage(ProcessState.ERROR, message).toBytes()*/ body);
+                        getChannel().basicAck(deliveryTag, false);
+                        LOG.warn("Acked message ('{}') and published to {}", message.text(), failedExchangeName);
+                    } else {
+                        properties = incrementBrblRetryCount(properties, numRetries);
+                        routeToDelayBucket(getChannel(), retryExchangeName, deliveryTag,
+                                properties, body,
+                                psk.retryDelayRoutingKey().name());
+                        LOG.warn("Delaying retry for message ('{}') by {}ms", message.text(),
+                                psk.retryDelayRoutingKey().delayMs());
+                    }
                 }
                 case NOOP -> { // Change/add enum: EXPIRE ?
                     LOG.info("FIXME This case makes no sense for Sndr.");

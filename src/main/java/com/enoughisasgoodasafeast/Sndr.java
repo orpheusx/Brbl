@@ -19,7 +19,6 @@ public class Sndr implements SndrMessageProcessor {
 
     private QueueConsumer queueConsumer;
     private PersistenceManager persistenceManager;
-    private HttpMTSender httpMtHandler;
     private TelnyxSender telnyxSender;
 
     public Sndr() {

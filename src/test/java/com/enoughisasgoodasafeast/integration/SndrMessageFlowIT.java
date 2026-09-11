@@ -14,6 +14,7 @@ import org.testcontainers.containers.RabbitMQContainer;
 import org.testcontainers.junit.jupiter.Testcontainers;
 
 import java.io.IOException;
+import java.util.List;
 import java.util.Properties;
 import java.util.concurrent.Callable;
 import java.util.concurrent.ConcurrentLinkedQueue;
@@ -21,6 +22,7 @@ import java.util.concurrent.TimeoutException;
 
 import static com.enoughisasgoodasafeast.integration.IntegrationTestFunctions.loadPropertiesWithContainerOverrides;
 import static com.enoughisasgoodasafeast.sndr.sim.server.TelnyxMessageService.SIGNAL_429_TOO_MANY_RETRY_AFTER;
+import static java.util.concurrent.TimeUnit.MILLISECONDS;
 import static java.util.concurrent.TimeUnit.SECONDS;
 import static org.awaitility.Awaitility.await;
 import static org.junit.jupiter.api.Assertions.*;
@@ -150,14 +152,26 @@ public class SndrMessageFlowIT {
         final boolean enqueued = opr8rSurrogate.enqueue(msgRequireRetry);
         assertTrue(enqueued);
 
+        long awaitTime =  1_000 + RetryDelayRoutingKey.DELAY_5S.delayMs(); // NB: possible cause of test flakiness here...
+
         // Wait to find out if the message was sent.
         final var retriedMessages = TelnyxServerMain.getTelnyxMessageService().retriedMessages;
-        await().atMost(6, SECONDS).until(mtRetryCount(retriedMessages, 1));
-        LOG.info("Check 1");
-        await().atMost(6, SECONDS).until(mtRetryCount(retriedMessages, 2));
-        LOG.info("Check 2");
-        await().atMost(6, SECONDS).until(mtRetryCount(retriedMessages, 3));
-        LOG.info("Check 3");
+        await().atMost(awaitTime, MILLISECONDS).until(mtRetryCount(retriedMessages, 1));
+        // LOG.info("Check 1");
+        await().atMost(awaitTime, MILLISECONDS).until(mtRetryCount(retriedMessages, 2));
+        // LOG.info("Check 2");
+        await().atMost(awaitTime, MILLISECONDS).until(mtRetryCount(retriedMessages, 3));
+        // LOG.info("Check 3");
+        // await().atMost(awaitTime, MILLISECONDS).until(mtRetryCount(retriedMessages, 4));
+        // LOG.info("Check 4");
+
+        // The Telnyx sim server has never failed this message but the TelnyxSender has decided to stop retrying so we
+        //  need look at the DLQLogger.
+        await().atMost(2, SECONDS).until(anyDeadMessages(dlqLogger.getDeadMessages()));
+    }
+
+    private Callable<Boolean> anyDeadMessages(List<Message> deadMessages) {
+        return () -> !deadMessages.isEmpty();
     }
 
     private Callable<Boolean> anyMtAccepted(ConcurrentLinkedQueue<TelnyxMessageService.IdMessage> sentMessages) {

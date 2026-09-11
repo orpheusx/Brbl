@@ -19,4 +19,9 @@ public interface SndrMessageProcessor extends MessageProcessor {
      * Log the processed Message as appropriate.
      */
     boolean log(Message message);
+
+    // TODO Obviously we need to build a real, read-through cache implementation in Sndr.
+    default int getRouteRetryLimit(Message message) {
+        return 1; // two retry attempts (we start at zero) in addition to the initial non-retry attempt.
+    };
 }

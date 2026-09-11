@@ -91,7 +91,7 @@ public class TelnyxSender {
     private Duration expirationForCustomerPlatformNumber(String platformNumber) {
         // TODO call a new PersistenceManager method to lookup the lifetime configured for the given platformNumber ('owned' by our customer)
         //  that is read through a time-expired Caffeine cache.
-        return Duration.ofSeconds(10);
+        return Duration.ofSeconds(60);
     }
 
     /**

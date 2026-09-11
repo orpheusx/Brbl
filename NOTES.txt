@@ -7682,10 +7682,14 @@ What this gets us:
 
 So here's the plan:
 
-    1) Define a retry-count limit alongside an expiration duration for each customer number. This should be stored in PG.
-    2) Retry messages per Telnyx/gateway provider signal until they exceed the retry-count (or they expire)
-    3) Track the message vs retry rates over time. (Do the same for 400/422 errors while we're at it.)
-    4) Move such messages to the DLQ wrapped in a record that includes the cause that distinguishes them from 400/422 responses.
-    5) Write a queue client (see DLQLogger) that extracts the 429s, clears their retry-counts and re-enqueues them. (For the legit fails, it writes them to CSV that can be moved to external storage and later analyzed by DuckDB?)
+    [X] Define a retry-count limit alongside an expiration duration for each customer number. This should be stored in PG.
+    [X] Retry messages per Telnyx/gateway provider signal until they exceed the retry-count (or they expire)
+    [ ] Track the message vs retry rates over time. (Do the same for 400/422 errors while we're at it.)
+    [ ] Move such messages to the DLQ wrapped in a record that includes the cause that distinguishes them from 400/422 responses.
+    [ ] Write a queue client (ref. DLQLogger) that extracts the 429s, clears their retry-counts and re-enqueues them.
+        (For the legit fails, it writes them to CSVs that can be moved to external storage and later analyzed by DuckDB?)
+    [ ] Design/implement the persistence model for the expiration duration, retry-count limit, etc
+        (Just new columns on the routes table? Reminds me of the lower priority task of adding Change Data Capture via triggers on configuration resources so we record our resource history.)
+
 
 
