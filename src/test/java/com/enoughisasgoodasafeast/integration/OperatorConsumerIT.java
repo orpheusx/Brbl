@@ -59,7 +59,7 @@ public class OperatorConsumerIT {
     private QueueProducer rcvrSurrogate;
     private QueueConsumer operatorConsumer;
     private DLQLogger failQueueLogger;
-    private DLQLogger retryQueueLogger;
+    private RetryQueueLogger retryQueueLogger;
     /** Dedicated channel for passive queue inspection and purging. Kept open for the test lifetime. */
     private Channel inspectionChannel;
 
@@ -108,7 +108,7 @@ public class OperatorConsumerIT {
 
         // Watchers for the side effect queues
         failQueueLogger  = DLQLogger.createDLQLogger(testProps);
-        retryQueueLogger = DLQLogger.createDLQLogger(testProps, retryQueueName);
+        retryQueueLogger = RetryQueueLogger.createRetryQueueLogger(testProps, retryQueueName);
     }
 
     @AfterEach
@@ -158,7 +158,7 @@ public class OperatorConsumerIT {
                 "Primary queue should be empty after OK ack");
         assertTrue(failQueueLogger.getDeadMessages().isEmpty(),
                 "Failed queue must be empty for ProcessState.OK");
-        assertTrue(retryQueueLogger.getDeadMessages().isEmpty(),
+        assertTrue(retryQueueLogger.getRetryingMessages().isEmpty(),
                 "Retry queue must be empty for ProcessState.OK");
         assertEquals(1, stub.getProcessCallCount(),  "process() should be called exactly once");
         assertEquals(1, stub.getCompleteCallCount(), "complete() should be called exactly once on OK");
@@ -180,11 +180,11 @@ public class OperatorConsumerIT {
 
         assertEquals(1, failQueueLogger.getDeadMessages().size(),
                 "Failed queue should contain exactly 1 message");
-        assertEquals(TEST_MO.text(), failQueueLogger.getDeadMessages().getFirst().text(),
+        assertEquals(TEST_MO.text(), failQueueLogger.getDeadMessages().getFirst().message().text(),
                 "Failed queue message text should match the original MO");
         assertEquals(0, getQueueDepth(primaryQueueName),
                 "Primary queue should be empty (message was acked after routing to fail queue)");
-        assertTrue(retryQueueLogger.getDeadMessages().isEmpty(),
+        assertTrue(retryQueueLogger.getRetryingMessages().isEmpty(),
                 "Retry queue must be empty on a commit failure");
         assertEquals(1, stub.getProcessCallCount());
         assertEquals(1, stub.getCompleteCallCount(),
@@ -207,11 +207,11 @@ public class OperatorConsumerIT {
 
         assertEquals(1, failQueueLogger.getDeadMessages().size(),
                 "Failed queue should contain exactly 1 message on ERROR");
-        assertEquals(TEST_MO.text(), failQueueLogger.getDeadMessages().getFirst().text(),
+        assertEquals(TEST_MO.text(), failQueueLogger.getDeadMessages().getFirst().message().text(),
                 "Failed queue message text should match the original MO");
         assertEquals(0, getQueueDepth(primaryQueueName),
                 "Primary queue should be empty after ERROR routing");
-        assertTrue(retryQueueLogger.getDeadMessages().isEmpty(),
+        assertTrue(retryQueueLogger.getRetryingMessages().isEmpty(),
                 "Retry queue must be empty for ProcessState.ERROR");
         assertEquals(1, stub.getProcessCallCount());
         assertEquals(0, stub.getCompleteCallCount(),
@@ -236,7 +236,7 @@ public class OperatorConsumerIT {
                 "Primary queue should be empty after NOOP ack");
         assertTrue(failQueueLogger.getDeadMessages().isEmpty(),
                 "Failed queue must be empty for ProcessState.NOOP");
-        assertTrue(retryQueueLogger.getDeadMessages().isEmpty(),
+        assertTrue(retryQueueLogger.getRetryingMessages().isEmpty(),
                 "Retry queue must be empty for ProcessState.NOOP");
         assertEquals(1, stub.getProcessCallCount());
         assertEquals(0, stub.getCompleteCallCount(),
@@ -262,9 +262,9 @@ public class OperatorConsumerIT {
         // delay-bucket queue, so it needs slightly more slack than the direct-publish paths.
         await().atMost(5, SECONDS).until(anyMessagesIn(retryQueueLogger));
 
-        assertEquals(1, retryQueueLogger.getDeadMessages().size(),
+        assertEquals(1, retryQueueLogger.getRetryingMessages().size(),
                 "Retry queue should contain exactly 1 message on first RETRY");
-        assertEquals(TEST_MO.text(), retryQueueLogger.getDeadMessages().getFirst().text(),
+        assertEquals(TEST_MO.text(), retryQueueLogger.getRetryingMessages().getFirst().text(),
                 "Retry queue message text should match the original MO");
         assertEquals(0, getQueueDepth(primaryQueueName),
                 "Primary queue should be empty after RETRY routing (message was acked)");
@@ -274,7 +274,7 @@ public class OperatorConsumerIT {
         assertEquals(0, stub.getCompleteCallCount(),
                 "complete() must NOT be called for RETRY");
 
-        retryQueueLogger.clearDeadMessages();
+        retryQueueLogger.clearRetryingMessages();
     }
 
     // ---- Helpers ---------------------------------------------------------
@@ -297,5 +297,9 @@ public class OperatorConsumerIT {
 
     private Callable<Boolean> anyMessagesIn(DLQLogger logger) {
         return () -> !logger.getDeadMessages().isEmpty();
+    }
+
+    private Callable<Boolean> anyMessagesIn(RetryQueueLogger logger) {
+        return () -> !logger.getRetryingMessages().isEmpty();
     }
 }

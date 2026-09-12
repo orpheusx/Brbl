@@ -4,6 +4,7 @@ import com.enoughisasgoodasafeast.*;
 import com.enoughisasgoodasafeast.operator.PersistenceManager;
 import com.enoughisasgoodasafeast.operator.ProcessState;
 import com.enoughisasgoodasafeast.operator.TestingPersistenceManager;
+import com.enoughisasgoodasafeast.sndr.ProcessStateMessage;
 import com.enoughisasgoodasafeast.sndr.sim.server.TelnyxMessageService;
 import com.enoughisasgoodasafeast.sndr.sim.server.TelnyxServerMain;
 import io.helidon.webserver.WebServer;
@@ -146,31 +147,29 @@ public class SndrMessageFlowIT {
 
     @Test
     void sendRetryMessageViaBroker() {
-        var telnyxSignalledDelay = "=2";
-        var msgRequireRetry = new Message(MessageType.MT, "+17814567890", "+17817209452",
+        final var telnyxSignalledDelay = "=2";
+        final var msgRequireRetry = new Message(MessageType.MT, "+17814567890", "+17817209452",
                 SIGNAL_429_TOO_MANY_RETRY_AFTER + telnyxSignalledDelay); //
+
         final boolean enqueued = opr8rSurrogate.enqueue(msgRequireRetry);
+
         assertTrue(enqueued);
 
-        long awaitTime =  1_000 + RetryDelayRoutingKey.DELAY_5S.delayMs(); // NB: possible cause of test flakiness here...
+        final long awaitTime =  1_000 + RetryDelayRoutingKey.DELAY_5S.delayMs(); // NB: possible cause of test flakiness here...
 
         // Wait to find out if the message was sent.
         final var retriedMessages = TelnyxServerMain.getTelnyxMessageService().retriedMessages;
+
         await().atMost(awaitTime, MILLISECONDS).until(mtRetryCount(retriedMessages, 1));
-        // LOG.info("Check 1");
         await().atMost(awaitTime, MILLISECONDS).until(mtRetryCount(retriedMessages, 2));
-        // LOG.info("Check 2");
         await().atMost(awaitTime, MILLISECONDS).until(mtRetryCount(retriedMessages, 3));
-        // LOG.info("Check 3");
-        // await().atMost(awaitTime, MILLISECONDS).until(mtRetryCount(retriedMessages, 4));
-        // LOG.info("Check 4");
 
         // The Telnyx sim server has never failed this message but the TelnyxSender has decided to stop retrying so we
         //  need look at the DLQLogger.
         await().atMost(2, SECONDS).until(anyDeadMessages(dlqLogger.getDeadMessages()));
     }
 
-    private Callable<Boolean> anyDeadMessages(List<Message> deadMessages) {
+    private Callable<Boolean> anyDeadMessages(List<ProcessStateMessage> deadMessages) {
         return () -> !deadMessages.isEmpty();
     }
 

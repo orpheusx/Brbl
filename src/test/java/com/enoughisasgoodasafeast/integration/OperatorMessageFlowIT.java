@@ -238,7 +238,7 @@ public class OperatorMessageFlowIT {
             await().atMost(3, SECONDS).until(anyDeadLettersEnqueued(dlqLogger));
             assertFalse(dlqLogger.getDeadMessages().isEmpty(), "No messages in failed queue."); // redundant check
             // Make sure it's the one we just sent.
-            assertEquals(unexpectedMO.text(), dlqLogger.getDeadMessages().getFirst().text(), "Wrong message in failed queue.");
+            assertEquals(unexpectedMO.text(), dlqLogger.getDeadMessages().getFirst().message().text(), "Wrong message in failed queue.");
         } finally {
             dlqLogger.clearDeadMessages();
         }
@@ -274,7 +274,7 @@ public class OperatorMessageFlowIT {
             await().atMost(5, SECONDS).until(anyDeadLettersEnqueued(dlqLogger));
             assertFalse(dlqLogger.getDeadMessages().isEmpty(), "No messages in failed queue."); // redundant check
             // Make sure it's the one we just sent.
-            assertEquals(routableMessage.text(), dlqLogger.getDeadMessages().getFirst().text(), "Wrong message in failed queue.");
+            assertEquals(routableMessage.text(), dlqLogger.getDeadMessages().getFirst().message().text(), "Wrong message in failed queue.");
 
         } finally {
             dlqLogger.clearDeadMessages();
@@ -345,7 +345,7 @@ public class OperatorMessageFlowIT {
 
         final var deadMessages = dlqLogger.getDeadMessages();
         assertFalse(deadMessages.isEmpty());
-        assertEquals(routableMessage.text(), deadMessages.getFirst().text(), "Wrong message in failed queue.");
+        assertEquals(routableMessage.text(), deadMessages.getFirst().message().text(), "Wrong message in failed queue.");
     }
 
     @Test

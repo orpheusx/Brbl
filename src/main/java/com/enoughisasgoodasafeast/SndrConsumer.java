@@ -54,7 +54,7 @@ public class SndrConsumer extends BrblConsumer {
                 case ERROR -> {
                     LOG.error("Failed to send {}", message);
                     getChannel().basicPublish(failedExchangeName, envelope.getRoutingKey(), properties,
-                            /*new ProcessStateMessage(ProcessState.ERROR, message).toBytes()*/ body);
+                            new ProcessStateMessage(ProcessState.ERROR, message).toBytes() /*body*/);
                     getChannel().basicAck(deliveryTag, false);
                 }
                 case RETRY -> {
@@ -65,7 +65,7 @@ public class SndrConsumer extends BrblConsumer {
                         // fail the message
                         LOG.warn("Retry count {} exceeded limit for {}", numRetries, message);
                         getChannel().basicPublish(failedExchangeName, envelope.getRoutingKey(), properties,
-                                /*new ProcessStateMessage(ProcessState.ERROR, message).toBytes()*/ body);
+                                new ProcessStateMessage(ProcessState.RETRY, message).toBytes() /*body*/);
                         getChannel().basicAck(deliveryTag, false);
                         LOG.warn("Acked message ('{}') and published to {}", message.text(), failedExchangeName);
                     } else {

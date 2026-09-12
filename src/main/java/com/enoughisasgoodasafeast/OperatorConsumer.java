@@ -1,5 +1,7 @@
 package com.enoughisasgoodasafeast;
 
+import com.enoughisasgoodasafeast.operator.ProcessState;
+import com.enoughisasgoodasafeast.sndr.ProcessStateMessage;
 import com.rabbitmq.client.*;
 import org.jspecify.annotations.NonNull;
 import org.jspecify.annotations.Nullable;
@@ -56,7 +58,8 @@ public class OperatorConsumer extends BrblConsumer {
                         getChannel().basicAck(deliveryTag, false);
                     } catch (Exception e) {
                         LOG.error("Failed to commit processing for message: {}. Routing to failed queue.", message.id(), e);
-                        getChannel().basicPublish(failedExchangeName, envelope.getRoutingKey(), properties, body);
+                        getChannel().basicPublish(failedExchangeName, envelope.getRoutingKey(), properties,
+                                new ProcessStateMessage(ProcessState.ERROR, message).toBytes() /*body*/);
                         getChannel().basicAck(deliveryTag, false);
                     }
                 }
@@ -65,7 +68,8 @@ public class OperatorConsumer extends BrblConsumer {
                     LOG.error("Failed {}", message);
                     // Put it on the failed message queue
                     LOG.error("Routing message to failed queue {}.", failedExchangeName);
-                    getChannel().basicPublish(failedExchangeName, envelope.getRoutingKey(), properties, body);
+                    getChannel().basicPublish(failedExchangeName, envelope.getRoutingKey(), properties,
+                            new ProcessStateMessage(ProcessState.ERROR, message).toBytes() /*body*/);
                     // Ack the original once its safely in the failed queue.
                     getChannel().basicAck(deliveryTag, false);
                     // Also write to table or file of error messages?
@@ -87,11 +91,12 @@ public class OperatorConsumer extends BrblConsumer {
                     } else {
                         // DRY this up; we're doing the same thing in the ERROR case.
                         // Put it on the failed message queue TODO/FIXME somehow compute the routingKey
-                        getChannel().basicPublish(failedExchangeName, envelope.getRoutingKey(), properties, body);
+                        getChannel().basicPublish(failedExchangeName, envelope.getRoutingKey(), properties,
+                                new ProcessStateMessage(ProcessState.RETRY, message).toBytes() /*body*/);
                         // Ack the original once its safely in the failed queue.
                         getChannel().basicAck(deliveryTag, false);
 
-                        LOG.info("Retries exceeded. Failed: {}", message);
+                        LOG.warn("Retry count {} exceeded limit for {}", numRetries, message);
                     }
                 }
                 case NOOP -> {
