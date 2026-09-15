@@ -142,13 +142,6 @@
             <version>0.14.0</version>
         </dependency>
 
-        <!-- https://mvnrepository.com/artifact/jakarta.persistence/jakarta.persistence-api -->
-        <dependency>
-            <groupId>jakarta.persistence</groupId>
-            <artifactId>jakarta.persistence-api</artifactId>
-            <version>3.2.0</version>
-        </dependency>
-
         <!-- https://mvnrepository.com/artifact/org.jspecify/jspecify -->
         <dependency>
             <groupId>org.jspecify</groupId>
@@ -163,6 +156,14 @@
             <groupId>com.enoughisasgoodasafeast</groupId>
             <artifactId>sndr-gateway-sim</artifactId>
             <version>1.0-SNAPSHOT</version>
+        </dependency>
+
+        <!-- Source: https://mvnrepository.com/artifact/com.bucket4j/bucket4j_jdk17-core -->
+        <dependency>
+            <groupId>com.bucket4j</groupId>
+            <artifactId>bucket4j_jdk17-core</artifactId>
+            <version>8.19.0</version>
+            <scope>compile</scope>
         </dependency>
 
         <!-- The next two includes are only used to generate testing data. No need to include in packaged artifacts. -->

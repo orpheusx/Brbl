@@ -1,9 +1,7 @@
 package com.enoughisasgoodasafeast.integration;
 
 import com.enoughisasgoodasafeast.*;
-import com.enoughisasgoodasafeast.operator.PersistenceManager;
-import com.enoughisasgoodasafeast.operator.ProcessState;
-import com.enoughisasgoodasafeast.operator.TestingPersistenceManager;
+import com.enoughisasgoodasafeast.operator.*;
 import com.enoughisasgoodasafeast.sndr.ProcessStateMessage;
 import com.enoughisasgoodasafeast.sndr.sim.server.TelnyxMessageService;
 import com.enoughisasgoodasafeast.sndr.sim.server.TelnyxServerMain;
@@ -15,12 +13,16 @@ import org.testcontainers.containers.RabbitMQContainer;
 import org.testcontainers.junit.jupiter.Testcontainers;
 
 import java.io.IOException;
+import java.time.Instant;
+import java.time.temporal.ChronoUnit;
 import java.util.List;
 import java.util.Properties;
+import java.util.UUID;
 import java.util.concurrent.Callable;
 import java.util.concurrent.ConcurrentLinkedQueue;
 import java.util.concurrent.TimeoutException;
 
+import static com.enoughisasgoodasafeast.Functions.randomUUID;
 import static com.enoughisasgoodasafeast.integration.IntegrationTestFunctions.loadPropertiesWithContainerOverrides;
 import static com.enoughisasgoodasafeast.sndr.sim.server.TelnyxMessageService.SIGNAL_429_TOO_MANY_RETRY_AFTER;
 import static java.util.concurrent.TimeUnit.MILLISECONDS;
@@ -37,6 +39,8 @@ public class SndrMessageFlowIT {
             "rabbitmq:4.3-management-alpine");
     private static Properties testProps;
     private static WebServer telnyxGateway;
+
+    private static final String ROUTE_CHANNEL = "+17814567890";
 
     private QueueProducer opr8rSurrogate;
     private TestingPersistenceManager persistenceManager;
@@ -60,6 +64,10 @@ public class SndrMessageFlowIT {
     void setUp() throws IOException, TimeoutException, PersistenceManager.PersistenceManagerException {
         opr8rSurrogate = RabbitQueueProducer.createQueueProducer(testProps); // Sends output MTs to the queue Sndr consumes
         persistenceManager = new TestingPersistenceManager();
+        persistenceManager.setActiveRoutes(new Route[]{
+                // Route will use the default mtExpirationMs value (8 hours)
+                new Route(Platform.SMS, ROUTE_CHANNEL, UUID.randomUUID(), randomUUID(), randomUUID(), randomUUID(), randomUUID())
+        });
         sndr = new Sndr(persistenceManager);
         sndr.init(testProps);
 
@@ -88,24 +96,24 @@ public class SndrMessageFlowIT {
     @Test
     void sendMessageToTelnyxBypassBroker() {
         var psk1 = sndr.process(
-                new Message(MessageType.MT, "+17814567890", "+17817209452", "test message1")
+                new Message(MessageType.MT, ROUTE_CHANNEL, "+17817209452", "test message1")
         );
         assertSame(ProcessState.OK, psk1.processState());
 
         var psk2 = sndr.process(
-                new Message(MessageType.MT, "+17814567890", "+17817209453", "test message2")
+                new Message(MessageType.MT, ROUTE_CHANNEL, "+17817209453", "test message2")
         );
         assertSame(ProcessState.OK, psk2.processState());
 
         var psk3 = sndr.process(
-                new Message(MessageType.MT, "+17814567890", "+17817209454", "test message3")
+                new Message(MessageType.MT, ROUTE_CHANNEL, "+17817209454", "test message3")
         );
         assertSame(ProcessState.OK, psk3.processState());
     }
 
     @Test
     void sendMessageViaBroker() {
-        final var message = new Message(MessageType.MT, "+17814567890", "+17817209452", "test message1");
+        final var message = new Message(MessageType.MT, ROUTE_CHANNEL, "+17817209452", "test message1");
         final boolean enqueued = opr8rSurrogate.enqueue(message);
         assertTrue(enqueued);
 
@@ -146,9 +154,19 @@ public class SndrMessageFlowIT {
     }
 
     @Test
+    void sendExpiredMessageViaBroker() {
+
+        var expiredMessage = new Message(UUID.randomUUID(), Instant.now().minus(1, ChronoUnit.DAYS), MessageType.MT, Platform.SMS,
+                ROUTE_CHANNEL, "+17817209452", "This is too old to send.");
+
+        assertTrue(opr8rSurrogate.enqueue(expiredMessage));
+
+    }
+
+    @Test
     void sendRetryMessageViaBroker() {
         final var telnyxSignalledDelay = "=2";
-        final var msgRequireRetry = new Message(MessageType.MT, "+17814567890", "+17817209452",
+        final var msgRequireRetry = new Message(MessageType.MT, ROUTE_CHANNEL, "+17817209452",
                 SIGNAL_429_TOO_MANY_RETRY_AFTER + telnyxSignalledDelay); //
 
         final boolean enqueued = opr8rSurrogate.enqueue(msgRequireRetry);
@@ -183,6 +201,10 @@ public class SndrMessageFlowIT {
 
     private Callable<Boolean> mtRetryCount(ConcurrentLinkedQueue<TelnyxMessageService.MessageErrorList> messages, int expected) {
         return () -> messages.size() >= expected;
+    }
+
+    private Callable<Boolean> mtExpiredAsNoop(SndrConsumer sndrConsumer, int expected) {
+        return () -> !(sndrConsumer.noopCounter.intValue() < expected);
     }
 
 }

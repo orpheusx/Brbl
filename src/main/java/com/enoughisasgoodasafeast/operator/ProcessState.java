@@ -7,5 +7,6 @@ public enum ProcessState {
     OK,     // Processing was successful.
     ERROR,  // Processing failed and we cannot continue processing.
     RETRY,  // Processing failed temporarily
-    NOOP    // No processing was performed
+    NOOP,    // No processing was performed
+    EXPIRED  // Processing was halted; Message is too old
 }

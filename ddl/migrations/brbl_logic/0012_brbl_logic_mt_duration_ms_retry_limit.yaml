@@ -1,0 +1,23 @@
+version_schema: 12
+operations:
+  - add_column:
+      table: routes
+      column:
+        name: mt_expiration_ms
+        type: integer
+        comment: The max time a queued MT can wait to be sent before failing.
+        nullable: false
+        unique: false
+        pk: false
+        # 8 hours
+        default: "28800000"
+  - add_column:
+      table: routes
+      column:
+        name: mt_retry_limit
+        type: integer
+        comment: The max number of retry attempts to send MTs
+        nullable: false
+        unique: false
+        pk: false
+        default: "20"

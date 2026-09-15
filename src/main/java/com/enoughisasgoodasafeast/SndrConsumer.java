@@ -3,7 +3,6 @@ package com.enoughisasgoodasafeast;
 import com.enoughisasgoodasafeast.operator.ProcessState;
 import com.enoughisasgoodasafeast.operator.SndrMessageProcessor;
 import com.enoughisasgoodasafeast.sndr.ProcessStateMessage;
-import com.enoughisasgoodasafeast.sndr.ProcessStateRoutingKey;
 import com.rabbitmq.client.AMQP;
 import com.rabbitmq.client.Channel;
 import com.rabbitmq.client.Envelope;
@@ -11,6 +10,7 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import java.io.IOException;
+import java.util.concurrent.atomic.AtomicInteger;
 
 public class SndrConsumer extends BrblConsumer {
     private static final Logger LOG = LoggerFactory.getLogger(SndrConsumer.class);
@@ -18,6 +18,9 @@ public class SndrConsumer extends BrblConsumer {
     SndrMessageProcessor processor;
     String failedExchangeName;
     String retryExchangeName;
+
+    // TODO add Prometheus Counter to track rates of sends, retries, and fails.
+    public AtomicInteger noopCounter = new AtomicInteger(); // TEMPORARY FOR TESTING PURPOSES.
 
     public SndrConsumer(SndrMessageProcessor processor, Channel channel, String failedExchangeName, String retryExchangeName) {
         super(channel);
@@ -54,7 +57,13 @@ public class SndrConsumer extends BrblConsumer {
                 case ERROR -> {
                     LOG.error("Failed to send {}", message);
                     getChannel().basicPublish(failedExchangeName, envelope.getRoutingKey(), properties,
-                            new ProcessStateMessage(ProcessState.ERROR, message).toBytes() /*body*/);
+                            new ProcessStateMessage(ProcessState.ERROR, message).toBytes());
+                    getChannel().basicAck(deliveryTag, false);
+                }
+                case EXPIRED -> {
+                    LOG.warn("Message expired: {}", message);
+                    getChannel().basicPublish(failedExchangeName, envelope.getRoutingKey(), properties,
+                            new ProcessStateMessage(ProcessState.EXPIRED, message).toBytes());
                     getChannel().basicAck(deliveryTag, false);
                 }
                 case RETRY -> {
@@ -65,7 +74,7 @@ public class SndrConsumer extends BrblConsumer {
                         // fail the message
                         LOG.warn("Retry count {} exceeded limit for {}", numRetries, message);
                         getChannel().basicPublish(failedExchangeName, envelope.getRoutingKey(), properties,
-                                new ProcessStateMessage(ProcessState.RETRY, message).toBytes() /*body*/);
+                                new ProcessStateMessage(ProcessState.RETRY, message).toBytes());
                         getChannel().basicAck(deliveryTag, false);
                         LOG.warn("Acked message ('{}') and published to {}", message.text(), failedExchangeName);
                     } else {
@@ -80,6 +89,7 @@ public class SndrConsumer extends BrblConsumer {
                 case NOOP -> { // Change/add enum: EXPIRE ?
                     LOG.info("FIXME This case makes no sense for Sndr.");
                     getChannel().basicAck(deliveryTag, false);
+                    noopCounter.incrementAndGet();
                 }
             }
         } catch (ClassNotFoundException e) {

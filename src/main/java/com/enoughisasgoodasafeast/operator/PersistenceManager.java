@@ -9,10 +9,7 @@ import org.jspecify.annotations.Nullable;
 import java.sql.Connection;
 import java.sql.SQLException;
 import java.time.Instant;
-import java.util.Collection;
-import java.util.List;
-import java.util.Map;
-import java.util.UUID;
+import java.util.*;
 import java.util.regex.Pattern;
 
 public interface PersistenceManager {
@@ -49,7 +46,13 @@ public interface PersistenceManager {
     Node getNodeGraph(UUID scriptId);
 
     // Called by Operator
-    Route[] getActiveRoutes();
+    @Nullable Route[] getActiveRoutes();
+
+    default @Nullable Route[] getActiveRoutes(Platform platform) {
+        return Arrays.stream(getActiveRoutes())
+                .filter(route -> route.platform().equals(platform))
+                .toArray(Route[]::new);
+    }
 
     boolean updateUserStatus(User user, Platform platform, UserStatus status);
 
