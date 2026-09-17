@@ -25,8 +25,8 @@ public class OperatorTest {
 
     private static final Logger LOG = LoggerFactory.getLogger(OperatorTest.class);
 
-    public static final String MOBILE_CA = "14385551234";  // Quebec, CA
-    public static final String MOBILE_MX = knownNumbersForUsers[9]; // Mexico City, MX
+    public static final String MOBILE_CA = knownNumbersForUsers[10]; // Quebec, CA
+    public static final String MOBILE_MX = knownNumbersForUsers[9];  // Mexico City, MX
     public static final String MOBILE_US = "7815551234";   // Fake US number.
     public static final String SHORT_CODE_1 = "1234";
     public static final String SHORT_CODE_2 = "2345";

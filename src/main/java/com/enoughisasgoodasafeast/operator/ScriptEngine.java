@@ -46,9 +46,9 @@ public class ScriptEngine {
             // This would signal out-of-order processing which Is Bad™
             Message previousInputMessage = session.previousInput();
             if (previousInputMessage != null) {
-                if (previousInputMessage.receivedAt().isAfter(message.receivedAt())) {
+                if (previousInputMessage.createdAt().isAfter(message.createdAt())) {
                     LOG.error("WTF, we processed an MO received later than this one: {} > {}",
-                            previousInputMessage.receivedAt(), message.receivedAt());
+                            previousInputMessage.createdAt(), message.createdAt());
                     // TODO fetch a special script to apologize to the user then replay the Node returned by Session.getScriptForProcessedMO()?
                 }
             }

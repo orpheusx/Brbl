@@ -348,7 +348,9 @@ PostgresPersistenceManager implements PersistenceManager {
                         r.updated_at,
                         (select node_id from scripts where id = r.interrupt_script_id),
                         (select node_id from scripts where id = r.opt_in_script_id),
-                        (select node_id from scripts where id = r.opt_out_script_id)
+                        (select node_id from scripts where id = r.opt_out_script_id),
+                        r.mt_expiration_ms,
+                        r.mt_retry_limit
                     FROM
                         routes r
                     INNER JOIN
@@ -539,7 +541,7 @@ PostgresPersistenceManager implements PersistenceManager {
     private static boolean insertMO(Connection connection, Message message) {
         //Instant before = Instant.now();
         try (PreparedStatement ps = connection.prepareStatement(MO_MESSAGE_INSERT)) {
-            Timestamp timestampFromInstant = Timestamp.from(message.receivedAt());
+            Timestamp timestampFromInstant = Timestamp.from(message.createdAt());
             ps.setObject(1, message.id());
             ps.setTimestamp(2, timestampFromInstant);
             ps.setString(3, message.from());
@@ -697,7 +699,7 @@ PostgresPersistenceManager implements PersistenceManager {
         //Instant before = Instant.now();
         try (PreparedStatement ps = connection.prepareStatement(MT_MESSAGE_INSERT)) {
             ps.setObject(1, message.id());                              // id
-            ps.setTimestamp(2, Timestamp.from(message.receivedAt()));   // sent_at
+            ps.setTimestamp(2, Timestamp.from(message.createdAt()));   // sent_at
             ps.setString(3, message.from());                            // _from
             ps.setString(4, message.to());                              // _to
             ps.setString(5, message.text());                            // _text
@@ -936,9 +938,16 @@ PostgresPersistenceManager implements PersistenceManager {
                 UUID optInNodeId = (UUID) rs.getObject(10);
                 // r.opt_out_script_id
                 UUID optOutNodeId = (UUID) rs.getObject(11);
+                // r.mt_expiration_ms
+                int mtExpirationMs = rs.getInt(12);
+                // r.mt_retry_limit
+                int mtRetryLimit = rs.getInt(13);
 
-                Route route = new Route(id, platform, channel, nodeId, companyId, status, interruptNodeId, optInNodeId, optOutNodeId, createdAt, updatedAt);
+                assert platform != null;
+                Route route = new Route(id, platform, channel, nodeId, companyId, status, interruptNodeId, optInNodeId,
+                        optOutNodeId, mtExpirationMs, mtRetryLimit, createdAt, updatedAt);
                 allRoutes.add(route);
+                LOG.info("Loaded {}", route);
             }
             if (allRoutes.isEmpty()) {
                 return null;

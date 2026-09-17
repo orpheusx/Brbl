@@ -7750,10 +7750,32 @@ Default expiration is 8 hours and retries are capped at 20.
 
 
 TODO
-[X] Design/implement the persistence model for the expiration duration, retry-count limit, etc
-         (Just new columns on the routes table? Reminds me of the lower priority task of adding Change Data Capture via triggers on configuration resources so we record our resource history.)
-[ ] Implement the PersistenceManager interfaces that use these methods.
-[ ] Implement the read-through caches.
-[ ] Write a queue client (ref. DLQLogger) that extracts the 429s, clears their retry-counts and re-enqueues them.
-    (For the legit fails, it writes them to CSVs that can be moved to external storage and later analyzed by DuckDB?)
-[ ] Once the above are working, design integration with Bucket4j (416Kb) /Google's RateLimiter.
+  [X] Design/implement the persistence model for the expiration duration, retry-count limit, etc
+           (Just new columns on the routes table? Reminds me of the lower priority task of adding Change Data Capture via triggers on configuration resources so we record our resource history.)
+  [X] Implement the PersistenceManager interfaces that provide the needed data.
+      (We already had the getActiveRoutes, added a filtering method that can cache just the ones for the supported Platform.)
+  [ ] Implement the read-through caches.
+  [ ] Write a queue client (ref. DLQLogger) that extracts the 429s, clears their retry-counts and re-enqueues them.
+      (For the legit fails, it writes them to CSVs that can be moved to external storage and later analyzed by DuckDB?)
+  [ ] Once the above are working, design integration with Bucket4j (416Kb) /Google's RateLimiter.
+
+
+Sndr: SndrConsumer --process--> MessageProcessor --send--> TelnyxSender
+
+--- 2026/09/16 ---
+TODO
+    [ ] Implement the read-through caches.
+    [ ] Write a queue client (ref. DLQLogger) that extracts the 429s, clears their retry-counts and re-enqueues them.
+        (For the legit fails, it writes them to CSVs that can be moved to external storage and later analyzed by DuckDB?)
+    [ ] Once the above are working, design integration with Bucket4j (416Kb) /Google's RateLimiter.
+
+While setting up a LoadingCache, realized how stinky the getActiveRoutes method is, all in the name of being able to loop through an array of Routes. The nullness of its return value causes problems throughout the relate code. We well recognize the possibility of null with annotations, etc but realistically a null or empty set of routes signals a problem that cannot be recovered from.
+
+Considering the following changes:
+    1) loading the cache at startup.
+    2) throwing a fatal exception if no data is found.
+
+Also, while we're at it we should probably convert all the actual phone numbers in KnownData to be E.164 formatted numbers.
+Need to reload all the data in Postgres...DONE. The numbers in brbl_logic.routes and brbl_users.users now all have a prefixed '+'.
+
+

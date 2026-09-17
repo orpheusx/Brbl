@@ -90,8 +90,8 @@ public class Telecom {
     }
 
     public static boolean isCA(String number) {
-        // e.g. 17815551234
-        String areaCode = number.substring(1, 4);
+        // e.g. +17815551234
+        String areaCode = number.substring(2, 5);
         int index = Integer.parseInt(areaCode);
         // Because the area code is less than the array size (1000), the first element indexed will always be not null
         return CANADA_AREA_CODES[index][0] != null;
@@ -104,8 +104,8 @@ public class Telecom {
      */
     public static String deriveCountryCodeFromId(String from) {
         return switch (from) {
-            case String id when id.length() == 12 && id.startsWith("52") -> "MX";
-            case String id when id.length() == 11 && id.startsWith("1") && Telecom.isCA(id) -> "CA";
+            case String id when id.length() == 13 && id.startsWith("+52") -> "MX";
+            case String id when id.length() == 12 && id.startsWith("+1") && Telecom.isCA(id) -> "CA";
             default -> "US";
         };
     }

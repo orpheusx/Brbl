@@ -80,10 +80,7 @@ public class Operator implements SessionAwareMessageProcessor {
 
     public void init(Properties props) throws IOException, TimeoutException, PersistenceManagerException {
         LOG.info("Initializing Brbl Operator with provided Properties object");
-        if (queueConsumer == null) {
-            queueConsumer = RabbitQueueConsumer.createQueueConsumer(
-                    props, this);
-        }
+
         if (queueProducer == null) {
             queueProducer = RabbitQueueProducer.createQueueProducer(props);
         }
@@ -92,6 +89,10 @@ public class Operator implements SessionAwareMessageProcessor {
             persistenceManager = PostgresPersistenceManager.createPersistenceManager(props);
         }
 
+        if (queueConsumer == null) {
+            queueConsumer = RabbitQueueConsumer.createQueueConsumer(
+                    props, this);
+        }
         // Other resources? Connections to database/distributed caches?
     }
 

@@ -47,16 +47,17 @@ public class KnownData {
     // public static final Platform[] knownPlatformsForUser = {SMS, SMS, SMS, SMS, SMS, SMS, SMS, SMS, SMS, SMS};
 
     public static final String[] knownNumbersForUsers = {
-            "17817209450",  // Massachusetts
-            "14157209451",  // California
-            "17817209452",  // Massachusetts
-            "15167209453",  // Kansas City
-            "17817209454",  // Massachusetts
-            "19297209455",  // NYC
-            "17817209456",  // Massachusetts
-            "19787209457",  // Massachusetts
-            "14167209458",  // Toronto area code.
-            "526641112222", // A very fake number in Mexico City.
+            "+17817209450",  // Massachusetts
+            "+14157209451",  // California
+            "+17817209452",  // Massachusetts
+            "+15167209453",  // Kansas City
+            "+17817209454",  // Massachusetts
+            "+19297209455",  // NYC
+            "+17817209456",  // Massachusetts
+            "+19787209457",  // Massachusetts
+            "+14167209458",  // Toronto area code.
+            "+526641112222", // A very fake number in Mexico City.
+            "+14385551234",   // Quebec
     };
 
     public static final CountryCode[] knownCountryCodes = {US, US, US, US, US, US, US, US, CA, MX};
@@ -106,9 +107,9 @@ public class KnownData {
     };
 
     public static String[][] knownRouteIdsAndChannels = {
-            {"019dca4b-bb1e-756c-9050-7960e5828d68", "17814567890"},
-            {"019dca4b-bb23-7e0d-bfb6-9226d5c4166b", "18163456789"},
-            {"019dca4b-bb23-7091-a32b-66f2e18cd073", "12124468003"}
+            {"019dca4b-bb1e-756c-9050-7960e5828d68", "+17814567890"},
+            {"019dca4b-bb23-7e0d-bfb6-9226d5c4166b", "+18163456789"},
+            {"019dca4b-bb23-7091-a32b-66f2e18cd073", "+12124468003"}
     };
 
     // Associate these with the favorite color script.

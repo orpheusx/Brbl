@@ -3,7 +3,6 @@ package com.enoughisasgoodasafeast.sndr;
 import com.enoughisasgoodasafeast.Message;
 import com.enoughisasgoodasafeast.RetryDelayRoutingKey;
 import com.enoughisasgoodasafeast.operator.PersistenceManager;
-import com.enoughisasgoodasafeast.operator.Platform;
 import com.enoughisasgoodasafeast.operator.ProcessState;
 import com.enoughisasgoodasafeast.sndr.server.model.MessageResponse;
 import com.enoughisasgoodasafeast.sndr.server.model.MessagingErrors;
@@ -20,8 +19,6 @@ import io.helidon.webclient.api.WebClient;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
-import java.time.Instant;
-import java.time.temporal.ChronoUnit;
 import java.util.Optional;
 
 public class TelnyxSender {
@@ -89,21 +86,21 @@ public class TelnyxSender {
          *
          */
 
-    private long expirationForCustomerPlatformNumber(String platformNumber) {
-        // TODO Implement cache
-        final var activeRoutes = persistenceManager.getActiveRoutes(Platform.SMS);
-        if (activeRoutes == null || activeRoutes.length == 0) {
-            throw new IllegalStateException("There are no active SMS routes available!");
-        }
-
-        for (var route : activeRoutes) {
-            if(route.channel().equals(platformNumber)) {
-                return route.mtExpirationMs();
-            }
-        }
-
-        return 60_000;
-    }
+    // private long expirationForCustomerPlatformNumber(String platformNumber) {
+    //     // TODO Implement cache
+    //     final var activeRoutes = persistenceManager.getActiveRoutes(Platform.SMS);
+    //     if (activeRoutes == null || activeRoutes.length == 0) {
+    //         throw new IllegalStateException("There are no active SMS routes available!");
+    //     }
+    //
+    //     for (var route : activeRoutes) {
+    //         if(route.channel().equals(platformNumber)) {
+    //             return route.mtExpirationMs();
+    //         }
+    //     }
+    //
+    //     return 60_000;
+    // }
 
     /**
      * Attempt to hand off the given Message to the Telnyx service.
@@ -121,16 +118,6 @@ public class TelnyxSender {
         // retry delay and put on a delay queue, the second comes along just after the delay expires and is sent immediately, ahead of the first
         // message. A WeakHashMap doesn't quite fit the use case; a time-expired Caffeine cache might...
         // Should we think about sending serially? It would certainly make it easier to think about
-
-        // Check for expired messages
-        var configuredLifetime = expirationForCustomerPlatformNumber(message.from());
-        var now = Instant.now();
-        if (now.isAfter(message.receivedAt().plus(configuredLifetime, ChronoUnit.MILLIS))) {
-            // The message has expired. Don't attempt to send it.
-            LOG.warn("Send time: {}. Configured lifetime: {}. Message expired: {}", now, configuredLifetime, message.receivedAt());
-            return new ProcessStateRoutingKey(ProcessState.EXPIRED, null);
-        }
-
 
         // FIXME need actual params for the fetch with a real PersistenceManager.
         var gwMeta = persistenceManager.fetchGatewayMeta(GatewayProvider.TELNYX, null, null, null);
@@ -189,7 +176,7 @@ public class TelnyxSender {
 
     /**
      * Fit the specified delay to available retry key/queues. Picks the shortest delay that is **at least**
-     * as long as what Telnyx specified. This means we may delay longer than that, but we don't want to balloon the
+     * as long as what Telnyx specified. This means we may delay longer than required, but we don't want to balloon the
      * number of queues we maintain.
      * @param delaySeconds the time Telnyx directed us to wait or when the limit resets.
      * @return the routing key used to pick the correct retry queue.
@@ -202,6 +189,7 @@ public class TelnyxSender {
                 return routingKey;
             }
         }
+        LOG.warn("Telnyx specified delay {} sec exceeds available delay queue. Using DELAY_20M", delaySeconds);
         return RetryDelayRoutingKey.DELAY_20M; // Max delay
     }
 

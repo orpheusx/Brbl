@@ -1,6 +1,7 @@
 package com.enoughisasgoodasafeast.integration;
 
 import com.enoughisasgoodasafeast.*;
+import com.enoughisasgoodasafeast.datagen.KnownData;
 import com.enoughisasgoodasafeast.operator.*;
 import com.enoughisasgoodasafeast.sndr.ProcessStateMessage;
 import com.enoughisasgoodasafeast.sndr.sim.server.TelnyxMessageService;
@@ -37,15 +38,17 @@ public class SndrMessageFlowIT {
 
     private static final RabbitMQContainer brokerContainer = new RabbitMQContainer(
             "rabbitmq:4.3-management-alpine");
-    private static Properties testProps;
-    private static WebServer telnyxGateway;
+    public static final String SUBSCRIBER = "+17817209452";
 
-    private static final String ROUTE_CHANNEL = "+17814567890";
+    static Properties testProps;
+    static WebServer telnyxGateway;
 
-    private QueueProducer opr8rSurrogate;
-    private TestingPersistenceManager persistenceManager;
-    private Sndr sndr;
-    private DLQLogger dlqLogger; // Drains the queue of messages that failed to send.
+    static final String ROUTE_CHANNEL = KnownData.knownRouteIdsAndChannels[0][1]; // "+17814567890";
+
+    QueueProducer opr8rSurrogate;
+    PersistenceManager persistenceManager;
+    Sndr sndr;
+    DLQLogger dlqLogger; // Drains the queue of messages that failed to send.
 
     @BeforeAll
     static void startServicesForAllTests() throws IOException {
@@ -64,7 +67,7 @@ public class SndrMessageFlowIT {
     void setUp() throws IOException, TimeoutException, PersistenceManager.PersistenceManagerException {
         opr8rSurrogate = RabbitQueueProducer.createQueueProducer(testProps); // Sends output MTs to the queue Sndr consumes
         persistenceManager = new TestingPersistenceManager();
-        persistenceManager.setActiveRoutes(new Route[]{
+        ((TestingPersistenceManager) persistenceManager).setActiveRoutes(new Route[]{
                 // Route will use the default mtExpirationMs value (8 hours)
                 new Route(Platform.SMS, ROUTE_CHANNEL, UUID.randomUUID(), randomUUID(), randomUUID(), randomUUID(), randomUUID())
         });
@@ -96,7 +99,7 @@ public class SndrMessageFlowIT {
     @Test
     void sendMessageToTelnyxBypassBroker() {
         var psk1 = sndr.process(
-                new Message(MessageType.MT, ROUTE_CHANNEL, "+17817209452", "test message1")
+                new Message(MessageType.MT, ROUTE_CHANNEL, SUBSCRIBER, "test message1")
         );
         assertSame(ProcessState.OK, psk1.processState());
 
@@ -113,7 +116,7 @@ public class SndrMessageFlowIT {
 
     @Test
     void sendMessageViaBroker() {
-        final var message = new Message(MessageType.MT, ROUTE_CHANNEL, "+17817209452", "test message1");
+        final var message = new Message(MessageType.MT, ROUTE_CHANNEL, SUBSCRIBER, "test message1");
         final boolean enqueued = opr8rSurrogate.enqueue(message);
         assertTrue(enqueued);
 
@@ -134,8 +137,8 @@ public class SndrMessageFlowIT {
 
     @Test
     void sendFailingMessageViaBroker() {
-        // A message where the "to" and "from" fields are wrong.
-        final var message = new Message(MessageType.MT, "+1781456F0F0", "17817209452", "_");
+        // A message where the "to" field is wrong.
+        final var message = new Message(MessageType.MT, ROUTE_CHANNEL, "+1781456F0F0", "_");
         final boolean enqueued = opr8rSurrogate.enqueue(message);
         assertTrue(enqueued);
 
@@ -156,17 +159,25 @@ public class SndrMessageFlowIT {
     @Test
     void sendExpiredMessageViaBroker() {
 
-        var expiredMessage = new Message(UUID.randomUUID(), Instant.now().minus(1, ChronoUnit.DAYS), MessageType.MT, Platform.SMS,
-                ROUTE_CHANNEL, "+17817209452", "This is too old to send.");
+        var expiringMessage = new Message(UUID.randomUUID(), Instant.now().minus(1, ChronoUnit.DAYS), MessageType.MT, Platform.SMS,
+                ROUTE_CHANNEL, SUBSCRIBER, "This is too old to send.");
 
-        assertTrue(opr8rSurrogate.enqueue(expiredMessage));
+        assertTrue(opr8rSurrogate.enqueue(expiringMessage));
+
+        var expiredMessages = dlqLogger.getDeadMessages();
+        // Expired messages should be sent to the DLQ.
+        await().atMost(2, SECONDS).until(anyDeadMessages(expiredMessages));
+
+        var expiredRecord = expiredMessages.getFirst();
+        assertSame(ProcessState.EXPIRED, expiredRecord.processState());
+        assertEquals(expiringMessage, expiredRecord.message());
 
     }
 
     @Test
     void sendRetryMessageViaBroker() {
         final var telnyxSignalledDelay = "=2";
-        final var msgRequireRetry = new Message(MessageType.MT, ROUTE_CHANNEL, "+17817209452",
+        final var msgRequireRetry = new Message(MessageType.MT, ROUTE_CHANNEL, SUBSCRIBER,
                 SIGNAL_429_TOO_MANY_RETRY_AFTER + telnyxSignalledDelay); //
 
         final boolean enqueued = opr8rSurrogate.enqueue(msgRequireRetry);
@@ -201,10 +212,6 @@ public class SndrMessageFlowIT {
 
     private Callable<Boolean> mtRetryCount(ConcurrentLinkedQueue<TelnyxMessageService.MessageErrorList> messages, int expected) {
         return () -> messages.size() >= expected;
-    }
-
-    private Callable<Boolean> mtExpiredAsNoop(SndrConsumer sndrConsumer, int expected) {
-        return () -> !(sndrConsumer.noopCounter.intValue() < expected);
     }
 
 }
