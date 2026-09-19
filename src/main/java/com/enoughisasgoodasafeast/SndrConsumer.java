@@ -19,9 +19,6 @@ public class SndrConsumer extends BrblConsumer {
     String failedExchangeName;
     String retryExchangeName;
 
-    // TODO add Prometheus Counter to track rates of sends, retries, and fails.
-    public AtomicInteger noopCounter = new AtomicInteger(); // TEMPORARY FOR TESTING PURPOSES.
-
     public SndrConsumer(SndrMessageProcessor processor, Channel channel, String failedExchangeName, String retryExchangeName) {
         super(channel);
         this.processor = processor;
@@ -35,7 +32,8 @@ public class SndrConsumer extends BrblConsumer {
      * @param envelope packaging data for the message
      * @param properties content header data for the message
      * @param body the message body (opaque, client-specific byte array)
-     * @throws IOException if unable to deserialize a message.
+     * @throws IOException if unable to deserialize a message or a queueing
+     *  operation has a problem.
      */
 
     @Override
@@ -89,7 +87,6 @@ public class SndrConsumer extends BrblConsumer {
                 case NOOP -> { // Change/add enum: EXPIRE ?
                     LOG.info("FIXME This case makes no sense for Sndr.");
                     getChannel().basicAck(deliveryTag, false);
-                    noopCounter.incrementAndGet();
                 }
             }
         } catch (ClassNotFoundException e) {

@@ -4,6 +4,7 @@ import com.enoughisasgoodasafeast.ConfigLoader;
 import com.enoughisasgoodasafeast.Message;
 import com.enoughisasgoodasafeast.sndr.GatewayMeta;
 import com.enoughisasgoodasafeast.sndr.GatewayProvider;
+import com.enoughisasgoodasafeast.sndr.TelnyxMeta;
 import com.mchange.v2.c3p0.ComboPooledDataSource;
 import org.jspecify.annotations.NonNull;
 import org.jspecify.annotations.Nullable;
@@ -1268,7 +1269,8 @@ PostgresPersistenceManager implements PersistenceManager {
 //    }
 
     public @Nullable GatewayMeta fetchGatewayMeta(GatewayProvider gatewayProvider, Company company, Platform platform, Route route) {
-        return null; // FIXME implement!!!
+        // FIXME we need an actual implementation here
+        return new TelnyxMeta("01a04ddd-624b-77ef-baac-e628266ff986", "PLACEHOLDER_API_KEY");
     }
 
     public @NonNull Collection<CampaignUser> getPushCampaignUsers(@NonNull UUID campaignId, DeliveryStatus byStatus) {

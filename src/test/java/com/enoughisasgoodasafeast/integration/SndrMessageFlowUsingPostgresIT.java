@@ -1,9 +1,11 @@
 package com.enoughisasgoodasafeast.integration;
 
+import ch.qos.logback.classic.Level;
 import com.enoughisasgoodasafeast.*;
 import com.enoughisasgoodasafeast.datagen.KnownData;
 import com.enoughisasgoodasafeast.operator.*;
 import com.enoughisasgoodasafeast.sndr.ProcessStateMessage;
+import com.enoughisasgoodasafeast.sndr.sim.server.TelnyxMessageService;
 import com.enoughisasgoodasafeast.sndr.sim.server.TelnyxServerMain;
 import io.helidon.webserver.WebServer;
 import org.junit.jupiter.api.*;
@@ -19,6 +21,7 @@ import java.util.List;
 import java.util.Properties;
 import java.util.UUID;
 import java.util.concurrent.Callable;
+import java.util.concurrent.ConcurrentLinkedQueue;
 import java.util.concurrent.TimeoutException;
 
 import static com.enoughisasgoodasafeast.integration.IntegrationTestFunctions.loadPropertiesWithContainerOverrides;
@@ -47,9 +50,9 @@ public class SndrMessageFlowUsingPostgresIT {
     DLQLogger dlqLogger; // Drains the queue of messages that failed to send.
 
     @BeforeEach
-    void setUp() throws IOException, TimeoutException, PersistenceManager.PersistenceManagerException {
+    void setUp() throws IOException, TimeoutException, PersistenceManager.PersistenceManagerException, CriticalConfigException {
         opr8rSurrogate = RabbitQueueProducer.createQueueProducer(testProps);
-        PostgresPersistenceManager.createPersistenceManager(testProps);
+        persistenceManager = PostgresPersistenceManager.createPersistenceManager(testProps);
 
         sndr = new Sndr(persistenceManager);
         sndr.init(testProps);
@@ -67,9 +70,9 @@ public class SndrMessageFlowUsingPostgresIT {
         try {
             if (dlqLogger != null) dlqLogger.stopConsuming();
             LOG.info("DLQ consumer shut down");
-            if(opr8rSurrogate!=null) opr8rSurrogate.shutdown();
+            if (opr8rSurrogate != null) opr8rSurrogate.shutdown();
             LOG.info("QueueProducer simulating Opr8r shut down");
-            if(sndr!=null) sndr.shutdown();
+            if (sndr != null) sndr.shutdown();
 
         } catch (IOException | TimeoutException e) {
             LOG.warn(e.getMessage());
@@ -78,6 +81,9 @@ public class SndrMessageFlowUsingPostgresIT {
 
     @BeforeAll
     static void startServicesForAllTests() throws IOException {
+        // TODO setup some infra to set this in each services' main from a property/env var.
+        ((ch.qos.logback.classic.Logger) LoggerFactory.getLogger("com.enoughisasgoodasafeast")).setLevel(Level.INFO);
+
         brokerContainer.start();
         testProps = loadPropertiesWithContainerOverrides(brokerContainer, "sndr_message_flow_it.properties");
         telnyxGateway = TelnyxServerMain.startServer();
@@ -107,8 +113,41 @@ public class SndrMessageFlowUsingPostgresIT {
 
     }
 
+    @Test
+    void load() {
+
+        int max = 100;
+
+        final Instant start = Instant.now();
+        for (int i = 0; i < max; i++) {
+            final var message = new Message(MessageType.MT, Platform.SMS,
+                    ROUTE_CHANNEL, SUBSCRIBER, "message text number " + i);
+            opr8rSurrogate.enqueue(message);
+        }
+
+        var afterEnqueue = Instant.now();
+        LOG.info("Enqueued {} in {} ms", max, afterEnqueue.toEpochMilli() - start.toEpochMilli());
+
+        final var sentMessages = TelnyxServerMain.getTelnyxMessageService().sentMessages;
+        await().atMost(10, SECONDS).until(countMtAcceptedEquals(sentMessages, max));
+
+        var delta = Instant.now().toEpochMilli() - start.toEpochMilli();
+        LOG.info("Accepted {} in {} ms", max, delta);
+
+        // 1000 msg sent with a limit of 50/sec requires should require at least 20 seconds to send. If we finished sooner we're over the limit.
+        assertTrue(delta >= 2_000, "Rate limit exceeded: " + max + " in " + delta + " rate: " + delta/max);
+    }
+
     private Callable<Boolean> anyDeadMessages(List<ProcessStateMessage> deadMessages) {
         return () -> !deadMessages.isEmpty();
+    }
+
+    private Callable<Boolean> countMtAcceptedEquals(ConcurrentLinkedQueue<TelnyxMessageService.IdMessage> sentMessages, int count) {
+        return () -> {
+            int numSent = sentMessages.size();
+            //LOG.info("sent={}", numSent);
+            return (numSent >= count);
+        };
     }
 
 }

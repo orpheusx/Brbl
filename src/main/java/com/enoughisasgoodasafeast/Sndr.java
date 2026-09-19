@@ -17,6 +17,7 @@ import java.time.temporal.ChronoUnit;
 import java.util.Properties;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.TimeoutException;
+import java.util.concurrent.atomic.AtomicInteger;
 
 public class Sndr implements SndrMessageProcessor {
 
@@ -47,11 +48,15 @@ public class Sndr implements SndrMessageProcessor {
         this.telnyxSender = new TelnyxSender(persistenceManager);
     }
 
-    public void init(Properties properties) throws IOException, TimeoutException, PersistenceManagerException {
+    public void init(Properties properties) throws IOException, TimeoutException, PersistenceManagerException, CriticalConfigException {
         LOG.info("Initializing SNDR");
 
         if (persistenceManager == null) {
             persistenceManager = PostgresPersistenceManager.createPersistenceManager(properties);
+            // Preload the routing data on startup, fail fast if none is available before we try processing from the queue.
+            if(null == activeRoutesCache.get("ALL")) {
+                throw new CriticalConfigException("No routing information found.");
+            }
         }
 
         if (telnyxSender == null) {
@@ -63,6 +68,12 @@ public class Sndr implements SndrMessageProcessor {
         }
     }
 
+    public final AtomicInteger okCounter = new AtomicInteger();
+    public final AtomicInteger failCounter = new AtomicInteger();
+    public final AtomicInteger retryCounter = new AtomicInteger();
+    public final AtomicInteger expiredCounter = new AtomicInteger();
+    //public final AtomicInteger noOpCounter = new AtomicInteger();
+
     @Override
     public ProcessStateRoutingKey process(Message message) {
         LOG.info("Processing outbound message: {}", message);
@@ -71,6 +82,7 @@ public class Sndr implements SndrMessageProcessor {
         var route = findRoute(message.platform(), message.from());
         if(route == null) {
             LOG.error("CRITICAL_CONFIG_ERROR: No route found for message {}", message);
+            failCounter.incrementAndGet();
             return new ProcessStateRoutingKey(ProcessState.ERROR, null);
         }
 
@@ -80,10 +92,20 @@ public class Sndr implements SndrMessageProcessor {
         if (now.isAfter(message.createdAt().plus(configuredLifetime, ChronoUnit.MILLIS))) {
             // The message has expired. Don't attempt to send it.
             LOG.warn("Send time: {}. Configured lifetime: {}. Message expired: {}", now, configuredLifetime, message.createdAt());
+            expiredCounter.incrementAndGet();
             return new ProcessStateRoutingKey(ProcessState.EXPIRED, null);
         }
 
-        return telnyxSender.send(message);
+        final ProcessStateRoutingKey sendResult = telnyxSender.send(message);
+        switch (sendResult.processState()) {
+            case OK -> okCounter.incrementAndGet();
+            case ERROR -> failCounter.incrementAndGet();
+            case RETRY -> retryCounter.incrementAndGet();
+            //            case EXPIRED -> expiredCounter.incrementAndGet();
+            //            case NOOP -> noOpCounter.incrementAndGet();
+        }
+
+        return sendResult;
     }
 
     @Nullable Route findRoute(@NonNull Platform platform, @NonNull String channel) {
@@ -118,7 +140,7 @@ public class Sndr implements SndrMessageProcessor {
     }
 
     // Called by Brbl.main
-    public static void main(String[] args) throws IOException, TimeoutException, PersistenceManagerException {
+    public static void main(String[] args) throws IOException, TimeoutException, PersistenceManagerException, CriticalConfigException {
         final Sndr sndr = new Sndr();
         final Properties properties = ConfigLoader.readConfig("sndr.properties");
         sndr.init(properties);

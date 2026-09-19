@@ -10,6 +10,8 @@ import com.fasterxml.jackson.annotation.JsonInclude;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.databind.PropertyNamingStrategies;
 import com.fasterxml.jackson.datatype.jsr310.JavaTimeModule;
+import io.github.bucket4j.Bucket;
+import io.github.bucket4j.VerboseBlockingBucket;
 import io.helidon.config.Config;
 import io.helidon.http.*;
 import io.helidon.http.media.MediaSupport;
@@ -19,6 +21,7 @@ import io.helidon.webclient.api.WebClient;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
+import java.time.Duration;
 import java.util.Optional;
 
 public class TelnyxSender {
@@ -30,6 +33,7 @@ public class TelnyxSender {
 
     private final PersistenceManager persistenceManager;
     private final WebClient client;
+    private final VerboseBlockingBucket rateLimiter;
 
     public TelnyxSender(PersistenceManager persistenceManager) {
 
@@ -72,6 +76,14 @@ public class TelnyxSender {
                 .build();
 
         LOG.info(config.get("telnyx-sender").get("base-uri").toString());
+
+        rateLimiter = Bucket.builder()
+                .addLimit(limit -> limit
+                        .capacity(35)
+                        //.refillIntervally(35, Duration.ofSeconds(1)))
+                        .refillGreedy(35, Duration.ofSeconds(1)))
+                .build().asBlocking().asVerbose();
+
     }
 
         /*
@@ -109,7 +121,6 @@ public class TelnyxSender {
      *  (or null if no retry is needed.)
      */
     public ProcessStateRoutingKey send(Message message) {
-
         LOG.info("Sending message: {}", message);
         // We're assuming that we have one instance of a Sender for each third-party we work with.
         // I think we need to track company-scoped (assuming each has their own messaging_profile_id) and SessionKey-scoped throttle state where
@@ -122,6 +133,15 @@ public class TelnyxSender {
         // FIXME need actual params for the fetch with a real PersistenceManager.
         var gwMeta = persistenceManager.fetchGatewayMeta(GatewayProvider.TELNYX, null, null, null);
 
+//        LOG.info("Requesting send token...");
+//        rateLimiter.tryConsume(1);
+        try {
+            rateLimiter.consume(1); // mix of fast and slow client could be a problem; virtual thread pool?
+        } catch (InterruptedException e) {
+            throw new RuntimeException(e);
+        }
+//        LOG.info("Got send token.");
+
         try (final HttpClientResponse res = client.post().submit(gwMeta.toGatewayMessage(message))) {
             final var status = res.status();
             final var headers = res.headers();
@@ -129,19 +149,19 @@ public class TelnyxSender {
             return switch (status.code()) {
 
                 case 200 -> {
-                    LOG.info("200: {}", res.as(MessageResponse.class));
+                    LOG.debug("200: {} -> {}", message.id(), res.as(MessageResponse.class).getData().getId());
                     yield new ProcessStateRoutingKey(ProcessState.OK);
                 }
                 case 429 -> {
-                    LOG.info("429: {}", res.as(MessagingErrors.class)); // temporary failure
+                    LOG.debug("429: {}", res.as(MessagingErrors.class)); // temporary failure
                     yield new ProcessStateRoutingKey(ProcessState.RETRY, routingKeyForDelay(headers));
                 }
                 case 422 -> {
-                    LOG.info("422: {}", res.as(MessagingErrors.class)); // e.g. conflicting message properties
+                    LOG.debug("422: {}", res.as(MessagingErrors.class)); // e.g. conflicting message properties
                     yield new ProcessStateRoutingKey(ProcessState.ERROR);
                 }
                 case 400 -> {
-                    LOG.info("400: {}", res.as(MessagingErrors.class)); // e.g. wrong/missing message properties
+                    LOG.debug("400: {}", res.as(MessagingErrors.class)); // e.g. wrong/missing message properties
                     yield new ProcessStateRoutingKey(ProcessState.ERROR);
                 }
                 default -> {

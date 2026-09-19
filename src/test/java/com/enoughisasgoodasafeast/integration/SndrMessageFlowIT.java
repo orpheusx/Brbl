@@ -64,7 +64,7 @@ public class SndrMessageFlowIT {
     }
 
     @BeforeEach
-    void setUp() throws IOException, TimeoutException, PersistenceManager.PersistenceManagerException {
+    void setUp() throws IOException, TimeoutException, PersistenceManager.PersistenceManagerException, CriticalConfigException {
         opr8rSurrogate = RabbitQueueProducer.createQueueProducer(testProps); // Sends output MTs to the queue Sndr consumes
         persistenceManager = new TestingPersistenceManager();
         ((TestingPersistenceManager) persistenceManager).setActiveRoutes(new Route[]{

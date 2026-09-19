@@ -79,7 +79,7 @@ public class Operator implements SessionAwareMessageProcessor {
     }
 
     public void init(Properties props) throws IOException, TimeoutException, PersistenceManagerException {
-        LOG.info("Initializing Brbl Operator with provided Properties object");
+        LOG.info("Initializing OPR8R");
 
         if (queueProducer == null) {
             queueProducer = RabbitQueueProducer.createQueueProducer(props);
