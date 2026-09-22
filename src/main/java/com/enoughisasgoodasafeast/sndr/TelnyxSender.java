@@ -65,23 +65,26 @@ public class TelnyxSender {
         //            "send_at":null,
         //            "encoding":"auto"
         //  }
+
         client = WebClient.builder()
                 .config(config.get("telnyx-sender"))
                 // TODO Can we set the Bearer header with our API key here or does it happen each time we make a post?
                 .addMediaSupport(snakeCaseSupport)
-                // FIXME implement a secure means of providing auth...
+                // FIXME implement a secure means of retrieving the appropriate auth token...
                 .addHeader(HeaderValues.create(HeaderNames.AUTHORIZATION, "Bearer " + "foobar"))
-                //.addService(WebClientTracing.create())
-                // TODO See application.yaml to enable TLS setup.
+                    //.addService(WebClientTracing.create())
+                    // TODO See application.yaml to enable TLS setup.
                 .build();
 
         LOG.info(config.get("telnyx-sender").get("base-uri").toString());
 
+        // TODO We need a separate limiter for each customer's
         rateLimiter = Bucket.builder()
-                .addLimit(limit -> limit
-                        .capacity(35)
-                        //.refillIntervally(35, Duration.ofSeconds(1)))
-                        .refillGreedy(35, Duration.ofSeconds(1)))
+                .addLimit(limit ->
+                        limit.capacity(35)
+                        // Either of these methods seem to work, at least for our integration tests.
+                        .refillIntervally(35, Duration.ofSeconds(1)))
+                        //  .refillGreedy(35, Duration.ofSeconds(1)))
                 .build().asBlocking().asVerbose();
 
     }
@@ -97,22 +100,6 @@ public class TelnyxSender {
          *       sessionScopeMessages.add(message)
          *
          */
-
-    // private long expirationForCustomerPlatformNumber(String platformNumber) {
-    //     // TODO Implement cache
-    //     final var activeRoutes = persistenceManager.getActiveRoutes(Platform.SMS);
-    //     if (activeRoutes == null || activeRoutes.length == 0) {
-    //         throw new IllegalStateException("There are no active SMS routes available!");
-    //     }
-    //
-    //     for (var route : activeRoutes) {
-    //         if(route.channel().equals(platformNumber)) {
-    //             return route.mtExpirationMs();
-    //         }
-    //     }
-    //
-    //     return 60_000;
-    // }
 
     /**
      * Attempt to hand off the given Message to the Telnyx service.
@@ -133,14 +120,13 @@ public class TelnyxSender {
         // FIXME need actual params for the fetch with a real PersistenceManager.
         var gwMeta = persistenceManager.fetchGatewayMeta(GatewayProvider.TELNYX, null, null, null);
 
-//        LOG.info("Requesting send token...");
-//        rateLimiter.tryConsume(1);
         try {
-            rateLimiter.consume(1); // mix of fast and slow client could be a problem; virtual thread pool?
+            rateLimiter.consume(1);
         } catch (InterruptedException e) {
-            throw new RuntimeException(e);
+            // Not sure what might be triggering this so not sure the best way to handle it.
+            LOG.warn("Interrupted in rate-limiter: {}", e.getMessage());
+            Thread.currentThread().interrupt();
         }
-//        LOG.info("Got send token.");
 
         try (final HttpClientResponse res = client.post().submit(gwMeta.toGatewayMessage(message))) {
             final var status = res.status();

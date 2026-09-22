@@ -10,7 +10,6 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import java.io.IOException;
-import java.util.concurrent.atomic.AtomicInteger;
 
 public class SndrConsumer extends BrblConsumer {
     private static final Logger LOG = LoggerFactory.getLogger(SndrConsumer.class);
@@ -51,6 +50,7 @@ public class SndrConsumer extends BrblConsumer {
                     LOG.info("Sent {}", message);
                     getChannel().basicAck(deliveryTag, false);
                     // TODO add .complete(Message,correlating_gateway_id) to write a log to a (new) table
+
                 }
                 case ERROR -> {
                     LOG.error("Failed to send {}", message);
@@ -75,6 +75,7 @@ public class SndrConsumer extends BrblConsumer {
                                 new ProcessStateMessage(ProcessState.RETRY, message).toBytes());
                         getChannel().basicAck(deliveryTag, false);
                         LOG.warn("Acked message ('{}') and published to {}", message.text(), failedExchangeName);
+
                     } else {
                         properties = incrementBrblRetryCount(properties, numRetries);
                         routeToDelayBucket(getChannel(), retryExchangeName, deliveryTag,

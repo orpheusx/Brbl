@@ -19,13 +19,6 @@ public record TelnyxMeta(String messagingProfileId, String bearerAPIKey) impleme
         cmr.setText(message.text());
         cmr.setType(CreateMessageRequest.TypeEnum.SMS);
 
-                //String from, String messagingProfileId, String to, String text,
-//                message.from(), KnownData.TELNYX_MESSAGING_PROFILE_IDS[0], message.to(), message.text(),
-                // String subject, List<String> mediaUrls, String webhookUrl, String webhookFailoverUrl, Boolean useProfileWebhooks,
-//                null, null, null, null, true,
-                // CreateMessageRequest.TypeEnum type, Boolean autoDetect, Object sendAt, CreateMessageRequest.EncodingEnum encoding
-//                CreateMessageRequest.TypeEnum.SMS, true, null, CreateMessageRequest.EncodingEnum.AUTO
-//        );
         return cmr;
     }
 
