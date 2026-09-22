@@ -7856,7 +7856,7 @@ CREATE TABLE brbl_logic.route_info (
     rate_limit          varchar(20) NOT NULL,
     mt_expiration_ms    integer NOT NULL DEFAULT 28800000,
     mt_retry_limit      integer NOT NULL DEFAULT 20,
-    route_id            uuid NOT NULL
+    route_id            uuid NOT NULL,
     created_at          TIMESTAMP WITH TIME ZONE NOT NULL,
     updated_at          TIMESTAMP WITH TIME ZONE NOT NULL,
 
@@ -7865,6 +7865,13 @@ CREATE TABLE brbl_logic.route_info (
     FOREIGN KEY (route_id) REFERENCES routes (id)
 );
 
-[ ] Create record class for RouteInfo
-[ ] Define & execute DDL (type and table)
-[ ] Write query/method to fetch route_info
+[X] Create record class for RouteInfo
+[X] Backup database:
+    pg_dumpall > backups/full_cluster_backup_20260922_01.sql
+    pg_dump -d brbl_db_dev -Fc -Z6 > backups/db_only_backup_compressed_20260922_01.sql
+    pg_dump -d brbl_db_dev --schema-only > ddl/brbl_db_schema_20260922_01.ddl
+[X] Define & execute DDL (type and table) via pgroll/run_migration.py
+[X] Create known_route_info.tsv data and add to delete/load sql files.
+[X] Write query/method to fetch route_info
+
+

@@ -1,0 +1,50 @@
+version_schema: 13
+operations:
+  - create_table:
+      name: "route_info"
+      columns:
+        - name: "id"
+          type: "uuid"
+          nullable: false
+          pk: true
+        - name: "gateway"
+          type: "brbl_logic.gateway_provider"
+          nullable: false
+          default: "'TELNYX'"
+        - name: "provider_id"
+          type: "varchar(2048)"
+          nullable: false
+        - name: "auth"
+          type: "varchar(48)"
+          nullable: false
+        - name: "rate_limit"
+          type: "varchar(20)"
+          nullable: false
+        - name: "mt_expiration_ms"
+          type: "integer"
+          nullable: false
+          default: "28800000"
+        - name: "mt_retry_limit"
+          type: "integer"
+          nullable: false
+          default: "20"
+        - name: "route_id"
+          type: "uuid"
+          nullable: false
+          references:
+            name: "fk_route_info_routes"
+            table: "routes"
+            column: "id"
+        - name: "created_at"
+          type: "TIMESTAMP WITH TIME ZONE"
+          nullable: false
+        - name: "updated_at"
+          type: "TIMESTAMP WITH TIME ZONE"
+          nullable: false
+      constraints:
+        - name: "route_info_gateway_provider_id_route_id_key"
+          type: "unique"
+          columns:
+            - "gateway"
+            - "provider_id"
+            - "route_id"

@@ -2,6 +2,7 @@ BEGIN TRANSACTION ;
 DELETE FROM brbl_logic.campaign_users WHERE delivered IN ('PENDING', 'SENT');
 DELETE FROM brbl_logic.push_campaigns WHERE created_at > '1980-01-01';
 DELETE FROM brbl_logic.keywords WHERE created_at > '1980-01-01';
+DELETE FROM brbl_logic.route_info WHERE created_at > '1980-01-01';
 DELETE FROM brbl_logic.routes WHERE created_at > '1980-01-01';
 DELETE FROM brbl_logic.scripts WHERE created_at > '1980-01-01';
 DELETE FROM brbl_logic.sessions WHERE created_at > '1980-01-01';

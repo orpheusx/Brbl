@@ -131,3 +131,10 @@ GRANT SELECT ON TABLE brbl_logic.routes TO brbl_sndr;
 GRANT SELECT ON TABLE brbl_logic_12.routes TO brbl_sndr;
 GRANT SELECT ON TABLE brbl_logic.scripts TO brbl_sndr;
 GRANT SELECT ON TABLE brbl_logic_12.scripts TO brbl_sndr;
+
+-- 2026/09/22 Allow brbl_sndr access to the new table, route_info.
+GRANT USAGE ON SCHEMA brbl_logic TO brbl_sndr;
+GRANT USAGE ON SCHEMA brbl_logic_13 TO brbl_sndr;
+GRANT SELECT ON TABLE brbl_logic.route_info TO brbl_sndr;
+GRANT SELECT ON TABLE brbl_logic_13.route_info TO brbl_sndr;
+
