@@ -29,6 +29,7 @@ public record RouteInfo(@NonNull UUID id,
                         @NonNull String authorization,
                         @NonNull String rateLimitExpression,
                         @NonNull UUID routeId,
+                        @NonNull String channel,
                         int mtExpirationMs,
                         int mtRetryLimit,
                         @NonNull Instant createdAt,
@@ -39,16 +40,16 @@ public record RouteInfo(@NonNull UUID id,
 
     public RouteInfo(@NonNull GatewayProvider gatewayProvider, @NonNull String provider_id,
                      @NonNull String authorization, @NonNull String rateLimitExpression,
-                     @NonNull UUID routeId) {
+                     @NonNull UUID routeId, @NonNull String channel) {
         var now = Instant.now();
-        this(randomUUID(), gatewayProvider, provider_id, authorization, rateLimitExpression, routeId,
+        this(randomUUID(), gatewayProvider, provider_id, authorization, rateLimitExpression, routeId, channel,
                 DEFAULT_EXPIRATION_MS, DEFAULT_RETRY_LIMIT, now, now);
     }
 
     // Initially we only have the one provider. This is the most fully defaulted version.
-    public RouteInfo(@NonNull String provider_id, @NonNull String authorization, @NonNull UUID routeId) {
+    public RouteInfo(@NonNull String provider_id, @NonNull String authorization, @NonNull UUID routeId, @NonNull String channel) {
         var now = Instant.now();
-        this(randomUUID(), GatewayProvider.TELNYX, provider_id, authorization, "35|35|I", routeId,
+        this(randomUUID(), GatewayProvider.TELNYX, provider_id, authorization, "35|35|I", routeId, channel,
                 DEFAULT_EXPIRATION_MS, DEFAULT_RETRY_LIMIT, now, now);
     }
 

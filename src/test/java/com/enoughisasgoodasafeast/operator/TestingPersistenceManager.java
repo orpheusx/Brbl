@@ -4,6 +4,7 @@ import com.enoughisasgoodasafeast.Message;
 import com.enoughisasgoodasafeast.datagen.KnownData;
 import com.enoughisasgoodasafeast.sndr.GatewayMeta;
 import com.enoughisasgoodasafeast.sndr.GatewayProvider;
+import com.enoughisasgoodasafeast.sndr.RouteInfo;
 import com.enoughisasgoodasafeast.sndr.TelnyxMeta;
 import org.jspecify.annotations.NonNull;
 import org.jspecify.annotations.Nullable;
@@ -33,6 +34,7 @@ public class TestingPersistenceManager implements PersistenceManager {
     private final Map<UUID, Node> nodesById = new HashMap<>();
 
     private Route[] routes;
+    private List<RouteInfo> routeInfo;
     private boolean isFailInsertNewUser;
     private boolean isFailLoadSession = false;
 
@@ -149,15 +151,24 @@ public class TestingPersistenceManager implements PersistenceManager {
         return routes;
     }
 
+    public void setActiveRoutes(Route[] routes) {
+        LOG.info("setActiveRoutes");
+        this.routes = routes;
+    }
+
+    @Override
+    public @Nullable List<RouteInfo> getRouteInfo(GatewayProvider gateway, RouteStatus status, Platform platform/*, String channel*/) {
+        return this.routeInfo;
+    }
+
+    public void setRouteInfo(List<RouteInfo> routeInfo) {
+        this.routeInfo = routeInfo;
+    }
+
     @Override
     public boolean updateUserStatus(User user, Platform platform, UserStatus status) {
         LOG.info("updateUserStatus");
         return true;
-    }
-
-    public void setActiveRoutes(Route[] routes) {
-        LOG.info("setActiveRoutes");
-        this.routes = routes;
     }
 
     private final Map<UUID, byte[]> savedSessions = new HashMap<>();

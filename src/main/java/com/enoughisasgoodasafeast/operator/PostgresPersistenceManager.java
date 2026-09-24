@@ -370,6 +370,7 @@ PostgresPersistenceManager implements PersistenceManager {
                            i.auth,
                            i.rate_limit,
                            i.route_id,
+                           r.channel,
                            i.mt_expiration_ms,
                            i.mt_retry_limit,
                            i.created_at,
@@ -385,8 +386,6 @@ PostgresPersistenceManager implements PersistenceManager {
                         r.status = ?::brbl_logic.route_status
                         AND
                         r.platform = ?::brbl_logic.platform
-                        AND
-                        r.channel = ?
                     """;
 
 
@@ -1302,56 +1301,68 @@ PostgresPersistenceManager implements PersistenceManager {
         return new TelnyxMeta("01a04ddd-624b-77ef-baac-e628266ff986", "PLACEHOLDER_API_KEY");
     }
 
-    public @Nullable RouteInfo getRouteInfo(GatewayProvider gateway, RouteStatus status, Platform platform, String channel) {
+    public @Nullable List<RouteInfo> getRouteInfo(GatewayProvider gateway, RouteStatus status, Platform platform/*, String channel*/) {
         try (Connection connection = fetchConnection()) {
-            return getRouteInfo(connection, gateway, status, platform, channel);
+            return getRouteInfo(connection, gateway, status, platform);
         } catch (SQLException e) {
             LOG.error("getRouteInfo: fetchConnection failed", e);
             throw new RuntimeException(e);
         }
     }
 
-    private @Nullable RouteInfo getRouteInfo(@NonNull Connection connection,
+    private @Nullable List<RouteInfo> getRouteInfo(@NonNull Connection connection,
                                              @NonNull GatewayProvider gateway,
                                              @NonNull RouteStatus status,
-                                             @NonNull Platform platform,
-                                             @NonNull String channel) throws SQLException {
+                                             @NonNull Platform platform) {
+        List<RouteInfo> routeInfo = new ArrayList<>();
         try (PreparedStatement ps = connection.prepareStatement(SELECT_ACTIVE_ROUTE_INFO)) {
             ps.setObject(1, gateway, OTHER);
             ps.setObject(2, status, OTHER);
             ps.setObject(3, platform.code(), OTHER);
-            ps.setString(4, channel);
 
             final ResultSet rs = ps.executeQuery();
-            if (!rs.next()) {
-                LOG.warn("getRouteInfo: No route_info found for gateway={}, status={}, platform={}, channel={}",
-                        gateway, status, platform, channel);
-                return null;
+            while (rs.next()) {
+
+                // i.id
+                UUID id = (UUID) rs.getObject(1);
+                // i.gateway
+                GatewayProvider gatewayProvider = GatewayProvider.valueOf(rs.getString(2));
+                // i.provider_id
+                String providerId = rs.getString(3);
+                // i.auth
+                String auth = rs.getString(4);
+                // i.rate_limit
+                String rateLimit = rs.getString(5);
+                // i.route_id
+                UUID routeId = (UUID) rs.getObject(6);
+                // r.channel
+                String channel = rs.getString(7);
+                // i.mt_expiration_ms
+                int mtExpirationMs = rs.getInt(8);
+                // i.mt_retry_limit
+                int mtRetryLimit = rs.getInt(9);
+                // i.created_at
+                Instant createdAt = rs.getTimestamp(10).toInstant();
+                // i.updated_at
+                Instant updatedAt = rs.getTimestamp(11).toInstant();
+
+                routeInfo.add(
+                        new RouteInfo(
+                                id, gatewayProvider, providerId, auth, rateLimit, routeId, channel,
+                                mtExpirationMs, mtRetryLimit, createdAt, updatedAt));
+
             }
 
-            // i.id
-            UUID id = (UUID) rs.getObject(1);
-            // i.gateway
-            GatewayProvider gatewayProvider = GatewayProvider.valueOf(rs.getString(2));
-            // i.provider_id
-            String providerId = rs.getString(3);
-            // i.auth
-            String auth = rs.getString(4);
-            // i.rate_limit
-            String rateLimit = rs.getString(5);
-            // i.route_id
-            UUID routeId = (UUID) rs.getObject(6);
-            // i.mt_expiration_ms
-            int mtExpirationMs = rs.getInt(7);
-            // i.mt_retry_limit
-            int mtRetryLimit = rs.getInt(8);
-            // i.created_at
-            Instant createdAt = rs.getTimestamp(9).toInstant();
-            // i.updated_at
-            Instant updatedAt = rs.getTimestamp(10).toInstant();
+            if (routeInfo.isEmpty()) {
+                LOG.error("getRouteInfo: route info is empty");
+                return null;
+            } else  {
+                return routeInfo;
+            }
 
-            return new RouteInfo(id, gatewayProvider, providerId, auth,
-                    rateLimit, routeId, mtExpirationMs, mtRetryLimit, createdAt, updatedAt);
+        } catch (SQLException e) {
+            LOG.error("getRouteInfo: getRouteInfo failed", e);
+            return null;
         }
     }
 
@@ -1966,7 +1977,9 @@ PostgresPersistenceManager implements PersistenceManager {
     }
 
     static void main() throws IOException, PersistenceManagerException {
-        PostgresPersistenceManager pm = new PostgresPersistenceManager(ConfigLoader.readConfig("persistence_manager_test.properties"));
+        PostgresPersistenceManager pm = new PostgresPersistenceManager(ConfigLoader.readConfig(
+                //"persistence_manager_test.properties"));
+                "sndr.properties"));
         //var routes = pm.getActiveRoutes();
         //for (var route : routes) {
         //    LOG.info(route.toString());
@@ -1990,12 +2003,14 @@ PostgresPersistenceManager implements PersistenceManager {
 
         // Test getRouteInfo
         final var routeInfo = pm.getRouteInfo(
-                GatewayProvider.TELNYX, RouteStatus.ACTIVE, Platform.SMS, "+17814567890"
+                GatewayProvider.TELNYX, RouteStatus.ACTIVE, Platform.SMS //, "+17814567890"
         );
         if (routeInfo != null) {
-            LOG.info("getRouteInfo: {}", routeInfo);
+            for (RouteInfo ri : routeInfo) {
+                LOG.info("getRouteInfo: {}", ri);
+            }
         } else {
-            LOG.warn("getRouteInfo returned null — no matching row found.");
+            LOG.warn("getRouteInfo returned null.");
         }
     }
 

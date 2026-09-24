@@ -4,6 +4,7 @@ import com.enoughisasgoodasafeast.*;
 import com.enoughisasgoodasafeast.datagen.KnownData;
 import com.enoughisasgoodasafeast.operator.*;
 import com.enoughisasgoodasafeast.sndr.ProcessStateMessage;
+import com.enoughisasgoodasafeast.sndr.RouteInfo;
 import com.enoughisasgoodasafeast.sndr.sim.server.TelnyxMessageService;
 import com.enoughisasgoodasafeast.sndr.sim.server.TelnyxServerMain;
 import io.helidon.webserver.WebServer;
@@ -24,6 +25,7 @@ import java.util.concurrent.ConcurrentLinkedQueue;
 import java.util.concurrent.TimeoutException;
 
 import static com.enoughisasgoodasafeast.Functions.randomUUID;
+import static com.enoughisasgoodasafeast.datagen.KnownData.TELNYX_MESSAGING_PROFILE_IDS;
 import static com.enoughisasgoodasafeast.integration.IntegrationTestFunctions.loadPropertiesWithContainerOverrides;
 import static com.enoughisasgoodasafeast.sndr.sim.server.TelnyxMessageService.SIGNAL_429_TOO_MANY_RETRY_AFTER;
 import static java.util.concurrent.TimeUnit.MILLISECONDS;
@@ -67,10 +69,13 @@ public class SndrMessageFlowIT {
     void setUp() throws IOException, TimeoutException, PersistenceManager.PersistenceManagerException, CriticalConfigException {
         opr8rSurrogate = RabbitQueueProducer.createQueueProducer(testProps); // Sends output MTs to the queue Sndr consumes
         persistenceManager = new TestingPersistenceManager();
-        ((TestingPersistenceManager) persistenceManager).setActiveRoutes(new Route[]{
-                // Route will use the default mtExpirationMs value (8 hours)
-                new Route(Platform.SMS, ROUTE_CHANNEL, UUID.randomUUID(), randomUUID(), randomUUID(), randomUUID(), randomUUID())
-        });
+
+        var routes = new Route[]{new Route(Platform.SMS, ROUTE_CHANNEL, UUID.randomUUID(), randomUUID(), randomUUID(), randomUUID(), randomUUID())};
+        ((TestingPersistenceManager) persistenceManager).setActiveRoutes(routes);
+
+        ((TestingPersistenceManager) persistenceManager).setRouteInfo(List.of(new RouteInfo(
+                TELNYX_MESSAGING_PROFILE_IDS[0], "blarg", routes[0].id(), routes[0].channel())));
+
         sndr = new Sndr(persistenceManager);
         sndr.init(testProps);
 

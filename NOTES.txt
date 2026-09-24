@@ -7821,7 +7821,7 @@ While researching on this topic Brave Search mentioned a tool called "pgroles" (
 
 TODO
     [ ] Add rate-limiting params to table; a properties file isn't ideal because our customers may have rates applied. Also need customer specific meta data (e.g. Telnxy's messaging_profile_id and bearer auth token.) Just slam all these into routes table?
-    [ ] Add support for auth errors (not retriable) as well as connection/DNS-related errors (use a long retry.)
+    [ ] Add support for auth errors (not retriable) as well as connection/DNS-related errors (java.net.UnknownHostException) (use a long retry.)
 
 Having a think...
 
@@ -7873,5 +7873,8 @@ CREATE TABLE brbl_logic.route_info (
 [X] Define & execute DDL (type and table) via pgroll/run_migration.py
 [X] Create known_route_info.tsv data and add to delete/load sql files.
 [X] Write query/method to fetch route_info
-
-
+[X] Replace the use of getActiveRoutes in Sndr code with getRouteInfo.
+        Should we fetch the whole set of routeinfos? If we get just single records we need to construct a key that combines the platform and channel (available from the Message being sent.)
+        We have an unused PlatformChannelKey record defined...
+        I think we'll go with the "ALL" set method.
+[ ] Remove the mtExpirationMs and mtRetryLimit properties from Route record and drop the corresponding columns from routes table.

@@ -3,6 +3,7 @@ package com.enoughisasgoodasafeast.operator;
 import com.enoughisasgoodasafeast.Message;
 import com.enoughisasgoodasafeast.sndr.GatewayMeta;
 import com.enoughisasgoodasafeast.sndr.GatewayProvider;
+import com.enoughisasgoodasafeast.sndr.RouteInfo;
 import org.jspecify.annotations.NonNull;
 import org.jspecify.annotations.Nullable;
 
@@ -53,6 +54,8 @@ public interface PersistenceManager {
                 .filter(route -> route.platform().equals(platform))
                 .toArray(Route[]::new);
     }
+
+    @Nullable List<RouteInfo> getRouteInfo(GatewayProvider gateway, RouteStatus status, Platform platform);
 
     boolean updateUserStatus(User user, Platform platform, UserStatus status);
 

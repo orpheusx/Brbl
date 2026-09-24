@@ -2,7 +2,9 @@ package com.enoughisasgoodasafeast;
 
 import com.enoughisasgoodasafeast.operator.*;
 import com.enoughisasgoodasafeast.operator.PersistenceManager.PersistenceManagerException;
+import com.enoughisasgoodasafeast.sndr.GatewayProvider;
 import com.enoughisasgoodasafeast.sndr.ProcessStateRoutingKey;
+import com.enoughisasgoodasafeast.sndr.RouteInfo;
 import com.enoughisasgoodasafeast.sndr.TelnyxSender;
 import com.github.benmanes.caffeine.cache.Caffeine;
 import com.github.benmanes.caffeine.cache.LoadingCache;
@@ -14,6 +16,7 @@ import org.slf4j.LoggerFactory;
 import java.io.IOException;
 import java.time.Instant;
 import java.time.temporal.ChronoUnit;
+import java.util.List;
 import java.util.Properties;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.TimeoutException;
@@ -27,12 +30,12 @@ public class Sndr implements SndrMessageProcessor {
     private PersistenceManager persistenceManager;
     private TelnyxSender telnyxSender;
 
-    final LoadingCache<@NonNull String, @NonNull Route[]> activeRoutesCache = Caffeine.newBuilder()
+    final LoadingCache<@NonNull String, List<RouteInfo>> routeInfoCache = Caffeine.newBuilder()
             .expireAfterWrite(20, TimeUnit.MINUTES)
             .build(allRoutes -> {
                 LOG.info("Loading cache of active routes");
-                return persistenceManager.getActiveRoutes();
-            }); // FIXME empty routes should trigger failure at startup
+                return persistenceManager.getRouteInfo(GatewayProvider.TELNYX, RouteStatus.ACTIVE, Platform.SMS);
+            });
 
     public Sndr() {
     }
@@ -53,8 +56,8 @@ public class Sndr implements SndrMessageProcessor {
 
         if (persistenceManager == null) {
             persistenceManager = PostgresPersistenceManager.createPersistenceManager(properties);
-            // Preload the routing data on startup, fail fast if none is available before we try processing from the queue.
-            if(null == activeRoutesCache.get("ALL")) {
+            // Preload the routing data on startup, fail fast if none is available before we start processing from the queue.
+            if(null == routeInfoCache.get("ALL")) {
                 throw new CriticalConfigException("No routing information found.");
             }
         }
@@ -108,14 +111,14 @@ public class Sndr implements SndrMessageProcessor {
         return sendResult;
     }
 
-    @Nullable Route findRoute(@NonNull Platform platform, @NonNull String channel) {
-        final var routes = activeRoutesCache.get("ALL");
-        if (routes == null || routes.length == 0) {
+    @Nullable RouteInfo findRoute(@NonNull Platform platform, @NonNull String channel) {
+        final var routeInfo = routeInfoCache.get("ALL");
+        if (routeInfo == null) {
             throw new IllegalStateException("CRITICAL_CONFIG_ERROR: findRoute: No routes found.");
         }
-        for (Route route : routes) {
-            if (route.platform() == platform && route.channel().equals(channel)) {
-                return route;
+        for (RouteInfo info : routeInfo) {
+            if (info.channel().equals(channel)) {
+                return info;
             }
         }
 
