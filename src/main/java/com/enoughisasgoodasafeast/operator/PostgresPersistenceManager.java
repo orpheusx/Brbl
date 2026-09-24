@@ -350,9 +350,7 @@ PostgresPersistenceManager implements PersistenceManager {
                         r.updated_at,
                         (select node_id from scripts where id = r.interrupt_script_id),
                         (select node_id from scripts where id = r.opt_in_script_id),
-                        (select node_id from scripts where id = r.opt_out_script_id),
-                        r.mt_expiration_ms,
-                        r.mt_retry_limit
+                        (select node_id from scripts where id = r.opt_out_script_id)
                     FROM
                         routes r
                     INNER JOIN
@@ -967,14 +965,10 @@ PostgresPersistenceManager implements PersistenceManager {
                 UUID optInNodeId = (UUID) rs.getObject(10);
                 // r.opt_out_script_id
                 UUID optOutNodeId = (UUID) rs.getObject(11);
-                // r.mt_expiration_ms
-                int mtExpirationMs = rs.getInt(12);
-                // r.mt_retry_limit
-                int mtRetryLimit = rs.getInt(13);
 
                 assert platform != null;
                 Route route = new Route(id, platform, channel, nodeId, companyId, status, interruptNodeId, optInNodeId,
-                        optOutNodeId, mtExpirationMs, mtRetryLimit, createdAt, updatedAt);
+                        optOutNodeId, createdAt, updatedAt);
                 allRoutes.add(route);
                 LOG.info("Loaded {}", route);
             }

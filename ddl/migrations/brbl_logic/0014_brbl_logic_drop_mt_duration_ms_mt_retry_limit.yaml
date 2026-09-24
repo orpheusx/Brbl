@@ -1,0 +1,10 @@
+version_schema: 14
+operations:
+  - drop_column:
+      table: routes
+      column: mt_expiration_ms
+      down: "28800000"
+  - drop_column:
+      table: routes
+      column: mt_retry_limit
+      down: "20"

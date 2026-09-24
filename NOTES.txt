@@ -7878,3 +7878,12 @@ CREATE TABLE brbl_logic.route_info (
         We have an unused PlatformChannelKey record defined...
         I think we'll go with the "ALL" set method.
 [ ] Remove the mtExpirationMs and mtRetryLimit properties from Route record and drop the corresponding columns from routes table.
+
+--- 2026/09/24 ---
+TODO
+  [ ] Remove the mtExpirationMs and mtRetryLimit properties from Route record and drop the corresponding columns from routes table.
+
+RANDOM NOTE: We should def check out using jcmd in place of any JMX console like function we've imagined (e.g. targeted cache clearing.)
+
+Create a simple migration to drop the columns that moved to route_info table.
+bin/run_migration.py ddl/migrations/brbl_logic/0014_brbl_logic_drop_mt_duration_ms_mt_retry_limit.yaml
