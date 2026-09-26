@@ -7820,7 +7820,7 @@ While researching on this topic Brave Search mentioned a tool called "pgroles" (
 --- 2026/09/21 ---
 
 TODO
-    [ ] Add rate-limiting params to table; a properties file isn't ideal because our customers may have rates applied. Also need customer specific meta data (e.g. Telnxy's messaging_profile_id and bearer auth token.) Just slam all these into routes table?
+    [X] Add rate-limiting params to table; a properties file isn't ideal because our customers may have rates applied. Also need customer specific meta data (e.g. Telnxy's messaging_profile_id and bearer auth token.) Just slam all these into routes table?
     [ ] Add support for auth errors (not retriable) as well as connection/DNS-related errors (java.net.UnknownHostException) (use a long retry.)
 
 Having a think...
@@ -7881,9 +7881,26 @@ CREATE TABLE brbl_logic.route_info (
 
 --- 2026/09/24 ---
 TODO
-  [ ] Remove the mtExpirationMs and mtRetryLimit properties from Route record and drop the corresponding columns from routes table.
+  [X] Remove the mtExpirationMs and mtRetryLimit properties from Route record and drop the corresponding columns from routes table.
+  [ ] Add support for auth errors (not retriable) as well as connection/DNS-related errors (java.net.UnknownHostException) (use a long retry.)
+  [ ] Figure out where we can plugin the auth token to the post. Do we unencrypt the value when filling the cache or delay till actual send?
 
 RANDOM NOTE: We should def check out using jcmd in place of any JMX console like function we've imagined (e.g. targeted cache clearing.)
 
-Create a simple migration to drop the columns that moved to route_info table.
-bin/run_migration.py ddl/migrations/brbl_logic/0014_brbl_logic_drop_mt_duration_ms_mt_retry_limit.yaml
+Created simple migration to drop the columns that moved to route_info table:
+    bin/run_migration.py ddl/migrations/brbl_logic/0014_brbl_logic_drop_mt_duration_ms_mt_retry_limit.yaml
+
+GatewayMeta/TelnyxMeta and RouteInfo are carrying some of the same data. The latter is more generic (it has a potentially lengthy field carring the customer's gateway id) We def don't need both. Deleted GatewayMeta/TelnyxMeta and removed it from PersistenceManager interface/impls.
+
+--- 2026/09/25 ---
+TODO
+  [ ] Add support for auth errors (not retriable) as well as connection/DNS-related errors (java.net.UnknownHostException) (use a long retry.)
+  [ ] Figure out where we can plugin the auth token to the post. Do we unencrypt the value when filling the cache or delay till actual send?
+
+When i use a bogus domain (e.g. wayfart.com) we get an IllegalArgumentException.
+When the port is not being listened on we get UncheckedIOException wrapping java.net.ConnectException.
+The Helidon docs claim that a DNS resolution failure throws io.helidon.webclient.api.RuntimeUnknownHostException which it describes as a variant of java.net.UnknownHostException which is thrown in this case by JDK classes. Both extend RuntimeException so (for now, at least) we're just going to catch those and return an ProcessState.ERROR.
+
+Fired up a new, reformulated Qwen3.8 27B model called Swift. It supposed to do less unuseful thinking (plus MTP) to run faster than the regular form. Pushes the memory envelope on PoG so the context is much smaller than the 3.6 model we've been using. Processing time is not impression so far...
+10:31am started commit message generation for 11 files. 20 minutes later its made progress but is still working.
+10:55 it started chunking out the message. 15.2K context. Not sure if its due to the Bionic/LM Studio updates but the output display is printed, redacted, re-printed, over and over. The running commentary seemed to treat the "use past tense" instruction as a separate goal which, I guess, it is. Quality is pretty good.

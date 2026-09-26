@@ -11,10 +11,12 @@ import org.junit.jupiter.api.*;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
+import java.util.List;
 import java.util.UUID;
 
 import static com.enoughisasgoodasafeast.Functions.randomUUID;
 import static com.enoughisasgoodasafeast.RetryDelayRoutingKey.*;
+import static com.enoughisasgoodasafeast.datagen.KnownData.TELNYX_MESSAGING_PROFILE_IDS;
 import static com.enoughisasgoodasafeast.operator.ProcessState.*;
 import static org.junit.jupiter.api.Assertions.assertSame;
 
@@ -26,6 +28,7 @@ public class TelynxSenderTest {
 
     private static WebServer server;
     private TelnyxSender sender;
+    private List<RouteInfo> routeInfo;
 
     @BeforeAll
     public static void startServerSim() {
@@ -47,6 +50,10 @@ public class TelynxSenderTest {
                 new Route(Platform.SMS, ROUTE_CHANNEL, UUID.randomUUID(), randomUUID(), randomUUID(), randomUUID(), randomUUID())
         };
         tpm.setActiveRoutes(routes);
+
+        routeInfo = List.of(new RouteInfo(
+                TELNYX_MESSAGING_PROFILE_IDS[0], "blarg", routes[0].id(), routes[0].channel()));
+        tpm.setRouteInfo(routeInfo);
         sender = new TelnyxSender(tpm);
     }
 
@@ -56,7 +63,7 @@ public class TelynxSenderTest {
         // Send a correctly formatted message
         var testMessage = new Message(
                 MessageType.MT, ROUTE_CHANNEL, "+17817209468", "A test of the Telnyx gateway service.");
-        final var stateRoutingKey = sender.send(testMessage);
+        final var stateRoutingKey = sender.send(testMessage, routeInfo.getFirst());
         assertSame(OK, stateRoutingKey.processState());
     }
 
@@ -65,7 +72,7 @@ public class TelynxSenderTest {
         // Send a message with phone numbers that are non E.164 compliant.
         var testMessage = new Message(
                 MessageType.MT, "19788879704", "+1-781-720-9468", "Malformed to and from fields.");
-        final var stateRoutingKey = sender.send(testMessage);
+        final var stateRoutingKey = sender.send(testMessage, routeInfo.getFirst());
         assertSame(ERROR, stateRoutingKey.processState());
     }
 
@@ -73,7 +80,7 @@ public class TelynxSenderTest {
     public void sendMessageExpectThrottle() {
         var signal429ResponseMessage = new Message(
                 MessageType.MT, ROUTE_CHANNEL, "+17817209468", "429:too-many:retry-after");
-        final var stateRoutingKey = sender.send(signal429ResponseMessage);
+        final var stateRoutingKey = sender.send(signal429ResponseMessage, routeInfo.getFirst());
         assertSame(RETRY, stateRoutingKey.processState());
         assertSame(DELAY_5S, stateRoutingKey.retryDelayRoutingKey());
     }

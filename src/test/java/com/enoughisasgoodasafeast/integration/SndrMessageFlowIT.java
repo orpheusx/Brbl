@@ -90,14 +90,21 @@ public class SndrMessageFlowIT {
     @AfterEach
     void tearDown() {
         try {
-            if (dlqLogger != null) dlqLogger.stopConsuming();
-            LOG.info("DLQ consumer shut down");
-            if(opr8rSurrogate!=null) opr8rSurrogate.shutdown();
-            LOG.info("QueueProducer simulating Opr8r shut down");
-            if(sndr!=null) sndr.shutdown();
+            if (dlqLogger != null) {
+                dlqLogger.stopConsuming();
+                LOG.info("DLQ consumer shut down");
+            }
+            if (opr8rSurrogate != null) {
+                opr8rSurrogate.shutdown();
+                LOG.info("QueueProducer simulating Opr8r shut down");
+            }
+            if (sndr != null) {
+                sndr.shutdown();
+                LOG.info("SNDR shutdown.");
+            }
 
         } catch (IOException | TimeoutException e) {
-            LOG.warn(e.getMessage());
+            LOG.error(e.getMessage());
         }
     }
 
@@ -189,7 +196,7 @@ public class SndrMessageFlowIT {
 
         assertTrue(enqueued);
 
-        final long awaitTime =  1_000 + RetryDelayRoutingKey.DELAY_5S.delayMs(); // NB: possible cause of test flakiness here...
+        final long awaitTime = 1_000 + RetryDelayRoutingKey.DELAY_5S.delayMs(); // NB: possible cause of test flakiness here...
 
         // Wait to find out if the message was sent.
         final var retriedMessages = TelnyxServerMain.getTelnyxMessageService().retriedMessages;

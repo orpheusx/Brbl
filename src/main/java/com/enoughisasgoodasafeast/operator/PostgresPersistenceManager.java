@@ -2,10 +2,8 @@ package com.enoughisasgoodasafeast.operator;
 
 import com.enoughisasgoodasafeast.ConfigLoader;
 import com.enoughisasgoodasafeast.Message;
-import com.enoughisasgoodasafeast.sndr.GatewayMeta;
 import com.enoughisasgoodasafeast.sndr.GatewayProvider;
 import com.enoughisasgoodasafeast.sndr.RouteInfo;
-import com.enoughisasgoodasafeast.sndr.TelnyxMeta;
 import com.mchange.v2.c3p0.ComboPooledDataSource;
 import org.jspecify.annotations.NonNull;
 import org.jspecify.annotations.Nullable;
@@ -1289,11 +1287,6 @@ PostgresPersistenceManager implements PersistenceManager {
 //        }
 //
 //    }
-
-    public @Nullable GatewayMeta fetchGatewayMeta(GatewayProvider gatewayProvider, Company company, Platform platform, Route route) {
-        // FIXME we need an actual implementation here
-        return new TelnyxMeta("01a04ddd-624b-77ef-baac-e628266ff986", "PLACEHOLDER_API_KEY");
-    }
 
     public @Nullable List<RouteInfo> getRouteInfo(GatewayProvider gateway, RouteStatus status, Platform platform/*, String channel*/) {
         try (Connection connection = fetchConnection()) {

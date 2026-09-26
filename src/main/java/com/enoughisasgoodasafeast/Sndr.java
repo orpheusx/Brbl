@@ -82,8 +82,8 @@ public class Sndr implements SndrMessageProcessor {
         LOG.info("Processing outbound message: {}", message);
         // TODO Check creation date of the Message. We don't want to try sending messages that are outside their window of relevance.
         //  Requires a lookup of the customer's preference from the database. TBD
-        var route = findRoute(message.platform(), message.from());
-        if(route == null) {
+        var routeInfo = findRoute(message.platform(), message.from());
+        if(routeInfo == null) {
             LOG.error("CRITICAL_CONFIG_ERROR: No route found for message {}", message);
             failCounter.incrementAndGet();
             return new ProcessStateRoutingKey(ProcessState.ERROR, null);
@@ -91,7 +91,7 @@ public class Sndr implements SndrMessageProcessor {
 
         // Fail the message if it has expired.
         var now = Instant.now();
-        var configuredLifetime = route.mtExpirationMs();
+        var configuredLifetime = routeInfo.mtExpirationMs();
         if (now.isAfter(message.createdAt().plus(configuredLifetime, ChronoUnit.MILLIS))) {
             // The message has expired. Don't attempt to send it.
             LOG.warn("Send time: {}. Configured lifetime: {}. Message expired: {}", now, configuredLifetime, message.createdAt());
@@ -99,7 +99,7 @@ public class Sndr implements SndrMessageProcessor {
             return new ProcessStateRoutingKey(ProcessState.EXPIRED, null);
         }
 
-        final ProcessStateRoutingKey sendResult = telnyxSender.send(message);
+        final ProcessStateRoutingKey sendResult = telnyxSender.send(message, routeInfo);
         switch (sendResult.processState()) {
             case OK -> okCounter.incrementAndGet();
             case ERROR -> failCounter.incrementAndGet();

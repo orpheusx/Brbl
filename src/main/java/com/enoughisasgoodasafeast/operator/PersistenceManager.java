@@ -1,7 +1,6 @@
 package com.enoughisasgoodasafeast.operator;
 
 import com.enoughisasgoodasafeast.Message;
-import com.enoughisasgoodasafeast.sndr.GatewayMeta;
 import com.enoughisasgoodasafeast.sndr.GatewayProvider;
 import com.enoughisasgoodasafeast.sndr.RouteInfo;
 import org.jspecify.annotations.NonNull;
@@ -65,7 +64,7 @@ public interface PersistenceManager {
 
     boolean clearSession(@NonNull Session session) throws PersistenceManagerException;
 
-    public GatewayMeta fetchGatewayMeta(GatewayProvider gatewayProvider, Company company, Platform platform, Route route);
+//    public GatewayMeta fetchGatewayMeta(GatewayProvider gatewayProvider, Company company, Platform platform, Route route);
 
     @Nullable PushCampaign getPushCampaign(@NonNull UUID campaignId);
 
